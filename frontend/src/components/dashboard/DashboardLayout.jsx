@@ -13,6 +13,7 @@ import {
   UserCircleIcon,
   UsersIcon,
   ShoppingBagIcon,
+  TagIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon },
   // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
   { name: 'Análisis', href: '/analisis', icon: ChartBarIcon },
+  { name: 'Márgenes', href: '/margenes', icon: TagIcon },
   // { name: 'SAT', href: '/sat', icon: DocumentCheckIcon },
   { name: 'Agentes IA', href: '/log-actividades', icon: CpuChipIcon },
   { name: 'Usuarios', href: '/usuarios', icon: UsersIcon, adminOnly: true },

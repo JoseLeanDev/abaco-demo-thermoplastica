@@ -18,6 +18,7 @@ import CuentasPorCobrar from './pages/CuentasPorCobrar'
 import CuentasPorPagar from './pages/CuentasPorPagar'
 // import CuentasBancarias from './pages/CuentasBancarias'
 import ProyeccionesFinancieras from './pages/ProyeccionesFinancieras'
+import Margenes from './pages/Margenes'
 // Cierre Mensual
 // import CierreDashboard from './pages/CierreDashboard'
 // import CierreWizard from './pages/CierreWizard'
@@ -57,6 +58,7 @@ function AppRoutes() {
                 <Route path="/gastos-operativos" element={<GastosOperativos />} />
                 <Route path="/gastos-operativos/historial-servicios" element={<HistorialVentas />} />
                 <Route path="/ventas" element={<Ventas />} />
+                <Route path="/margenes" element={<Margenes />} />
                 {/* <Route path="/sat" element={<SAT />} /> */}
                 <Route path="/log-actividades" element={<LogActividades />} />
                 <Route path="/usuarios" element={<Usuarios />} />

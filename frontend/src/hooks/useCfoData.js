@@ -71,3 +71,38 @@ export const useWorkingCapital = (options = {}) => {
     }
   )
 }
+
+export const useMargenes = () => {
+  return useQuery('margenes', endpoints.margenes.resumen, {
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+export const useMargenProductoDetalle = (id) => {
+  return useQuery(['margen-producto-detalle', id], () => 
+    endpoints.margenes.detalleProducto(id),
+    { enabled: !!id }
+  )
+}
+
+export const useMargenVendedores = () => {
+  return useQuery('margen-vendedores', endpoints.margenes.vendedores, {
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+export const useMargenClientes = () => {
+  return useQuery('margen-clientes', endpoints.margenes.clientes, {
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+export const useMargenLineas = () => {
+  return useQuery('margen-lineas', endpoints.margenes.lineas, {
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+  })
+}
