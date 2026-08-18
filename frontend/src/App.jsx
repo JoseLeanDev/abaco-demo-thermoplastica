@@ -7,6 +7,7 @@ import Contabilidad from './pages/Contabilidad'
 import Analisis from './pages/Analisis'
 import GastosOperativos from './pages/GastosOperativos'
 import HistorialVentas from './pages/HistorialVentas'
+import Compras from './pages/Compras'
 import SAT from './pages/SAT'
 import LogActividades from './pages/LogActividades'
 import Usuarios from './pages/Usuarios'
@@ -55,6 +56,8 @@ function AppRoutes() {
                 <Route path="/analisis" element={<Analisis />} />
                 <Route path="/gastos-operativos" element={<GastosOperativos />} />
                 <Route path="/gastos-operativos/historial-servicios" element={<HistorialVentas />} />
+                <Route path="/compras" element={<Compras />} />
+                <Route path="/compras/historial-ventas" element={<HistorialVentas />} />
                 <Route path="/sat" element={<SAT />} />
                 <Route path="/log-actividades" element={<LogActividades />} />
                 <Route path="/usuarios" element={<Usuarios />} />
