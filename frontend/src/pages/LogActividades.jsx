@@ -42,7 +42,7 @@ const agenteConfig = {
     bg: 'bg-violet-50',
     border: 'border-violet-200',
     icon: DocumentTextIcon,
-    desc: 'CxC aging, DSO, CCC, cobro'
+    desc: 'CxC antigüedad, DSO, CCC, cobro'
   },
   'contabilidad': { 
     nombre: 'Contabilidad', 
@@ -340,7 +340,7 @@ export default function LogActividades() {
               <option value="proyeccion_cashflow">📊 Proyección Cash Flow</option>
               <option value="kpis_diarios">📈 KPIs Diarios</option>
               <option value="analisis_semanal">📉 Análisis Semanal</option>
-              <option value="aging_cartera">📋 Aging Cartera</option>
+              <option value="aging_cartera">📋 Antigüedad Cartera</option>
               <option value="metricas_cobranza">📊 Métricas Cobranza</option>
               <option value="conciliacion_bancaria">🏦 Conciliación</option>
               <option value="cierre_mensual">📅 Cierre Mensual</option>

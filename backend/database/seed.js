@@ -4,67 +4,67 @@ const db = require('./connection');
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
 // ============================================
-// CONFIGURACIÓN EMPRESARIAL - LAVANDERÍA
+// CONFIGURACIÓN EMPRESARIAL - THERMOPLÁSTICA
 // ============================================
 const EMPRESA = {
-  nombre: 'Lavandería El Siglo',
-  nit: '8765432-1',
-  direccion: '4ta Avenida 15-22, Zona 10, Guatemala',
-  telefono: '+502 2334-5678',
-  email: 'admin@laesperanza-lavanderia.com.gt',
-  industria: 'Servicios de lavandería y limpieza',
-  empleados: 28
+  nombre: 'Thermoplástica, S.A.',
+  nit: '1234567-8',
+  direccion: '32 Calle 5-49, Zona 3, Guatemala, C.A.',
+  telefono: '+502 2317-3000',
+  email: 'info@thermoplastica.com',
+  industria: 'Empaque y envase industrial',
+  empleados: 120
 };
 
 // SUCURSALES
 const SUCURSALES = [
-  { nombre: 'Sucursal Central', direccion: '4ta Avenida 15-22, Zona 10, Guatemala', tipo: 'central', empleados: 12 },
-  { nombre: 'Sucursal Zona 1', direccion: '6ta Calle 8-45, Zona 1, Guatemala', tipo: 'sucursal', empleados: 5 },
-  { nombre: 'Sucursal Zona 14', direccion: 'Av. Las Américas 22-11, Zona 14, Guatemala', tipo: 'sucursal', empleados: 6 },
-  { nombre: 'Sucursal Mixco', direccion: 'Calzada San Juan 45-12, Mixco', tipo: 'sucursal', empleados: 5 },
+  { nombre: 'Planta Central', direccion: '32 Calle 5-49, Zona 3, Guatemala', tipo: 'central', empleados: 45 },
+  { nombre: 'Planta Zona 12', direccion: 'Calzada Aguilar Batres, Zona 12, Guatemala', tipo: 'sucursal', empleados: 35 },
+  { nombre: 'Centro Distribución Petapa', direccion: 'Km. 14.5 Carretera a El Salvador, Guatemala', tipo: 'sucursal', empleados: 25 },
+  { nombre: 'Oficinas Administrativas', direccion: 'Torre Reforma, Zona 9, Guatemala', tipo: 'administrativo', empleados: 15 },
 ];
 
-// Catalogo de clientes - B2B (hoteles, restaurantes, hospitales, spas) y B2C
+// Catalogo de clientes - B2B (industria, retail, exportación) y B2C
 const CLIENTES = [
-  // B2B - Hotelería
-  { nombre: 'Hotel Real Intercontinental', credito: 350000, terminos: 30, tipo: 'B2B', segmento: 'hoteles' },
-  { nombre: 'Hotel Barceló Guatemala', credito: 280000, terminos: 30, tipo: 'B2B', segmento: 'hoteles' },
-  { nombre: 'Hotel Casa Santo Domingo', credito: 180000, terminos: 15, tipo: 'B2B', segmento: 'hoteles' },
-  { nombre: 'Hotel Clarion Suites', credito: 95000, terminos: 15, tipo: 'B2B', segmento: 'hoteles' },
-  // B2B - Restaurantes
-  { nombre: 'Grupo Cacao (Restaurantes)', credito: 120000, terminos: 15, tipo: 'B2B', segmento: 'restaurantes' },
-  { nombre: 'Restaurante Hacienda Real', credito: 85000, terminos: 15, tipo: 'B2B', segmento: 'restaurantes' },
-  { nombre: 'Café Baviera (3 locales)', credito: 65000, terminos: 7, tipo: 'B2B', segmento: 'restaurantes' },
-  { nombre: 'Pizzería Vesuvio', credito: 45000, terminos: 7, tipo: 'B2B', segmento: 'restaurantes' },
-  // B2B - Salud y Spa
-  { nombre: 'Spa Santa María', credito: 75000, terminos: 15, tipo: 'B2B', segmento: 'salud' },
-  { nombre: 'Centro Médico Integral', credito: 150000, terminos: 30, tipo: 'B2B', segmento: 'salud' },
-  { nombre: 'Clínica de Belleza Aura', credito: 55000, terminos: 15, tipo: 'B2B', segmento: 'salud' },
-  // B2B - Gimnasios y otros
-  { nombre: 'Gimnasio Fitness One', credito: 65000, terminos: 15, tipo: 'B2B', segmento: 'fitness' },
-  { nombre: 'Gimnasio Golds Gym (2 sucursales)', credito: 95000, terminos: 15, tipo: 'B2B', segmento: 'fitness' },
-  { nombre: 'Industrias Textiles GT', credito: 220000, terminos: 30, tipo: 'B2B', segmento: 'industria' },
+  // B2B - Industria Alimenticia
+  { nombre: 'Cervecería Centroamericana', credito: 450000, terminos: 30, tipo: 'B2B', segmento: 'alimenticia' },
+  { nombre: 'Corporación Multi Inversiones', credito: 380000, terminos: 30, tipo: 'B2B', segmento: 'conglomerado' },
+  { nombre: 'Grupo Hame', credito: 280000, terminos: 15, tipo: 'B2B', segmento: 'alimenticia' },
+  { nombre: 'Industrias de la Galletera', credito: 195000, terminos: 15, tipo: 'B2B', segmento: 'alimenticia' },
+  // B2B - Retail y Supermercados
+  { nombre: 'La Bodegona (Walmart)', credito: 520000, terminos: 30, tipo: 'B2B', segmento: 'retail' },
+  { nombre: 'Supermercados La Torre', credito: 310000, terminos: 15, tipo: 'B2B', segmento: 'retail' },
+  { nombre: 'Paiz (Grupo La Fragua)', credito: 275000, terminos: 15, tipo: 'B2B', segmento: 'retail' },
+  { nombre: 'Maxi Despensa', credito: 180000, terminos: 7, tipo: 'B2B', segmento: 'retail' },
+  // B2B - Farmacéutica y Salud
+  { nombre: 'Farmacéutica Centroamericana', credito: 220000, terminos: 30, tipo: 'B2B', segmento: 'farmaceutica' },
+  { nombre: 'Laboratorios Bernabé', credito: 165000, terminos: 15, tipo: 'B2B', segmento: 'farmaceutica' },
+  { nombre: 'Medical Center Supplies', credito: 95000, terminos: 15, tipo: 'B2B', segmento: 'salud' },
+  // B2B - Exportación y Textil
+  { nombre: 'Vestex (Grupo Hame)', credito: 180000, terminos: 30, tipo: 'B2B', segmento: 'textil' },
+  { nombre: 'Textiles del Pacífico', credito: 145000, terminos: 30, tipo: 'B2B', segmento: 'textil' },
+  { nombre: 'Exportaciones Agrícolas GT', credito: 320000, terminos: 30, tipo: 'B2B', segmento: 'agricola' },
   // B2C - Clientes individuales (sin crédito, pago al contado)
   { nombre: 'Cliente Particular (Varios)', credito: 0, terminos: 0, tipo: 'B2C', segmento: 'particular' },
 ];
 
-// Catalogo de proveedores de lavandería
+// Catalogo de proveedores de Thermoplástica
 const PROVEEDORES = [
-  { nombre: 'Químicos y Detergentes INDUGUA', terminos: '2/10 n/30', descuento: '2%' },
-  { nombre: 'Equipos de Lavandería MX, S.A.', terminos: 'n/30', descuento: null },
-  { nombre: 'Plásticos y Empaque Centroamérica', terminos: '1/15 n/45', descuento: '1%' },
-  { nombre: 'Servicio Técnico Lavadoras GT', terminos: 'contado', descuento: null },
-  { nombre: 'Servicios Eléctricos de Guatemala', terminos: 'n/15', descuento: null },
+  { nombre: 'Resinas Petróleos Mexicanos (PEMEX)', terminos: '2/10 n/30', descuento: '2%' },
+  { nombre: 'Dow Chemical Centralamérica', terminos: 'n/30', descuento: null },
+  { nombre: 'Basell Poliolefinas', terminos: '1/15 n/45', descuento: '1%' },
+  { nombre: 'Equipos Termoformado INDUSTRIA', terminos: 'n/45', descuento: null },
+  { nombre: 'Servicio Técnico Maquinaria Plástica', terminos: 'contado', descuento: null },
+  { nombre: 'Empaques y Películas Centroamérica', terminos: 'n/15', descuento: null },
   { nombre: 'Agua y Saneamiento, S.A.', terminos: 'n/15', descuento: null },
   { nombre: 'Telefónica Guatemala, S.A.', terminos: 'n/15', descuento: null },
-  { nombre: 'Alquileres Metropolitanos', terminos: 'n/5', descuento: null },
+  { nombre: 'Alquileres Industriales Metropolitanos', terminos: 'n/5', descuento: null },
   { nombre: 'Seguros El Roble, S.A.', terminos: 'n/30', descuento: null },
   { nombre: 'Seguridad Privada Orion', terminos: 'n/15', descuento: null },
   { nombre: 'Mantenimiento Industrial GT', terminos: 'n/15', descuento: null },
   { nombre: 'Suministros de Oficina G&T', terminos: 'n/30', descuento: null },
-  { nombre: 'Transporte Express Laundry', terminos: 'n/15', descuento: null },
+  { nombre: 'Transporte de Carga Express', terminos: 'n/15', descuento: null },
   { nombre: 'Consultoría Financiera SIGMA', terminos: 'n/30', descuento: null },
-  { nombre: 'Publicidad y Marketing 360°', terminos: 'n/15', descuento: null },
 ];
 
 // Cuentas bancarias (escenario realista PYME: 2-3 cuentas)
@@ -300,25 +300,27 @@ const seedData = async () => {
   console.log('\n💰 Creando historial de transacciones (6 meses)...');
   
   const categoriasEntrada = [
-    { cat: 'Servicios lavandería B2B', prob: 0.6, min: 15000, max: 85000 },
-    { cat: 'Servicios lavandería B2C', prob: 0.4, min: 500, max: 3500 },
-    { cat: 'Planchado y tintorería', prob: 0.3, min: 2500, max: 15000 },
-    { cat: 'Cobros CxC', prob: 0.5, min: 15000, max: 85000 },
-    { cat: 'Intereses bancarios', prob: 0.1, min: 500, max: 3500 },
-    { cat: 'Otros ingresos', prob: 0.05, min: 1000, max: 15000 },
+    { cat: 'Venta termoformados B2B', prob: 0.6, min: 25000, max: 125000 },
+    { cat: 'Venta envases y tapas', prob: 0.5, min: 15000, max: 95000 },
+    { cat: 'Venta liners y sellos de seguridad', prob: 0.4, min: 10000, max: 65000 },
+    { cat: 'Venta laminaciones', prob: 0.3, min: 8000, max: 45000 },
+    { cat: 'Servicios de maquila', prob: 0.25, min: 5000, max: 35000 },
+    { cat: 'Cobros CxC', prob: 0.5, min: 25000, max: 125000 },
+    { cat: 'Intereses bancarios', prob: 0.1, min: 1500, max: 8500 },
+    { cat: 'Otros ingresos', prob: 0.05, min: 2500, max: 25000 },
   ];
   
   const categoriasSalida = [
-    { cat: 'Compra detergentes y químicos', prob: 0.5, min: 12000, max: 85000 },
-    { cat: 'Nómina', prob: 0.25, min: 65000, max: 75000 },
-    { cat: 'Servicios públicos (agua, luz)', prob: 0.2, min: 15000, max: 45000 },
-    { cat: 'Alquiler sucursales', prob: 0.08, min: 35000, max: 35000 },
-    { cat: 'Marketing y publicidad', prob: 0.1, min: 5000, max: 30000 },
-    { cat: 'Transporte y logística', prob: 0.15, min: 3000, max: 15000 },
-    { cat: 'Mantenimiento equipos', prob: 0.08, min: 5000, max: 35000 },
-    { cat: 'Impuestos', prob: 0.05, min: 25000, max: 125000 },
-    { cat: 'Seguros', prob: 0.03, min: 15000, max: 45000 },
-    { cat: 'Pagos CxP', prob: 0.4, min: 15000, max: 75000 },
+    { cat: 'Compra resinas plásticas', prob: 0.5, min: 45000, max: 185000 },
+    { cat: 'Nómina', prob: 0.25, min: 185000, max: 215000 },
+    { cat: 'Servicios públicos (electricidad, agua)', prob: 0.2, min: 35000, max: 75000 },
+    { cat: 'Alquiler planta industrial', prob: 0.08, min: 85000, max: 85000 },
+    { cat: 'Mantenimiento maquinaria termoformado', prob: 0.15, min: 15000, max: 55000 },
+    { cat: 'Transporte y logística', prob: 0.15, min: 8000, max: 35000 },
+    { cat: 'Marketing y publicidad', prob: 0.1, min: 8000, max: 45000 },
+    { cat: 'Impuestos', prob: 0.05, min: 45000, max: 185000 },
+    { cat: 'Seguros', prob: 0.03, min: 25000, max: 75000 },
+    { cat: 'Pagos CxP', prob: 0.4, min: 25000, max: 125000 },
   ];
   
   let totalTransacciones = 0;

@@ -25,40 +25,40 @@ const formatNum = (value) => {
   return value.toLocaleString('es-GT')
 }
 
-const lineas = ['todas', 'B2B - Hotelería', 'B2B - Restaurantes', 'B2B - Corporativo', 'B2B - Salud', 'B2C - Premium', 'B2C - Estándar']
+const lineas = ['todas', 'Alimentaria', 'Farmacéutica', 'Química/Cosmética', 'Logística/Seguridad', 'Bebidas', 'Industrial']
 
 const coloresLinea = {
-  'B2B - Hotelería': '#2563EB',
-  'B2B - Restaurantes': '#059669',
-  'B2B - Corporativo': '#D97706',
-  'B2B - Salud': '#7C3AED',
-  'B2C - Premium': '#DC2626',
-  'B2C - Estándar': '#0891B2',
+  'Alimentaria': '#2563EB',
+  'Farmacéutica': '#059669',
+  'Química/Cosmética': '#D97706',
+  'Logística/Seguridad': '#7C3AED',
+  'Bebidas': '#DC2626',
+  'Industrial': '#0891B2',
 }
 
 // ============================================
-// DATOS DE SERVICIOS LAVANDERÍA
+// DATOS DE PRODUCTOS THERMOPLÁSTICA
 // ============================================
 const demoHistorialServicios = [
-  // B2B - Hotelería
-  { id: 1, nombre: 'Lavandería Industrial Hotel Real Intercontinental', linea: 'B2B - Hotelería', precioVenta: 12.50, costoUnitario: 6.80, historial: [8200, 8450, 8100, 8600, 8800, 8950], margen: 45, proveedor: 'Operación propia' },
-  { id: 2, nombre: 'Lavandería Industrial Hotel Barceló', linea: 'B2B - Hotelería', precioVenta: 12.50, costoUnitario: 6.80, historial: [6500, 6700, 6400, 6800, 7000, 7100], margen: 45, proveedor: 'Operación propia' },
-  { id: 3, nombre: 'Lavado Ropa de Cama Hotel Casa Santo Domingo', linea: 'B2B - Hotelería', precioVenta: 18.00, costoUnitario: 11.70, historial: [3800, 3900, 3700, 4000, 4100, 4200], margen: 35, proveedor: 'Operación propia' },
-  // B2B - Restaurantes
-  { id: 4, nombre: 'Lavandería Industrial Grupo Cacao', linea: 'B2B - Restaurantes', precioVenta: 12.50, costoUnitario: 7.25, historial: [2800, 2900, 2700, 3000, 3100, 3200], margen: 42, proveedor: 'Operación propia' },
-  { id: 5, nombre: 'Servicio Express Restaurante Hacienda Real', linea: 'B2B - Restaurantes', precioVenta: 25.00, costoUnitario: 13.00, historial: [350, 380, 340, 400, 420, 450], margen: 48, proveedor: 'Operación propia' },
-  // B2B - Corporativo
-  { id: 6, nombre: 'Lavado Uniformes Golds Gym', linea: 'B2B - Corporativo', precioVenta: 8.50, costoUnitario: 5.27, historial: [2800, 2900, 2700, 3000, 3100, 3200], margen: 38, proveedor: 'Operación propia' },
-  { id: 7, nombre: 'Lavado Uniformes Corporativos', linea: 'B2B - Corporativo', precioVenta: 8.50, costoUnitario: 5.27, historial: [1200, 1250, 1100, 1300, 1350, 1400], margen: 38, proveedor: 'Operación propia' },
-  // B2B - Salud
-  { id: 8, nombre: 'Lavado Especializado Centro Médico Integral', linea: 'B2B - Salud', precioVenta: 15.00, costoUnitario: 9.00, historial: [1500, 1550, 1480, 1600, 1650, 1700], margen: 40, proveedor: 'Operación propia' },
-  { id: 9, nombre: 'Lavado Especializado Spa Santa María', linea: 'B2B - Salud', precioVenta: 15.00, costoUnitario: 9.00, historial: [800, 820, 750, 850, 880, 900], margen: 40, proveedor: 'Operación propia' },
-  // B2C - Premium
-  { id: 10, nombre: 'Tintorería y Planchado Premium', linea: 'B2C - Premium', precioVenta: 45.00, costoUnitario: 21.60, historial: [520, 540, 510, 560, 580, 600], margen: 52, proveedor: 'Operación propia' },
-  { id: 11, nombre: 'Servicio Express 24h (B2C)', linea: 'B2C - Premium', precioVenta: 25.00, costoUnitario: 13.00, historial: [380, 400, 370, 420, 440, 460], margen: 48, proveedor: 'Operación propia' },
-  // B2C - Estándar
-  { id: 12, nombre: 'Lavandería Doméstica B2C', linea: 'B2C - Estándar', precioVenta: 15.00, costoUnitario: 10.80, historial: [1100, 1150, 1050, 1200, 1250, 1300], margen: 28, proveedor: 'Operación propia' },
-  { id: 13, nombre: 'Lavado de Alfombras', linea: 'B2C - Estándar', precioVenta: 35.00, costoUnitario: 24.50, historial: [180, 190, 170, 200, 210, 220], margen: 30, proveedor: 'Operación propia' },
+  // Alimentaria
+  { id: 1, nombre: 'Termoformados Bandejas Alimentarias - Cervecería Centroamericana', linea: 'Alimentaria', precioVenta: 2.50, costoUnitario: 1.40, historial: [82000, 84500, 81000, 86000, 88000, 89500], margen: 44, proveedor: 'Operación propia' },
+  { id: 2, nombre: 'Envases PET para Yogurt - Lácteos del Sur', linea: 'Alimentaria', precioVenta: 1.80, costoUnitario: 1.05, historial: [65000, 67000, 64000, 68000, 70000, 71000], margen: 42, proveedor: 'Operación propia' },
+  { id: 3, nombre: 'Tapas Termoformadas para Helados - Helados Sarita', linea: 'Alimentaria', precioVenta: 0.85, costoUnitario: 0.48, historial: [38000, 39000, 37000, 40000, 41000, 42000], margen: 44, proveedor: 'Operación propia' },
+  // Farmacéutica
+  { id: 4, nombre: 'Blísters Termoformados para Medicamentos - Genfar Guatemala', linea: 'Farmacéutica', precioVenta: 3.20, costoUnitario: 1.92, historial: [28000, 29000, 27000, 30000, 31000, 32000], margen: 40, proveedor: 'Operación propia' },
+  { id: 5, nombre: 'Envases PE para Suplementos - Pharma Latinoamérica', linea: 'Farmacéutica', precioVenta: 2.80, costoUnitario: 1.68, historial: [3500, 3800, 3400, 4000, 4200, 4500], margen: 40, proveedor: 'Operación propia' },
+  // Química/Cosmética
+  { id: 6, nombre: 'Envases Soplados PE para Detergentes - Empresas Diana', linea: 'Química/Cosmética', precioVenta: 4.50, costoUnitario: 2.70, historial: [28000, 29000, 27000, 30000, 31000, 32000], margen: 40, proveedor: 'Operación propia' },
+  { id: 7, nombre: 'Envases PET para Cosméticos - Boticas Similares', linea: 'Química/Cosmética', precioVenta: 3.80, costoUnitario: 2.28, historial: [1200, 1250, 1100, 1300, 1350, 1400], margen: 40, proveedor: 'Operación propia' },
+  // Logística/Seguridad
+  { id: 8, nombre: 'Liners para Sellos de Seguridad - Transportes Galgos', linea: 'Logística/Seguridad', precioVenta: 0.45, costoUnitario: 0.27, historial: [150000, 155000, 148000, 160000, 165000, 170000], margen: 40, proveedor: 'Operación propia' },
+  { id: 9, nombre: 'Laminación PVDC para Sellos - Aduanas del Istmo', linea: 'Logística/Seguridad', precioVenta: 6.50, costoUnitario: 3.90, historial: [800, 820, 750, 850, 880, 900], margen: 40, proveedor: 'Operación propia' },
+  // Bebidas
+  { id: 10, nombre: 'Botellas PET 500ml para Agua - Agua Pura Vida', linea: 'Bebidas', precioVenta: 1.20, costoUnitario: 0.72, historial: [52000, 54000, 51000, 56000, 58000, 60000], margen: 40, proveedor: 'Operación propia' },
+  { id: 11, nombre: 'Botellas PET 2L para Refrescos - Gatorade Guatemala', linea: 'Bebidas', precioVenta: 2.40, costoUnitario: 1.44, historial: [3800, 4000, 3700, 4200, 4400, 4600], margen: 40, proveedor: 'Operación propia' },
+  // Industrial
+  { id: 12, nombre: 'Contenedores Termoformados Industriales - Cementos Progreso', linea: 'Industrial', precioVenta: 12.00, costoUnitario: 7.20, historial: [1100, 1150, 1050, 1200, 1250, 1300], margen: 40, proveedor: 'Operación propia' },
+  { id: 13, nombre: 'Laminación Aluminio para Químicos - Química Centroamericana', linea: 'Industrial', precioVenta: 18.50, costoUnitario: 11.10, historial: [180, 190, 170, 200, 210, 220], margen: 40, proveedor: 'Operación propia' },
 ]
 
 const demoMesesHistorial = ['Dic 2025', 'Ene 2026', 'Feb 2026', 'Mar 2026', 'Abr 2026', 'May 2026']
@@ -204,7 +204,7 @@ export default function HistorialServicios() {
             <div>
               <h1 className="text-2xl font-semibold">Historial de Servicios por Línea</h1>
               <p className="text-sm text-[var(--text-muted)]">
-                Análisis de servicios de lavandería — 6 meses de historial
+                Análisis de productos Thermoplástica — 6 meses de historial
               </p>
             </div>
           </div>

@@ -9,6 +9,9 @@ const db = require('../database/connection');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Set db on app for routes
+app.set('db', db);
+
 // Middleware
 app.use(helmet());
 app.use(cors({
@@ -33,6 +36,7 @@ app.use('/api/cierre', require('./routes/cierre'));
 app.use('/api/conciliador', require('./routes/conciliador'));
 app.use('/api/scheduler', require('./routes/scheduler'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/margenes', require('./routes/margenes'));
 app.use('/api/run-all-agents', require('./routes/runAllAgents'));
 app.use('/api/debug', require('./routes/debug'));
 app.use('/api/test', require('./routes/test'));

@@ -13,19 +13,23 @@ import {
   UserCircleIcon,
   UsersIcon,
   ShoppingCartIcon,
+  ShoppingBagIcon,
+  TagIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import AgentChat from '../agents/AgentChat'
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: HomeIcon },
+  { name: 'Panel', href: '/', icon: HomeIcon },
+  { name: 'Ventas', href: '/ventas', icon: ShoppingBagIcon },
   { name: 'Gastos Operativos', href: '/gastos-operativos', icon: BanknotesIconNav },
   { name: 'Compras', href: '/compras', icon: ShoppingCartIcon },
   { name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon },
-  { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
+  // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
   { name: 'Análisis', href: '/analisis', icon: ChartBarIcon },
-  { name: 'SAT', href: '/sat', icon: DocumentCheckIcon },
+  { name: 'Márgenes', href: '/margenes', icon: TagIcon },
+  // { name: 'SAT', href: '/sat', icon: DocumentCheckIcon },
   { name: 'Agentes IA', href: '/log-actividades', icon: CpuChipIcon },
   { name: 'Usuarios', href: '/usuarios', icon: UsersIcon, adminOnly: true },
 ]

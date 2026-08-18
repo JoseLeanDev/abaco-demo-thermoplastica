@@ -1,18 +1,18 @@
-# 🚀 PASO A PASO - Deploy Demo Lavandería
+# 🚀 PASO A PASO - Deploy Demo Thermoplástica
 
 ## 1. CREAR REPOSITORIO EN GITHUB (1 minuto)
 
 ### Opción A: Desde GitHub web
 1. Ve a https://github.com/new
-2. **Nombre:** `abaco-demo-lavanderia`
-3. **Descripción:** `Demo de abaco para Lavandería La Esperanza - B2B/B2C con sucursales`
+2. **Nombre:** `abaco-demo-thermoplastica`
+3. **Descripción:** `Demo de abaco para Thermoplástica, S.A. - B2B/B2C con sucursales`
 4. **Público** o **Privado** (como prefieras)
 5. NO inicializar con README (ya lo tenemos)
 6. Click **Create repository**
 
 ### Opción B: Con GitHub CLI (si lo tienes instalado)
 ```bash
-gh repo create abaco-demo-lavanderia --public --source=. --push
+gh repo create abaco-demo-thermoplastica --public --source=. --push
 ```
 
 ---
@@ -23,14 +23,14 @@ Después de crear el repo vacío, ejecuta estos comandos:
 
 ```bash
 # Ir a la carpeta del proyecto
-cd abaco-demo-lavanderia
+cd abaco-demo-thermoplastica
 
 # Renombrar la rama a main (opcional, pero recomendado)
 git branch -m main
 
 # Agregar el remote de GitHub
 # Reemplazá TU_USUARIO con tu usuario de GitHub
-git remote add origin https://github.com/TU_USUARIO/abaco-demo-lavanderia.git
+git remote add origin https://github.com/TU_USUARIO/abaco-demo-thermoplastica.git
 
 # Subir el código
 git push -u origin main
@@ -42,20 +42,20 @@ git push -u origin main
 
 1. Ve a https://dashboard.render.com
 2. Click **New** → **PostgreSQL**
-3. **Name:** `abaco-demo-lavanderia-db`
+3. **Name:** `abaco-demo-thermoplastica-db`
 4. **Region:** Ohio (o la que prefieras)
 5. **Plan:** Free (o el que prefieras)
 6. Click **Create Database**
 7. **IMPORTANTE:** Copiar la **Internal Database URL** (se verá algo como:
-   `postgresql://abaco_demo_lavanderia_user:PASSWORD@dpg-XXXX.ohio-postgres.render.com/abaco_demo_lavanderia_db`)
+   `postgresql://abaco_demo_thermoplastica_user:PASSWORD@dpg-XXXX.ohio-postgres.render.com/abaco_demo_thermoplastica_db`)
 
 ---
 
 ## 4. CREAR SERVICIO WEB EN RENDER (3 minutos)
 
 1. En https://dashboard.render.com, click **New** → **Web Service**
-2. Conecta tu repositorio de GitHub: `abaco-demo-lavanderia`
-3. **Name:** `abaco-demo-lavanderia`
+2. Conecta tu repositorio de GitHub: `abaco-demo-thermoplastica`
+3. **Name:** `abaco-demo-thermoplastica`
 4. **Runtime:** Node
 5. **Region:** Ohio (misma que la DB)
 6. **Branch:** main
@@ -73,7 +73,7 @@ git push -u origin main
 | `JWT_SECRET` | *(generar un string largo)* | Secreto para autenticación |
 | `NODE_ENV` | `production` | Modo producción |
 | `PORT` | `10000` | Puerto de Render |
-| `APP_URL` | `https://abaco-demo-lavanderia.onrender.com` | URL del servicio |
+| `APP_URL` | `https://abaco-demo-thermoplastica.onrender.com` | URL del servicio |
 | `DEFAULT_EMPRESA_ID` | `1` | ID empresa demo |
 | `DEFAULT_USUARIO_ID` | `1` | ID usuario demo |
 | `MONEDA_DEFAULT` | `GTQ` | Moneda quetzal |
@@ -97,8 +97,8 @@ git push -u origin main
 ## 5. CREAR WORKER (Scheduler) EN RENDER (1 minuto)
 
 1. Click **New** → **Background Worker**
-2. Conecta el mismo repo: `abaco-demo-lavanderia`
-3. **Name:** `abaco-demo-lavanderia-scheduler`
+2. Conecta el mismo repo: `abaco-demo-thermoplastica`
+3. **Name:** `abaco-demo-thermoplastica-scheduler`
 4. **Runtime:** Node
 5. **Region:** Ohio (misma que el web service)
 6. **Build Command:** `cd backend && npm install`
@@ -114,7 +114,7 @@ git push -u origin main
 1. El deploy puede tardar 3-5 minutos
 2. Render mostrará los logs en tiempo real
 3. Una vez que diga "Your service is live", visita:
-   - `https://abaco-demo-lavanderia.onrender.com`
+   - `https://abaco-demo-thermoplastica.onrender.com`
 
 ### Si hay errores:
 - Revisar los logs en Render (pestaña "Logs")
@@ -130,7 +130,7 @@ git push -u origin main
    - **Usuario:** `admin`
    - **Password:** `admin123`
 3. Verificar que aparezca:
-   - **Lavandería La Esperanza, S.A.** en el dashboard
+   - **Thermoplástica, S.A., S.A.** en el dashboard
    - **Datos de B2B y B2C** en cuentas por cobrar
    - **4 sucursales** en el contexto
 
@@ -147,7 +147,7 @@ git push -u origin main
 - [ ] Worker (scheduler) creado
 - [ ] Deploy exitoso (URL accesible)
 - [ ] Login funciona (admin/admin123)
-- [ ] Dashboard muestra "Lavandería La Esperanza"
+- [ ] Dashboard muestra "Thermoplástica, S.A."
 - [ ] Datos de clientes B2B/B2C visibles
 
 ---

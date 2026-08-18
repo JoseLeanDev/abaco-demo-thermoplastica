@@ -1,6 +1,6 @@
-# 🚀 abaco Demo - Lavandería La Esperanza
+# 🚀 abaco Demo - Thermoplástica, S.A.
 
-Demo de la plataforma abaco configurado para una lavandería con clientes B2B (hoteles, restaurantes, spas) y B2C, con sucursal central y múltiples sucursales.
+Demo de la plataforma abaco configurado para Thermoplástica, S.A., empresa de empaque y envase industrial con más de 53 años de experiencia.
 
 ## Requisitos Previos
 
@@ -62,7 +62,7 @@ npm run dev
 │   ├── database/
 │   │   ├── connection.js    # PostgreSQL/SQLite config
 │   │   ├── migrate.js       # Crear tablas
-│   │   └── seed.js          # Datos demo (Lavandería)
+│   │   └── seed.js          # Datos demo (Thermoplástica)
 │   └── package.json
 │
 └── frontend/
@@ -109,10 +109,10 @@ npm run preview     # Previsualizar build
 
 ---
 
-## 📊 Datos Demo Incluidos (Lavandería)
+## 📊 Datos Demo Incluidos (Thermoplástica)
 
 La base de datos incluye:
-- 1 empresa: Lavandería La Esperanza, S.A.
+- 1 empresa: Thermoplástica, S.A.
 - 4 sucursales (central + 3 sucursales)
 - 3 cuentas bancarias (GTQ/USD)
 - 45 cuentas por cobrar (B2B y B2C)
@@ -153,4 +153,4 @@ npm run seed
 
 ---
 
-*abaco - Demo Lavandería La Esperanza*
+*abaco - Demo Thermoplástica, S.A.*

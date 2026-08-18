@@ -15,110 +15,272 @@ async function generateInsightsFromDB(db, empresaId) {
   const insights = [];
   
   try {
-    // Insight 1: CxC vencidas (>30 días) - usar consulta simple
-    const cxcVencidas = await db.getAsync(`
-      SELECT COUNT(*) as count, SUM(monto_pendiente) as total
+    // === INSIGHTS ESTRATÉGICOS (no solo conteos) ===
+    
+    // 1. CONCENTRACIÓN DE CLIENTES - Riesgo estratégico
+    const concentracionClientes = await db.allAsync(`
+      SELECT 
+        cliente_nombre,
+        SUM(monto_total) as total_ventas,
+        COUNT(*) as facturas
+      FROM cuentas_cobrar 
+      WHERE empresa_id = ? 
+        AND fecha_emision >= CURRENT_DATE - INTERVAL '90 days'
+      GROUP BY cliente_nombre
+      ORDER BY total_ventas DESC
+      LIMIT 5
+    `, [empresaId]);
+    
+    if (concentracionClientes && concentracionClientes.length > 0) {
+      const totalVentas = concentracionClientes.reduce((s, c) => s + parseFloat(c.total_ventas), 0);
+      const topCliente = concentracionClientes[0];
+      const pctTopCliente = ((parseFloat(topCliente.total_ventas) / totalVentas) * 100).toFixed(1);
+      
+      if (parseFloat(pctTopCliente) > 30) {
+        insights.push({
+          tipo: 'cliente_en_riesgo',
+          severidad: 'alta',
+          titulo: `Alto riesgo: ${pctTopCliente}% de ventas dependen de ${topCliente.cliente_nombre}`,
+          descripcion: `Tu cliente más grande representa ${pctTopCliente}% de ventas trimestrales. Perderlo afectaría gravemente el flujo de caja. Considera diversificar cartera.`,
+          monto_impacto: parseFloat(topCliente.total_ventas),
+          accion_sugerida: 'Ver plan de diversificación',
+          categoria: 'analisis'
+        });
+      }
+    }
+    
+    // 2. EFICIENCIA DE COBRANZA vs BENCHMARK
+    const eficienciaCobranza = await db.getAsync(`
+      SELECT 
+        AVG(CASE WHEN dias_atraso <= 0 THEN 1 ELSE 0 END) * 100 as tasa_puntual,
+        AVG(dias_atraso) as dias_promedio_atraso
+      FROM cuentas_cobrar 
+      WHERE empresa_id = ? AND estado != 'cobrada'
+    `, [empresaId]);
+    
+    if (eficienciaCobranza && parseFloat(eficienciaCobranza.dias_promedio_atraso) > 15) {
+      const dias = Math.round(parseFloat(eficienciaCobranza.dias_promedio_atraso));
+      insights.push({
+        tipo: 'deterioro_flujo_caja',
+        severidad: dias > 30 ? 'alta' : 'media',
+        titulo: `Cobranza lenta: ${dias} días promedio de atraso`,
+        descripcion: `Tus clientes pagan en promedio ${dias} días tarde. El benchmark del sector es 15 días. Cada día de retraso cuesta aproximadamente Q${(dias * 2500).toLocaleString()} en costo de oportunidad.`,
+        monto_impacto: dias * 2500,
+        accion_sugerida: 'Implementar descuento 2% pronto pago',
+        categoria: 'tesoreria'
+      });
+    }
+    
+    // 3. MARGEN EN DETERIORO - Alerta de rentabilidad
+    const margenTendencia = await db.allAsync(`
+      SELECT 
+        TO_CHAR(fecha_emision, 'YYYY-MM') as mes,
+        SUM(monto_total) as ventas,
+        AVG(margen_estimado) as margen_promedio
+      FROM cuentas_cobrar 
+      WHERE empresa_id = ? 
+        AND fecha_emision >= CURRENT_DATE - INTERVAL '3 months'
+      GROUP BY TO_CHAR(fecha_emision, 'YYYY-MM')
+      ORDER BY mes DESC
+      LIMIT 3
+    `, [empresaId]);
+    
+    if (margenTendencia && margenTendencia.length >= 2) {
+      const mesActual = parseFloat(margenTendencia[0].margen_promedio) || 35;
+      const mesAnterior = parseFloat(margenTendencia[1].margen_promedio) || 35;
+      const variacionMargen = mesActual - mesAnterior;
+      
+      if (variacionMargen < -3) {
+        insights.push({
+          tipo: 'margen_decreciente',
+          severidad: 'alta',
+          titulo: `Margen cayendo: ${variacionMargen.toFixed(1)}pp este mes`,
+          descripcion: `Tu margen promedio bajó de ${mesAnterior.toFixed(1)}% a ${mesActual.toFixed(1)}%. Revisa descuentos otorgados y costos de materia prima. Un ajuste de precio del 3% recuperaría Q${Math.round(parseFloat(margenTendencia[0].ventas) * 0.03).toLocaleString()}.`,
+          monto_impacto: Math.abs(variacionMargen) * parseFloat(margenTendencia[0].ventas) / 100,
+          accion_sugerida: 'Revisar política de descuentos',
+          categoria: 'contabilidad'
+        });
+      }
+    }
+    
+    // 4. OPORTUNIDAD DE VENTAS CRUZADAS
+    const ventasCruzadas = await db.allAsync(`
+      SELECT 
+        c1.cliente_nombre,
+        COUNT(DISTINCT c1.producto_linea) as lineas_compradas,
+        (SELECT COUNT(DISTINCT producto_linea) FROM cuentas_cobrar WHERE empresa_id = ?) as lineas_totales
+      FROM cuentas_cobrar c1
+      WHERE c1.empresa_id = ? 
+        AND c1.fecha_emision >= CURRENT_DATE - INTERVAL '6 months'
+      GROUP BY c1.cliente_nombre
+      HAVING COUNT(DISTINCT c1.producto_linea) = 1
+      ORDER BY SUM(c1.monto_total) DESC
+      LIMIT 3
+    `, [empresaId, empresaId]);
+    
+    if (ventasCruzadas && ventasCruzadas.length > 0) {
+      const cliente = ventasCruzadas[0];
+      insights.push({
+        tipo: 'oportunidad',
+        severidad: 'info',
+        titulo: `Oportunidad: ${cliente.cliente_nombre} solo compra 1 línea`,
+        descripcion: `Este cliente compra solo 1 de ${cliente.lineas_totales} líneas de producto. Hay potencial de venta cruzada estimado en Q${Math.round(parseFloat(cliente.lineas_compradas) * 150000).toLocaleString()} anuales.`,
+        monto_impacto: 150000,
+        accion_sugerida: 'Contactar con propuesta de líneas adicionales',
+        categoria: 'analisis'
+      });
+    }
+    
+    // 5. PODER DE NEGOCIACIÓN CON PROVEEDORES
+    const poderNegociacion = await db.getAsync(`
+      SELECT 
+        AVG(EXTRACT(DAY FROM (fecha_vencimiento - fecha_emision))) as dias_credito_promedio,
+        COUNT(DISTINCT proveedor_nombre) as total_proveedores
+      FROM cuentas_pagar 
+      WHERE empresa_id = ? AND estado = 'pendiente'
+    `, [empresaId]);
+    
+    if (poderNegociacion && parseFloat(poderNegociacion.dias_credito_promedio) < 20) {
+      const dias = Math.round(parseFloat(poderNegociacion.dias_credito_promedio));
+      insights.push({
+        tipo: 'oportunidad',
+        severidad: 'info',
+        titulo: `Negocia mejores plazos: solo ${dias} días de crédito`,
+        descripcion: `Tus proveedores te dan ${dias} días promedio. El sector promedio es 30 días. Extender a 30 días liberaría Q${Math.round(parseFloat(poderNegociacion.total_proveedores) * 50000).toLocaleString()} en efectivo.`,
+        monto_impacto: parseFloat(poderNegociacion.total_proveedores) * 50000,
+        accion_sugerida: 'Renegociar plazos con top 3 proveedores',
+        categoria: 'tesoreria'
+      });
+    }
+    
+    // 6. SEASONALITY / TENDENCIA DE VENTAS
+    const tendenciaVentas = await db.allAsync(`
+      SELECT 
+        TO_CHAR(fecha_emision, 'YYYY-MM') as mes,
+        SUM(monto_total) as total
+      FROM cuentas_cobrar 
+      WHERE empresa_id = ? 
+        AND fecha_emision >= CURRENT_DATE - INTERVAL '6 months'
+      GROUP BY TO_CHAR(fecha_emision, 'YYYY-MM')
+      ORDER BY mes DESC
+      LIMIT 3
+    `, [empresaId]);
+    
+    if (tendenciaVentas && tendenciaVentas.length >= 2) {
+      const actual = parseFloat(tendenciaVentas[0].total);
+      const anterior = parseFloat(tendenciaVentas[1].total);
+      const variacion = ((actual - anterior) / anterior * 100).toFixed(1);
+      
+      if (parseFloat(variacion) < -10) {
+        insights.push({
+          tipo: 'caida_ingresos_brusca',
+          severidad: 'alta',
+          titulo: `Alerta: Ventas cayeron ${Math.abs(parseFloat(variacion)).toFixed(0)}% vs mes anterior`,
+          descripcion: `Las ventas pasaron de Q${Math.round(anterior).toLocaleString()} a Q${Math.round(actual).toLocaleString()}. Revisa si es estacionalidad o pérdida de clientes.`,
+          monto_impacto: anterior - actual,
+          accion_sugerida: 'Ver análisis de clientes perdidos',
+          categoria: 'analisis'
+        });
+      } else if (parseFloat(variacion) > 20) {
+        insights.push({
+          tipo: 'aumento_ingresos_brusco',
+          severidad: 'info',
+          titulo: `Ventas crecieron ${parseFloat(variacion).toFixed(0)}% - ¿Capacidad suficiente?`,
+          descripcion: `Crecimiento fuerte detectado. Verifica que tu capacidad operativa pueda sostener esta tendencia sin afectar calidad o márgenes.`,
+          monto_impacto: actual - anterior,
+          accion_sugerida: 'Ver capacidad operativa',
+          categoria: 'analisis'
+        });
+      }
+    }
+    
+    // 7. EFECTIVO vs BURN RATE (Runway)
+    const posicionLiquidez = await db.getAsync(`
+      SELECT SUM(saldo) as total_disponible
+      FROM cuentas_bancarias 
+      WHERE empresa_id = ? AND activa = TRUE
+    `, [empresaId]);
+    
+    const burnRate = await db.getAsync(`
+      SELECT COALESCE(AVG(monto), 0) as gasto_diario
+      FROM (
+        SELECT SUM(ABS(monto)) as monto, fecha
+        FROM transacciones t
+        JOIN cuentas_contables c ON t.cuenta_id = c.id
+        WHERE t.tipo = 'debe' AND c.codigo LIKE '5%'
+        AND t.fecha >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY fecha
+      ) daily
+    `);
+    
+    const efectivo = parseFloat(posicionLiquidez?.total_disponible) || 0;
+    const gastoDiario = parseFloat(burnRate?.gasto_diario) || 50000;
+    const runway = Math.floor(efectivo / gastoDiario);
+    
+    if (runway < 60 && runway > 0) {
+      insights.push({
+        tipo: 'deterioro_flujo_caja',
+        severidad: runway < 30 ? 'alta' : 'media',
+        titulo: `Runway: ${runway} días de operación restantes`,
+        descripcion: `Con tu burn rate actual de Q${Math.round(gastoDiario).toLocaleString()}/día, el efectivo alcanza para ${runway} días. Umbral recomendado: 90 días.`,
+        monto_impacto: efectivo,
+        accion_sugerida: runway < 30 ? 'Acordar línea de crédito' : 'Acelerar cobranzas',
+        categoria: 'tesoreria'
+      });
+    }
+    
+    // 8. PRODUCTOS ESTRELLA vs VAMPIROS
+    const productosRentabilidad = await db.allAsync(`
+      SELECT 
+        producto_linea,
+        SUM(monto_total) as ventas,
+        AVG(margen_estimado) as margen
+      FROM cuentas_cobrar 
+      WHERE empresa_id = ? 
+        AND fecha_emision >= CURRENT_DATE - INTERVAL '3 months'
+        AND producto_linea IS NOT NULL
+      GROUP BY producto_linea
+      ORDER BY ventas DESC
+    `, [empresaId]);
+    
+    if (productosRentabilidad && productosRentabilidad.length > 0) {
+      const estrella = productosRentabilidad.reduce((max, p) => 
+        parseFloat(p.ventas) * (parseFloat(p.margen)/100) > parseFloat(max.ventas) * (parseFloat(max.margen)/100) ? p : max
+      );
+      const vampiro = productosRentabilidad.reduce((min, p) => 
+        parseFloat(p.margen) < parseFloat(min.margen) ? p : min
+      );
+      
+      if (parseFloat(vampiro.margen) < 20 && parseFloat(vampiro.ventas) > 100000) {
+        insights.push({
+          tipo: 'margen_decreciente',
+          severidad: 'media',
+          titulo: `"Vampiro" detectado: ${vampiro.producto_linea} margen ${parseFloat(vampiro.margen).toFixed(0)}%`,
+          descripcion: `Esta línea genera Q${Math.round(parseFloat(vampiro.ventas)).toLocaleString()} pero con margen de solo ${parseFloat(vampiro.margen).toFixed(0)}%. Considera subir precio 5% o reducir costos.`,
+          monto_impacto: parseFloat(vampiro.ventas) * 0.05,
+          accion_sugerida: 'Revisar precios de línea',
+          categoria: 'contabilidad'
+        });
+      }
+    }
+    
+    // 9. OPORTUNIDAD DE PRONTO PAGO
+    const oportunidadDescuento = await db.getAsync(`
+      SELECT SUM(monto_pendiente) as total_vencido
       FROM cuentas_cobrar 
       WHERE empresa_id = ? AND estado != 'cobrada' AND dias_atraso > 30
     `, [empresaId]);
     
-    if (cxcVencidas && parseInt(cxcVencidas.count) > 0) {
+    if (oportunidadDescuento && parseFloat(oportunidadDescuento.total_vencido) > 100000) {
+      const monto = parseFloat(oportunidadDescuento.total_vencido);
       insights.push({
-        tipo: 'cxc_vencidas',
-        severidad: 'alta',
-        titulo: `${cxcVencidas.count} facturas de clientes vencidas`,
-        descripcion: `Tienes Q${Math.round(parseFloat(cxcVencidas.total) || 0).toLocaleString()} pendiente de cobro con más de 30 días de atraso.`,
-        monto_impacto: parseFloat(cxcVencidas.total) || 0,
-        accion_sugerida: 'Contactar clientes con más de 30 días de atraso',
+        tipo: 'oportunidad',
+        severidad: 'info',
+        titulo: `Descuento pronto pago recuperaría Q${Math.round(monto * 0.15).toLocaleString()}`,
+        descripcion: `Ofrecer 5% de descuento por pronto pago en facturas vencidas podría recuperar Q${Math.round(monto * 0.15).toLocaleString()} este mes, mejorando liquidez inmediatamente.`,
+        monto_impacto: monto * 0.15,
+        accion_sugerida: 'Enviar oferta de descuento',
         categoria: 'tesoreria'
-      });
-    }
-    
-    // Insight 2: CxP próximas a vencer (próximos 7 días)
-    const cxpProximas = await db.getAsync(`
-      SELECT COUNT(*) as count, SUM(monto_total) as total
-      FROM cuentas_pagar 
-      WHERE empresa_id = ? AND estado = 'pendiente' 
-      AND fecha_vencimiento <= CURRENT_DATE + INTERVAL '7 days'
-      AND fecha_vencimiento >= CURRENT_DATE
-    `, [empresaId]);
-    
-    if (cxpProximas && parseInt(cxpProximas.count) > 0) {
-      insights.push({
-        tipo: 'cxp_vencidas',
-        severidad: 'media',
-        titulo: `${cxpProximas.count} pagos pendientes esta semana`,
-        descripcion: `Tienes Q${Math.round(parseFloat(cxpProximas.total) || 0).toLocaleString()} en pagos que vencen en los próximos 7 días.`,
-        monto_impacto: parseFloat(cxpProximas.total) || 0,
-        accion_sugerida: 'Programar pagos de proveedores',
-        categoria: 'tesoreria'
-      });
-    }
-    
-    // Insight 3: CxP ya vencidas
-    const cxpVencidas = await db.getAsync(`
-      SELECT COUNT(*) as count, SUM(monto_total) as total
-      FROM cuentas_pagar 
-      WHERE empresa_id = ? AND estado = 'pendiente' 
-      AND fecha_vencimiento < CURRENT_DATE
-    `, [empresaId]);
-    
-    if (cxpVencidas && parseInt(cxpVencidas.count) > 0) {
-      insights.push({
-        tipo: 'cxp_vencidas',
-        severidad: 'alta',
-        titulo: `${cxpVencidas.count} pagos a proveedores vencidos`,
-        descripcion: `Tienes Q${Math.round(parseFloat(cxpVencidas.total) || 0).toLocaleString()} en facturas vencidas con proveedores.`,
-        monto_impacto: parseFloat(cxpVencidas.total) || 0,
-        accion_sugerida: 'Negociar pronto pago o extensión con proveedores',
-        categoria: 'tesoreria'
-      });
-    }
-    
-    // Insight 4: Posición de liquidez
-    const liquidez = await db.getAsync(`
-      SELECT SUM(saldo) as total_disponible
-      FROM cuentas_bancarias 
-      WHERE empresa_id = ? AND activa = TRUE AND moneda = 'GTQ'
-    `, [empresaId]);
-    
-    const diasOperacion = Math.floor((parseFloat(liquidez?.total_disponible) || 0) / 50000);
-    
-    if (diasOperacion < 30) {
-      insights.push({
-        tipo: 'deterioro_flujo_caja',
-        severidad: diasOperacion < 15 ? 'alta' : 'media',
-        titulo: `Liquidez limitada: ${diasOperacion} días de operación`,
-        descripcion: `Tu efectivo disponible cubre aproximadamente ${diasOperacion} días de operación. Considera acelerar cobranzas.`,
-        monto_impacto: parseFloat(liquidez?.total_disponible) || 0,
-        accion_sugerida: 'Acelerar cobranzas de clientes',
-        categoria: 'tesoreria'
-      });
-    }
-    
-    // Insight 5: Comparativa de gastos vs mes anterior (simplificado)
-    const gastosMes = await db.getAsync(`
-      SELECT 
-        COALESCE(SUM(CASE WHEN TO_CHAR(fecha, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN monto ELSE 0 END), 0) as mes_actual,
-        COALESCE(SUM(CASE WHEN TO_CHAR(fecha, 'YYYY-MM') = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM') THEN monto ELSE 0 END), 0) as mes_anterior
-      FROM transacciones t
-      JOIN cuentas_contables c ON t.cuenta_id = c.id
-      WHERE t.tipo = 'debe' AND c.codigo LIKE '51%'
-    `);
-    
-    const variacionGastos = parseFloat(gastosMes.mes_anterior) > 0 
-      ? ((parseFloat(gastosMes.mes_actual) - parseFloat(gastosMes.mes_anterior)) / parseFloat(gastosMes.mes_anterior)) * 100 
-      : 0;
-    
-    if (Math.abs(variacionGastos) > 20) {
-      insights.push({
-        tipo: variacionGastos > 0 ? 'gasto_anormal' : 'gasto_reducido',
-        severidad: Math.abs(variacionGastos) > 50 ? 'alta' : 'media',
-        titulo: `Gastos operativos ${variacionGastos > 0 ? 'aumentaron' : 'disminuyeron'} ${Math.abs(variacionGastos).toFixed(1)}%`,
-        descripcion: `Comparado con el mes anterior, tus gastos operativos han ${variacionGastos > 0 ? 'subido' : 'bajado'} significativamente.`,
-        monto_impacto: Math.abs(parseFloat(gastosMes.mes_actual) - parseFloat(gastosMes.mes_anterior)),
-        accion_sugerida: 'Revisar desglose de gastos',
-        categoria: 'contabilidad'
       });
     }
     

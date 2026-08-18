@@ -7,10 +7,10 @@ import {
 } from '@heroicons/react/24/outline'
 
 /**
- * RunwayCalculator - Componente de cálculo de meses de operación
+ * Calculadora de Reserva - Componente de cálculo de meses de operación
  * 
- * Fórmula: Runway = Efectivo Disponible / Burn Rate Mensual
- * Burn Rate = (Gastos Operativos - Ingresos Operativos) mensual promedio
+ * Fórmula: Reserva = Efectivo Disponible / Quema de Efectivo Mensual
+ * Quema de Efectivo = (Gastos Operativos - Ingresos Operativos) mensual promedio
  * 
  * Umbrales:
  * - 🟢 >6 meses: Saludable
@@ -143,7 +143,7 @@ export default function RunwayCalculator({
             <CalculatorIcon className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="font-semibold">Runway Calculator</h2>
+            <h2 className="font-semibold">Calculadora de Reserva</h2>
             <p className="text-sm text-[var(--text-muted)]">Meses de operación con efectivo actual</p>
           </div>
         </div>
@@ -157,7 +157,7 @@ export default function RunwayCalculator({
         {/* KPI Principal */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className={`p-4 rounded-lg ${config.bg} border ${config.border}`}>
-            <span className="text-sm text-[var(--text-muted)]">Runway</span>
+            <span className="text-sm text-[var(--text-muted)]">Reserva</span>
             <p className={`text-3xl font-bold ${config.color}`}>
               {meses.toFixed(1)} meses
             </p>

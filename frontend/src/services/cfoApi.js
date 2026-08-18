@@ -73,6 +73,14 @@ export const endpoints = {
     clear: () => cfoApi.post('/agents/clear'),
     logs: (params) => cfoApi.get('/agents/logs', { params }),
     createLog: (data) => cfoApi.post('/agents/logs', data)
+  },
+  // Márgenes
+  margenes: {
+    resumen: () => cfoApi.get('/margenes'),
+    detalleProducto: (id) => cfoApi.get(`/margenes/producto/${id}/detalle`),
+    vendedores: () => cfoApi.get('/margenes/vendedores'),
+    clientes: () => cfoApi.get('/margenes/clientes'),
+    lineas: () => cfoApi.get('/margenes/lineas'),
   }
 }
 

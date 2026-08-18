@@ -3,25 +3,27 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import DashboardLayout from './components/dashboard/DashboardLayout'
 import Dashboard from './pages/Dashboard'
 import Tesoreria from './pages/Tesoreria'
-import Contabilidad from './pages/Contabilidad'
+// import Contabilidad from './pages/Contabilidad'
 import Analisis from './pages/Analisis'
 import GastosOperativos from './pages/GastosOperativos'
 import HistorialVentas from './pages/HistorialVentas'
 import Compras from './pages/Compras'
-import SAT from './pages/SAT'
+import Ventas from './pages/Ventas'
+// import SAT from './pages/SAT'
 import LogActividades from './pages/LogActividades'
 import Usuarios from './pages/Usuarios'
 import Login from './pages/Login'
 // Páginas secundarias
-import LibroDiario from './pages/LibroDiario'
+// import LibroDiario from './pages/LibroDiario'
 import CuentasPorCobrar from './pages/CuentasPorCobrar'
 import CuentasPorPagar from './pages/CuentasPorPagar'
-import CuentasBancarias from './pages/CuentasBancarias'
+// import CuentasBancarias from './pages/CuentasBancarias'
 import ProyeccionesFinancieras from './pages/ProyeccionesFinancieras'
+import Margenes from './pages/Margenes'
 // Cierre Mensual
-import CierreDashboard from './pages/CierreDashboard'
-import CierreWizard from './pages/CierreWizard'
-import ConciliacionBancaria from './pages/ConciliacionBancaria'
+// import CierreDashboard from './pages/CierreDashboard'
+// import CierreWizard from './pages/CierreWizard'
+// import ConciliacionBancaria from './pages/ConciliacionBancaria'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -52,25 +54,27 @@ function AppRoutes() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/tesoreria" element={<Tesoreria />} />
-                <Route path="/contabilidad" element={<Contabilidad />} />
+                {/* <Route path="/contabilidad" element={<Contabilidad />} /> */}
                 <Route path="/analisis" element={<Analisis />} />
                 <Route path="/gastos-operativos" element={<GastosOperativos />} />
                 <Route path="/gastos-operativos/historial-servicios" element={<HistorialVentas />} />
                 <Route path="/compras" element={<Compras />} />
                 <Route path="/compras/historial-ventas" element={<HistorialVentas />} />
-                <Route path="/sat" element={<SAT />} />
+                <Route path="/ventas" element={<Ventas />} />
+                <Route path="/margenes" element={<Margenes />} />
+                {/* <Route path="/sat" element={<SAT />} /> */}
                 <Route path="/log-actividades" element={<LogActividades />} />
                 <Route path="/usuarios" element={<Usuarios />} />
                 {/* Páginas secundarias */}
-                <Route path="/contabilidad/libro-diario" element={<LibroDiario />} />
+                {/* <Route path="/contabilidad/libro-diario" element={<LibroDiario />} /> */}
                 <Route path="/tesoreria/cuentas-por-cobrar" element={<CuentasPorCobrar />} />
                 <Route path="/tesoreria/cuentas-por-pagar" element={<CuentasPorPagar />} />
-                <Route path="/tesoreria/cuentas-bancarias" element={<CuentasBancarias />} />
+                {/* <Route path="/tesoreria/cuentas-bancarias" element={<CuentasBancarias />} /> */}
                 <Route path="/tesoreria/proyecciones" element={<ProyeccionesFinancieras />} />
                 {/* Cierre Mensual */}
-                <Route path="/contabilidad/cierre" element={<CierreDashboard />} />
-                <Route path="/contabilidad/cierre/:anio/:mes" element={<CierreWizard />} />
-                <Route path="/contabilidad/conciliacion/:cuentaId/:anio/:mes" element={<ConciliacionBancaria />} />
+                {/* <Route path="/contabilidad/cierre" element={<CierreDashboard />} /> */}
+                {/* <Route path="/contabilidad/cierre/:anio/:mes" element={<CierreWizard />} /> */}
+                {/* <Route path="/contabilidad/conciliacion/:cuentaId/:anio/:mes" element={<ConciliacionBancaria />} /> */}
               </Routes>
             </DashboardLayout>
           </ProtectedRoute>

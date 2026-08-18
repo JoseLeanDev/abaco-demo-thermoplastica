@@ -1,7 +1,7 @@
 {
-  "name": "cfo-ai-backend",
+  "name": "abaco-thermoplastica-backend",
   "version": "1.0.0",
-  "description": "CFO AI Backend API with Multi-Agent System",
+  "description": "abaco Backend API - Thermoplástica Demo",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

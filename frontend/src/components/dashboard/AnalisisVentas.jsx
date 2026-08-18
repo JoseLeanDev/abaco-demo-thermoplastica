@@ -21,60 +21,60 @@ const formatGTQ = (value) => {
 }
 
 // ============================================
-// DATOS DE SERVICIOS - LAVANDERÍA
+// DATOS DE PRODUCTOS - THERMOPLÁSTICA
 // ============================================
 const serviciosData = [
-  { id: 1, nombre: 'Lavandería Industrial B2B (hoteles)', categoria: 'B2B - Hotelería', volumenMensual: 8500, ingresos: 1062500, margen: 45, tendencia: 'up', capacidad: 'alta' },
-  { id: 2, nombre: 'Lavandería Industrial B2B (restaurantes)', categoria: 'B2B - Restaurantes', volumenMensual: 6200, ingresos: 775000, margen: 42, tendencia: 'up', capacidad: 'alta' },
-  { id: 3, nombre: 'Tintorería y Planchado Premium', categoria: 'B2C - Premium', volumenMensual: 650, ingresos: 292500, margen: 52, tendencia: 'up', capacidad: 'media' },
-  { id: 4, nombre: 'Lavado de Uniformes (gimnasios/clínicas)', categoria: 'B2B - Corporativo', volumenMensual: 3200, ingresos: 272000, margen: 38, tendencia: 'stable', capacidad: 'alta' },
-  { id: 5, nombre: 'Lavado de Ropa de Cama (hoteles)', categoria: 'B2B - Hotelería', volumenMensual: 4200, ingresos: 189000, margen: 35, tendencia: 'down', capacidad: 'media' },
-  { id: 6, nombre: 'Servicio Express 24h', categoria: 'B2C - Premium', volumenMensual: 450, ingresos: 168750, margen: 48, tendencia: 'up', capacidad: 'baja' },
-  { id: 7, nombre: 'Lavandería Doméstica B2C', categoria: 'B2C - Estándar', volumenMensual: 1200, ingresos: 180000, margen: 28, tendencia: 'stable', capacidad: 'alta' },
-  { id: 8, nombre: 'Lavado Especializado (hospitales)', categoria: 'B2B - Salud', volumenMensual: 1800, ingresos: 162000, margen: 40, tendencia: 'up', capacidad: 'media' },
+  { id: 1, nombre: 'Termoformados Alimentarios (bandejas/contenedores)', categoria: 'Alimentaria', volumenMensual: 8500, ingresos: 1062500, margen: 45, tendencia: 'up', capacidad: 'alta' },
+  { id: 2, nombre: 'Envases PET para Bebidas (500ml/2L)', categoria: 'Bebidas', volumenMensual: 6200, ingresos: 775000, margen: 42, tendencia: 'up', capacidad: 'alta' },
+  { id: 3, nombre: 'Laminaciones PVC/PVDC/Aluminio', categoria: 'Logística/Seguridad', volumenMensual: 650, ingresos: 292500, margen: 52, tendencia: 'up', capacidad: 'media' },
+  { id: 4, nombre: 'Envases Polietileno Soplado (PE/PP)', categoria: 'Química/Cosmética', volumenMensual: 3200, ingresos: 272000, margen: 38, tendencia: 'stable', capacidad: 'alta' },
+  { id: 5, nombre: 'Envases PET para Bebidas (500ml/2L)', categoria: 'Alimentaria', volumenMensual: 4200, ingresos: 189000, margen: 35, tendencia: 'down', capacidad: 'media' },
+  { id: 6, nombre: 'Blísters Termoformados Farmacéuticos', categoria: 'Logística/Seguridad', volumenMensual: 450, ingresos: 168750, margen: 48, tendencia: 'up', capacidad: 'baja' },
+  { id: 7, nombre: 'Contenedores Industriales Termoformados', categoria: 'Industrial', volumenMensual: 1200, ingresos: 180000, margen: 28, tendencia: 'stable', capacidad: 'alta' },
+  { id: 8, nombre: 'Tapas y Válvulas para Envases', categoria: 'Farmacéutica', volumenMensual: 1800, ingresos: 162000, margen: 40, tendencia: 'up', capacidad: 'media' },
 ]
 
 const sucursalesData = [
-  { id: 1, nombre: 'Sucursal Central - Zona 10', region: 'Guatemala', ventas: 4200000, transacciones: 1840, ticketPromedio: 2282, clientesUnicos: 42, meta: 4000000, cumplimiento: 105 },
-  { id: 2, nombre: 'Sucursal Zona 1', region: 'Guatemala', ventas: 2100000, transacciones: 1320, ticketPromedio: 1591, clientesUnicos: 35, meta: 2200000, cumplimiento: 95 },
-  { id: 3, nombre: 'Sucursal Zona 14', region: 'Guatemala', ventas: 2800000, transacciones: 1280, ticketPromedio: 2187, clientesUnicos: 38, meta: 2600000, cumplimiento: 108 },
-  { id: 4, nombre: 'Sucursal Mixco', region: 'Mixco', ventas: 1900000, transacciones: 950, ticketPromedio: 2000, clientesUnicos: 28, meta: 2000000, cumplimiento: 95 },
+  { id: 1, nombre: 'Planta Industrial Zona 3', region: 'Guatemala', ventas: 4200000, transacciones: 1840, ticketPromedio: 2282, clientesUnicos: 42, meta: 4000000, cumplimiento: 105 },
+  { id: 2, nombre: 'Bodega Zona 12', region: 'Guatemala', ventas: 2100000, transacciones: 1320, ticketPromedio: 1591, clientesUnicos: 35, meta: 2200000, cumplimiento: 95 },
+  { id: 3, nombre: 'Bodega Zona 124', region: 'Guatemala', ventas: 2800000, transacciones: 1280, ticketPromedio: 2187, clientesUnicos: 38, meta: 2600000, cumplimiento: 108 },
+  { id: 4, nombre: 'Centro de Distribución Mixco', region: 'Mixco', ventas: 1900000, transacciones: 950, ticketPromedio: 2000, clientesUnicos: 28, meta: 2000000, cumplimiento: 95 },
 ]
 
 const clientesData = [
-  { id: 1, nombre: 'Hotel Real Intercontinental', tipo: 'Hotel', compras: 1850000, transacciones: 45, ticketPromedio: 41111, frecuencia: 'Semanal', tendencia: 'up' },
-  { id: 2, nombre: 'Hotel Barceló Guatemala', tipo: 'Hotel', compras: 1420000, transacciones: 38, ticketPromedio: 37368, frecuencia: 'Semanal', tendencia: 'up' },
-  { id: 3, nombre: 'Grupo Cacao (Restaurantes)', tipo: 'Restaurante', compras: 980000, transacciones: 28, ticketPromedio: 35000, frecuencia: '2x semana', tendencia: 'stable' },
-  { id: 4, nombre: 'Centro Médico Integral', tipo: 'Salud', compras: 720000, transacciones: 52, ticketPromedio: 13846, frecuencia: 'Semanal', tendencia: 'up' },
-  { id: 5, nombre: 'Gimnasio Golds Gym', tipo: 'Fitness', compras: 450000, transacciones: 85, ticketPromedio: 5294, frecuencia: '2x semana', tendencia: 'up' },
-  { id: 6, nombre: 'Hotel Casa Santo Domingo', tipo: 'Hotel', compras: 380000, transacciones: 18, ticketPromedio: 21111, frecuencia: 'Semanal', tendencia: 'stable' },
-  { id: 7, nombre: 'Spa Santa María', tipo: 'Salud', compras: 290000, transacciones: 42, ticketPromedio: 6905, frecuencia: 'Semanal', tendencia: 'down' },
-  { id: 8, nombre: 'Restaurante Hacienda Real', tipo: 'Restaurante', compras: 195000, transacciones: 25, ticketPromedio: 7800, frecuencia: '2x semana', tendencia: 'up' },
+  { id: 1, nombre: 'Cervecería Centroamericana', tipo: 'Alimentaria', compras: 1850000, transacciones: 45, ticketPromedio: 41111, frecuencia: 'Semanal', tendencia: 'up' },
+  { id: 2, nombre: 'Cementos Progreso', tipo: 'Alimentaria', compras: 1420000, transacciones: 38, ticketPromedio: 37368, frecuencia: 'Semanal', tendencia: 'up' },
+  { id: 3, nombre: 'Transportes Galgos', tipo: 'Logística', compras: 980000, transacciones: 28, ticketPromedio: 35000, frecuencia: '2x semana', tendencia: 'stable' },
+  { id: 4, nombre: 'Genfar Guatemala', tipo: 'Farmacéutica', compras: 720000, transacciones: 52, ticketPromedio: 13846, frecuencia: 'Semanal', tendencia: 'up' },
+  { id: 5, nombre: 'Empresas Diana', tipo: 'Química', compras: 450000, transacciones: 85, ticketPromedio: 5294, frecuencia: '2x semana', tendencia: 'up' },
+  { id: 6, nombre: 'Lácteos del Sur', tipo: 'Alimentaria', compras: 380000, transacciones: 18, ticketPromedio: 21111, frecuencia: 'Semanal', tendencia: 'stable' },
+  { id: 7, nombre: 'Agua Pura Vida', tipo: 'Farmacéutica', compras: 290000, transacciones: 42, ticketPromedio: 6905, frecuencia: 'Semanal', tendencia: 'down' },
+  { id: 8, nombre: 'Helados Sarita', tipo: 'Logística', compras: 195000, transacciones: 25, ticketPromedio: 7800, frecuencia: '2x semana', tendencia: 'up' },
 ]
 
 const insightsData = [
   {
     tipo: 'oportunidad',
-    titulo: 'Lavandería B2B lidera con 45% margen',
-    descripcion: 'El servicio a hoteles genera Q1.06M mensuales. Negociar contratos anuales con hotelería para mejorar margen al 48%.',
+    titulo: 'Termoformados Alimentarios lideran con 44% margen',
+    descripcion: 'El producto a industria alimentaria genera Q1.06M mensuales. Negociar contratos anuales con cervecería para mejorar margen al 48%.',
     icono: TrophyIcon
   },
   {
     tipo: 'alerta',
-    titulo: 'Capacidad media en Ropa de Cama',
-    descripcion: 'Sucursal Zona 10 opera al 85% de capacidad en lavado de ropa de cama. Considerar invertir en lavadoras industriales adicionales.',
+    titulo: 'Capacidad media en Envases PE Soplado',
+    descripcion: 'Bodega Zona 120 opera al 85% de capacidad en envases polietileno. Considerar invertir en extrusoras adicionales adicionales.',
     icono: CubeIcon
   },
   {
     tipo: 'insight',
-    titulo: 'Sucursal Zona 14 supera meta en 8%',
-    descripcion: 'Aunque es la 3ra en volumen, tiene el mejor cumplimiento (108%). Replicar estrategia de atención express en otras sucursales.',
+    titulo: 'Bodega Zona 124 supera meta en 8%',
+    descripcion: 'Aunque es la 3ra en volumen, tiene el mejor cumplimiento (108%). Replicar estrategia de proceso de termoformado en otras sucursales.',
     icono: MapPinIcon
   },
   {
     tipo: 'alerta',
-    titulo: 'Cliente "Spa Santa María" en tendencia negativa',
-    descripcion: 'Servicios bajaron 15% vs mes anterior. Contactar para evaluar satisfacción y ofrecer paquete de fidelización.',
+    titulo: 'Cliente "Agua Pura Vida" en tendencia negativa',
+    descripcion: 'Ventas bajaron 15% vs mes anterior. Contactar para evaluar satisfacción y ofrecer contrato de exclusividad.',
     icono: UsersIcon
   }
 ]
@@ -227,12 +227,12 @@ export default function AnalisisVentas() {
                 className="input text-xs py-1.5 w-auto"
               >
                 <option value="todas">Todas las categorías</option>
-                <option value="B2B - Hotelería">B2B - Hotelería</option>
-                <option value="B2B - Restaurantes">B2B - Restaurantes</option>
-                <option value="B2B - Corporativo">B2B - Corporativo</option>
-                <option value="B2B - Salud">B2B - Salud</option>
-                <option value="B2C - Premium">B2C - Premium</option>
-                <option value="B2C - Estándar">B2C - Estándar</option>
+                <option value="Alimentaria">Alimentaria</option>
+                <option value="Bebidas">Bebidas</option>
+                <option value="Química/Cosmética">Química/Cosmética</option>
+                <option value="Farmacéutica">Farmacéutica</option>
+                <option value="Logística/Seguridad">Logística/Seguridad</option>
+                <option value="Industrial">Industrial</option>
               </select>
             )}
             {activeTab === 'sucursales' && (
@@ -253,10 +253,10 @@ export default function AnalisisVentas() {
                 className="input text-xs py-1.5 w-auto"
               >
                 <option value="todos">Todos los tipos</option>
-                <option value="Hotel">Hotel</option>
-                <option value="Restaurante">Restaurante</option>
-                <option value="Salud">Salud</option>
-                <option value="Fitness">Fitness</option>
+                <option value="Alimentaria">Alimentaria</option>
+                <option value="Logística">Logística</option>
+                <option value="Farmacéutica">Farmacéutica</option>
+                <option value="Química">Química</option>
               </select>
             )}
           </div>
@@ -342,7 +342,7 @@ export default function AnalisisVentas() {
             
             {/* Resumen por categoría */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {['B2B - Hotelería', 'B2B - Restaurantes', 'B2B - Corporativo', 'B2C - Premium'].map(cat => {
+              {['Alimentaria', 'Bebidas', 'Química/Cosmética', 'Logística/Seguridad'].map(cat => {
                 const serviciosCat = serviciosData.filter(s => s.categoria === cat)
                 const totalCat = serviciosCat.reduce((sum, s) => sum + s.ingresos, 0)
                 const margenPromedio = serviciosCat.length > 0 
@@ -535,9 +535,9 @@ export default function AnalisisVentas() {
                       </td>
                       <td>
                         <span className={`badge text-[10px] ${
-                          cliente.tipo === 'Hotel' ? 'badge-info' :
-                          cliente.tipo === 'Restaurante' ? 'badge-success' :
-                          cliente.tipo === 'Salud' ? 'badge-warning' :
+                          cliente.tipo === 'Alimentaria' ? 'badge-info' :
+                          cliente.tipo === 'Logística' ? 'badge-success' :
+                          cliente.tipo === 'Farmacéutica' ? 'badge-warning' :
                           'badge-neutral'
                         }`}>
                           {cliente.tipo}

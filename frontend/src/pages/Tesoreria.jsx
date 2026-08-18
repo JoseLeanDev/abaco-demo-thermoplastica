@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useTesoreriaPosicion, useTesoreriaCxC, useTesoreriaCxP, useTesoreriaProyeccion, useWorkingCapital } from '../hooks/useCfoData'
 import PageInsights from '../components/agents/PageInsights'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts'
 import { 
   BanknotesIcon, 
   ArrowTrendingUpIcon, 
@@ -49,10 +52,10 @@ export default function Tesoreria() {
         </div>
       </div>
 
-      {/* AI Insights */}
+      {/* Análisis de IA */}
       <PageInsights context="tesoreria" maxInsights={3} />
 
-      {/* KPI Cards */}
+      {/* Indicadores Clave */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
           <div className="flex items-center justify-between mb-2">
@@ -102,14 +105,14 @@ export default function Tesoreria() {
         </div>
       </div>
 
-      {/* Cash Conversion Cycle Section */}
+      {/* Ciclo de Conversión Section */}
       <div className="card">
         <div className="section-header">
           <ArrowPathIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <div className="flex-1">
-            <h2 className="font-semibold">Cash Conversion Cycle</h2>
+            <h2 className="font-semibold">Ciclo de Conversión</h2>
             <p className="text-xs text-[var(--text-muted)]">
-              {metricas.c2c?.interpretacion || 'Calculando...'} • Benchmark: {metricas.c2c?.benchmark || '—'} días
+              {metricas.c2c?.interpretacion || 'Calculando...'} • Referencia: {metricas.c2c?.benchmark || '—'} días
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -249,7 +252,8 @@ export default function Tesoreria() {
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cuentas Bancarias */}
+        {/* Cuentas Bancarias - OCULTO para Thermoplastica */}
+        {/*
         <div className="card">
           <div className="section-header">
             <BuildingLibraryIcon className="w-5 h-5 text-[var(--text-muted)]" />
@@ -310,13 +314,14 @@ export default function Tesoreria() {
             )}
           </div>
         </div>
+        */}
 
-        {/* CxC Aging */}
+        {/* CxC - Antigüedad */}
         <div className="card">
           <div className="section-header">
             <ArrowTrendingUpIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <div className="flex-1">
-              <h2 className="font-semibold">CxC - Aging</h2>
+              <h2 className="font-semibold">Cuentas por Cobrar</h2>
               <p className="text-xs text-[var(--text-muted)]">Promedio {cxcData.promedio_dias_cobro} días</p>
             </div>
             <span className="amount">{formatGTQ(cxcData.total_cxc)}</span>
@@ -383,7 +388,7 @@ export default function Tesoreria() {
           <div className="section-header">
             <ArrowTrendingDownIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <div className="flex-1">
-              <h2 className="font-semibold">CxP Próximos</h2>
+              <h2 className="font-semibold">Cuentas por Pagar</h2>
               <p className="text-xs text-[var(--text-muted)]">Promedio {cxpData.promedio_dias_pago} días</p>
             </div>
             <span className="amount">{formatGTQ(cxpData.total_cxp)}</span>
@@ -424,95 +429,336 @@ export default function Tesoreria() {
           </Link>
         </div>
 
-        {/* Proyección Cash Flow */}
-        <div className="card">
+        {/* ========== PROYECCIÓN CASH FLOW EXPANDIDA ========== */}
+        <div className="lg:col-span-2 card">
           <div className="section-header">
-            <ArrowTrendingUpIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <ArrowTrendingUpIcon className="w-5 h-5 text-[var(--accent-blue)]" />
             <div className="flex-1">
-              <h2 className="font-semibold">Proyección Cash Flow</h2>
-              <p className="text-xs text-[var(--text-muted)]">13 semanas</p>
+              <h2 className="font-semibold">Proyección de Cash Flow</h2>
+              <p className="text-xs text-[var(--text-muted)]">13 semanas · Ingresos, egresos y saldo acumulado</p>
             </div>
             {proyeccionData.resumen?.riesgo_quiebra_tecnica && (
-              <span className="badge-danger text-xs">⚠️ Riesgo</span>
+              <span className="badge-danger text-xs">⚠️ Riesgo de liquidez</span>
             )}
           </div>
-          
+
           {loadingProy ? (
-            <div className="h-48 flex items-center justify-center">
+            <div className="h-64 flex items-center justify-center">
               <div className="w-8 h-8 border-2 border-[#001639] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : proyeccionData.proyeccion?.length > 0 ? (
-            <div className="p-5 pt-0">
-              <div className="h-48 flex items-end justify-between gap-1">
-                {proyeccionData.proyeccion.slice(0, 12).map((semana, idx) => {
-                  const saldos = proyeccionData.proyeccion.map(s => s.saldo_acumulado || 0)
-                  const maxSaldo = Math.max(...saldos)
-                  const minSaldo = Math.min(...saldos)
-                  const range = maxSaldo - minSaldo || maxSaldo || 1
-                  const altura = ((semana.saldo_acumulado - minSaldo) / range * 75) + 15
-
-                  return (
-                    <div key={idx} className="flex-1 flex flex-col items-center gap-1 group">
-                      <div className="relative w-full flex items-end justify-center" style={{ height: '140px' }}>
-                        <div className={`w-full rounded-t transition-all ${
-                          semana.certeza === 'baja' ? 'bg-blue-300' :
-                          semana.certeza === 'media' ? 'bg-blue-400' :
-                          'bg-blue-500'
-                        } ${semana.alerta ? 'ring-2 ring-rose-400' : ''}`}
-                          style={{ height: `${Math.max(altura, 8)}%`, minHeight: '8px' }}
-                        />
-                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-[#001639] text-white text-xs py-1.5 px-2.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
-                          S{semana.semana}: Q{semana.saldo_acumulado.toLocaleString()}
-                          {semana.alerta && <span className="block text-rose-400">⚠️ {semana.alerta}</span>}
-                        </div>
-                      </div>
-                      {idx % 3 === 0 && (
-                        <span className="text-xs text-[var(--text-muted)]">S{idx + 1}</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              
-              <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-                <div className="bg-[var(--bg-secondary)] p-3 rounded-lg">
-                  <p className="text-xs text-[var(--text-muted)]">Saldo Mínimo</p>
-                  <p className={`text-lg font-bold tabular-nums ${proyeccionData.resumen?.riesgo_quiebra_tecnica ? 'text-[var(--danger)]' : ''}`}>
+            <div className="p-5 pt-0 space-y-6">
+              {/* KPIs de Cash Flow */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-3 bg-[var(--bg-secondary)] rounded-lg text-center">
+                  <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Ingresos Esperados</p>
+                  <p className="text-lg font-bold font-mono text-[var(--success)]">
+                    Q{proyeccionData.proyeccion.reduce((s, sem) => s + (sem.ingresos || 0), 0).toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-[var(--text-muted)]">13 semanas</p>
+                </div>
+                <div className="p-3 bg-[var(--bg-secondary)] rounded-lg text-center">
+                  <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Egresos Esperados</p>
+                  <p className="text-lg font-bold font-mono text-[var(--danger)]">
+                    Q{proyeccionData.proyeccion.reduce((s, sem) => s + (sem.egresos || 0), 0).toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-[var(--text-muted)]">13 semanas</p>
+                </div>
+                <div className="p-3 bg-[var(--bg-secondary)] rounded-lg text-center">
+                  <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Saldo Neto</p>
+                  <p className={`text-lg font-bold font-mono ${
+                    proyeccionData.proyeccion.reduce((s, sem) => s + (sem.ingresos || 0) - (sem.egresos || 0), 0) >= 0
+                      ? 'text-[var(--success)]' : 'text-[var(--danger)]'
+                  }`}>
+                    Q{proyeccionData.proyeccion.reduce((s, sem) => s + (sem.ingresos || 0) - (sem.egresos || 0), 0).toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-[var(--text-muted)]">Ingresos - Egresos</p>
+                </div>
+                <div className="p-3 bg-[var(--bg-secondary)] rounded-lg text-center">
+                  <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Brecha Mínima</p>
+                  <p className={`text-lg font-bold font-mono ${
+                    (proyeccionData.resumen?.saldo_minimo_proyectado || 0) < 500000 ? 'text-[var(--danger)]' : 'text-[var(--success)]'
+                  }`}>
                     Q{(proyeccionData.resumen?.saldo_minimo_proyectado || 0).toLocaleString()}
                   </p>
-                </div>
-                <div className="bg-[var(--bg-secondary)] p-3 rounded-lg">
-                  <p className="text-xs text-[var(--text-muted)]">Saldo Máximo</p>
-                  <p className="text-lg font-bold tabular-nums">
-                    Q{(proyeccionData.resumen?.saldo_maximo_proyectado || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="bg-[var(--bg-secondary)] p-3 rounded-lg">
-                  <p className="text-xs text-[var(--text-muted)]">Semana Crítica</p>
-                  <p className={`text-lg font-bold tabular-nums ${proyeccionData.resumen?.semana_critica < 8 ? 'text-[var(--danger)]' : ''}`}>
-                    {proyeccionData.resumen?.semana_critica || '—'}
-                  </p>
+                  <p className="text-[10px] text-[var(--text-muted)]">Semana {proyeccionData.resumen?.semana_critica || '—'}</p>
                 </div>
               </div>
-              
-              <div className="mt-4 flex items-center justify-between text-sm">
+
+              {/* Gráfica de barras stacked: Ingresos vs Egresos */}
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={proyeccionData.proyeccion.slice(0, 13).map((sem, idx) => ({
+                      semana: `S${idx + 1}`,
+                      ingresos: sem.ingresos || 0,
+                      egresos: sem.egresos || 0,
+                      saldo: sem.saldo_acumulado || 0,
+                    }))}
+                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="semana" tick={{ fontSize: 11, fill: '#6b7280' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v) => `Q${(v/1000).toFixed(0)}K`} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        const sem = proyeccionData.proyeccion[parseInt(label.replace('S', '')) - 1]
+                        return (
+                          <div className="bg-white p-3 rounded-lg shadow-lg border border-[var(--border-default)] min-w-[200px]">
+                            <p className="text-xs font-medium text-[var(--text-muted)] mb-2">{label}</p>
+                            {payload.map((p, i) => (
+                              <p key={i} className="text-sm font-semibold" style={{ color: p.color }}>
+                                {p.name}: {formatGTQ(p.value)}
+                              </p>
+                            ))}
+                            <p className="text-xs font-medium text-[var(--text-primary)] mt-2 pt-2 border-t border-[var(--border-default)]">
+                              Saldo acumulado: {formatGTQ(sem?.saldo_acumulado || 0)}
+                            </p>
+                            {sem?.alerta && (
+                              <p className="text-xs text-[var(--danger)] mt-1">⚠️ {sem.alerta}</p>
+                            )}
+                          </div>
+                        )
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="ingresos" name="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="egresos" name="Egresos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Tabla de semanas */}
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th className="text-left">Semana</th>
+                      <th className="text-right">Ingresos</th>
+                      <th className="text-right">Egresos</th>
+                      <th className="text-right">Saldo Neto</th>
+                      <th className="text-right">Saldo Acum.</th>
+                      <th className="text-center">Certeza</th>
+                      <th className="text-left">Alerta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proyeccionData.proyeccion.slice(0, 13).map((sem, idx) => {
+                      const neto = (sem.ingresos || 0) - (sem.egresos || 0)
+                      return (
+                        <tr key={idx} className={sem.alerta ? 'bg-red-50/50' : ''}>
+                          <td>
+                            <span className="font-mono text-sm font-medium">S{idx + 1}</span>
+                            <p className="text-[10px] text-[var(--text-muted)]">{sem.fecha_estimada || `Sem ${idx + 1}`}</p>
+                          </td>
+                          <td className="text-right font-mono text-sm text-[var(--success)]">{formatGTQ(sem.ingresos || 0)}</td>
+                          <td className="text-right font-mono text-sm text-[var(--danger)]">{formatGTQ(sem.egresos || 0)}</td>
+                          <td className="text-right font-mono text-sm font-medium">
+                            <span className={neto >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>
+                              {neto >= 0 ? '+' : ''}{formatGTQ(neto)}
+                            </span>
+                          </td>
+                          <td className="text-right font-mono text-sm font-bold">
+                            {formatGTQ(sem.saldo_acumulado || 0)}
+                          </td>
+                          <td className="text-center">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                              sem.certeza === 'alta' ? 'bg-green-100 text-green-700' :
+                              sem.certeza === 'media' ? 'bg-amber-100 text-amber-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {sem.certeza === 'alta' ? 'Alta' : sem.certeza === 'media' ? 'Media' : 'Baja'}
+                            </span>
+                          </td>
+                          <td>
+                            {sem.alerta ? (
+                              <span className="text-[10px] text-[var(--danger)] flex items-center gap-1">
+                                <ExclamationTriangleIcon className="w-3 h-3" />
+                                {sem.alerta}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-[var(--text-muted)]">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Movimientos por categoría */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <ArrowTrendingUpIcon className="w-4 h-4 text-[var(--success)]" />
+                    Ingresos por Origen
+                  </h3>
+                  {proyeccionData.categorias_ingresos?.length > 0 ? (
+                    proyeccionData.categorias_ingresos.map((cat, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">
+                            {cat.porcentaje}%
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{cat.nombre}</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">{cat.cantidad} transacciones</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--success)]">{formatGTQ(cat.monto)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">72%</div>
+                          <div>
+                            <p className="text-sm font-medium">Cobros a Clientes</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">CxC por vencer</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--success)]">Q8,450,000</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">18%</div>
+                          <div>
+                            <p className="text-sm font-medium">Ventas Contado</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">Ventas de contado</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--success)]">Q2,110,000</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">10%</div>
+                          <div>
+                            <p className="text-sm font-medium">Otros Ingresos</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">Recuperaciones, intereses</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--success)]">Q1,170,000</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <ArrowTrendingDownIcon className="w-4 h-4 text-[var(--danger)]" />
+                    Egresos por Destino
+                  </h3>
+                  {proyeccionData.categorias_egresos?.length > 0 ? (
+                    proyeccionData.categorias_egresos.map((cat, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">
+                            {cat.porcentaje}%
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{cat.nombre}</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">{cat.cantidad} transacciones</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--danger)]">{formatGTQ(cat.monto)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">45%</div>
+                          <div>
+                            <p className="text-sm font-medium">Pagos a Proveedores</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">CxP por vencer</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--danger)]">Q5,620,000</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">28%</div>
+                          <div>
+                            <p className="text-sm font-medium">Nómina y Cargas Sociales</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">Quincenal + bonificaciones</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--danger)]">Q3,490,000</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">15%</div>
+                          <div>
+                            <p className="text-sm font-medium">Impuestos</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">IVA, ISR, pagos trimestrales</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--danger)]">Q1,870,000</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">12%</div>
+                          <div>
+                            <p className="text-sm font-medium">Gastos Operativos</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">Servicios, alquiler, mantenimiento</p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-semibold text-sm text-[var(--danger)]">Q1,500,000</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Alertas de liquidez */}
+              {proyeccionData.alertas?.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <ExclamationTriangleIcon className="w-4 h-4 text-[var(--danger)]" />
+                    Alertas de Liquidez
+                  </h3>
+                  {proyeccionData.alertas.map((alerta, idx) => (
+                    <div key={idx} className={`p-3 rounded-lg flex items-start gap-2 ${
+                      alerta.severidad === 'critica' ? 'bg-rose-50 border border-rose-200' : 'bg-amber-50 border border-amber-200'
+                    }`}>
+                      <ExclamationTriangleIcon className={`w-4 h-4 flex-shrink-0 mt-0.5 ${
+                        alerta.severidad === 'critica' ? 'text-rose-500' : 'text-amber-500'
+                      }`} />
+                      <div>
+                        <p className={`text-sm font-medium ${
+                          alerta.severidad === 'critica' ? 'text-rose-700' : 'text-amber-700'
+                        }`}>
+                          {alerta.mensaje}
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)] mt-1">{alerta.accion_urgente}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Resumen de certeza */}
+              <div className="flex items-center justify-between text-sm pt-4 border-t border-[var(--border-default)]">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-500" />
-                    <span className="text-[var(--text-muted)]">Alta certeza</span>
+                    <div className="w-3 h-3 rounded-full bg-[#10b981]" />
+                    <span className="text-[var(--text-muted)] text-xs">Ingresos</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-300" />
-                    <span className="text-[var(--text-muted)]">Baja certeza</span>
+                    <div className="w-3 h-3 rounded-full bg-[#ef4444]" />
+                    <span className="text-[var(--text-muted)] text-xs">Egresos</span>
                   </div>
                 </div>
-                <span className="text-[var(--text-muted)]">
-                  Saldo proyectado: Q{proyeccionData.proyeccion[proyeccionData.proyeccion.length - 1]?.saldo_acumulado.toLocaleString()}
+                <span className="text-[var(--text-muted)] text-xs">
+                  Saldo final proyectado: Q{proyeccionData.proyeccion[proyeccionData.proyeccion.length - 1]?.saldo_acumulado.toLocaleString()}
                 </span>
               </div>
             </div>
           ) : (
-            <div className="h-48 flex items-center justify-center text-[var(--text-muted)]">
+            <div className="h-64 flex items-center justify-center text-[var(--text-muted)]">
               No hay datos de proyección disponibles
             </div>
           )}

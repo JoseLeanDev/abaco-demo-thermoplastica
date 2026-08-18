@@ -17,7 +17,7 @@ export default function Analisis() {
         </div>
       </div>
 
-      {/* AI Insights */}
+      {/* Análisis de IA */}
       <PageInsights context="analisis" maxInsights={3} />
 
       {/* Subsección: Análisis de Ventas (Servicios, Sucursales, Clientes) */}
@@ -55,10 +55,10 @@ export default function Analisis() {
           
           <div className="space-y-4 p-5 pt-0">
             {[
-              { dimension: 'Por Servicio', servicio: 'Lavandería B2B Hotelería', rentabilidad: 45, unidades: 8500 },
-              { dimension: 'Por Línea', servicio: 'B2B - Hotelería', rentabilidad: 42, unidades: 6200 },
-              { dimension: 'Por Cliente', servicio: 'Hotel Real Intercontinental', rentabilidad: 48, unidades: 45 },
-              { dimension: 'Por Sucursal', servicio: 'Sucursal Central Zona 10', rentabilidad: 38, unidades: 2100 },
+              { dimension: 'Por Servicio', servicio: 'Termoformados Alimentarios', rentabilidad: 45, unidades: 8500 },
+              { dimension: 'Por Línea', servicio: 'Alimentaria', rentabilidad: 42, unidades: 6200 },
+              { dimension: 'Por Cliente', servicio: 'Cervecería Centroamericana', rentabilidad: 48, unidades: 45 },
+              { dimension: 'Por Sucursal', servicio: 'Planta Industrial Zona 3', rentabilidad: 38, unidades: 2100 },
             ].map((item, idx) => (
               <div key={idx} className="p-4 bg-[var(--bg-secondary)] rounded-lg">
                 <div className="flex items-center justify-between mb-2">

@@ -1,7 +1,7 @@
 {
-  "name": "cfo-ai-frontend",
+  "name": "abaco-thermoplastica-frontend",
   "version": "1.0.0",
-  "description": "Frontend React para CFO AI",
+  "description": "Frontend React para abaco - Thermoplástica Demo",
   "private": true,
   "scripts": {
     "dev": "vite",

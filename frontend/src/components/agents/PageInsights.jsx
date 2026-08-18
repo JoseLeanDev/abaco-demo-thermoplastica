@@ -39,7 +39,7 @@ export default function PageInsights({
     tesoreria: 'Insights de Tesorería',
     contabilidad: 'Insights Contables',
     analisis: 'Insights de Análisis',
-    general: 'Insights de IA'
+    general: 'Análisis de IA'
   }
   
   const title = customTitle || titles[context] || titles.general
@@ -162,10 +162,10 @@ export default function PageInsights({
         </div>
       </div>
       
-      {/* Lista de insights */}
-      <div className="divide-y divide-slate-100">
+      {/* Grid de insights - 2 columnas */}
+      <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
         {insights.length === 0 ? (
-          <div className="p-6 text-center text-slate-400">
+          <div className="col-span-2 p-6 text-center text-slate-400">
             <p>No hay insights disponibles</p>
             <p className="text-xs mt-1">Los insights se generan automáticamente al analizar tus datos</p>
           </div>
@@ -178,55 +178,55 @@ export default function PageInsights({
             return (
               <div 
                 key={insight.id || index} 
-                className="p-4 hover:bg-white transition-colors group"
+                className="p-4 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all group"
               >
-              <div className="flex items-start gap-3">
-                {/* Icono */}
-                <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${config.bg} ${config.border} border flex items-center justify-center`}>
-                  <IconComponent className={`w-5 h-5 ${config.color}`} />
-                </div>
-                
-                {/* Contenido */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${severity.badge}`}>
-                      {insight.severity === 'critical' ? 'Crítico' : insight.severity === 'warning' ? 'Advertencia' : 'Info'}
-                    </span>
+                <div className="flex items-start gap-3">
+                  {/* Icono */}
+                  <div className={`flex-shrink-0 w-9 h-9 rounded-lg ${config.bg} ${config.border} border flex items-center justify-center`}>
+                    <IconComponent className={`w-4.5 h-4.5 ${config.color}`} />
                   </div>
-                  <h4 className="text-sm font-semibold text-slate-900 mb-1">
-                    {insight.title}
-                  </h4>
-                  <p className="text-sm text-slate-600 line-clamp-2">
-                    {insight.description}
-                  </p>
                   
-                  {/* Impacto si existe */}
-                  {insight.impact !== undefined && insight.impact !== 0 && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-xs text-slate-500">Impacto:</span>
-                      <span className={`text-sm font-bold ${insight.impact > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {insight.impact > 0 ? '+' : '-'}
-                        {new Intl.NumberFormat('es-GT', {
-                          style: 'currency',
-                          currency: insight.currency || 'GTQ',
-                          minimumFractionDigits: 0
-                        }).format(Math.abs(insight.impact))}
+                  {/* Contenido */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${severity.badge}`}>
+                        {insight.severity === 'critical' ? 'Crítico' : insight.severity === 'warning' ? 'Advertencia' : 'Info'}
                       </span>
                     </div>
-                  )}
+                    <h4 className="text-sm font-semibold text-slate-900 mb-1 leading-tight">
+                      {insight.title}
+                    </h4>
+                    <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                      {insight.description}
+                    </p>
+                    
+                    {/* Impacto si existe */}
+                    {insight.impact !== undefined && insight.impact !== 0 && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-xs text-slate-500">Impacto:</span>
+                        <span className={`text-xs font-bold ${insight.impact > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {insight.impact > 0 ? '+' : '-'}
+                          {new Intl.NumberFormat('es-GT', {
+                            style: 'currency',
+                            currency: insight.currency || 'GTQ',
+                            minimumFractionDigits: 0
+                          }).format(Math.abs(insight.impact))}
+                        </span>
+                      </div>
+                    )}
 
-                  {/* Acción sugerida */}
-                  {insight.action && (
-                    <button
-                      onClick={() => handleInsightAction(insight)}
-                      className="mt-2 text-xs font-medium text-primary-600 hover:text-primary-700 px-2 py-1 rounded hover:bg-primary-50 transition-colors"
-                    >
-                      {insight.actionLabel || 'Ver acción'} →
-                    </button>
-                  )}
+                    {/* Acción sugerida */}
+                    {insight.action && (
+                      <button
+                        onClick={() => handleInsightAction(insight)}
+                        className="mt-2 text-xs font-medium text-primary-600 hover:text-primary-700 px-2 py-1 rounded hover:bg-primary-50 transition-colors"
+                      >
+                        {insight.actionLabel || 'Ver acción'} →
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
             )
           })
         )}

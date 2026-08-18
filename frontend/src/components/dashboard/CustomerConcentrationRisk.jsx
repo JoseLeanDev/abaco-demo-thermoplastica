@@ -7,7 +7,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 /**
- * CustomerConcentrationRisk - Análisis de concentración de ingresos por cliente
+ * Concentración de Clientes - Análisis de concentración de ingresos por cliente
  * 
  * Detecta riesgo existencial: dependencia de 1-2 clientes mayores
  * 
@@ -145,7 +145,7 @@ export default function CustomerConcentrationRisk({
             <UsersIcon className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="font-semibold">Customer Concentration Risk</h2>
+            <h2 className="font-semibold">Concentración de Clientes</h2>
             <p className="text-sm text-[var(--text-muted)]">Análisis de dependencia de ingresos por cliente</p>
           </div>
         </div>

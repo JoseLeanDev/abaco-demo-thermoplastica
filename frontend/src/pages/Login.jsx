@@ -55,14 +55,14 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
-                Email
+                Correo electrónico
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-white text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[#001639] focus:border-transparent"
-                placeholder="tu@email.com"
+                placeholder="tu@correo.com"
                 required
               />
             </div>
@@ -91,9 +91,9 @@ export default function Login() {
           </form>
 
           <div className="mt-4 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
-            <p className="text-xs text-[var(--text-muted)] mb-1 font-medium">Demo Login:</p>
-            <p className="text-xs text-[var(--text-secondary)]">Email: <span className="font-mono">demo@cfoai.com</span></p>
-            <p className="text-xs text-[var(--text-secondary)]">Password: <span className="font-mono">demo123</span></p>
+            <p className="text-xs text-[var(--text-muted)] mb-1 font-medium">Demo:</p>
+            <p className="text-xs text-[var(--text-secondary)]">Correo: <span className="font-mono">demo@cfoai.com</span></p>
+            <p className="text-xs text-[var(--text-secondary)]">Contraseña: <span className="font-mono">demo123</span></p>
           </div>
         </div>
 

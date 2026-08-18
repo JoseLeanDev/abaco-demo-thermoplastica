@@ -8,7 +8,7 @@ const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes
 // GET /api/tesoreria/posicion
 router.get('/posicion', async (req, res) => {
   try {
-    const empresaId = req.query.empresa_id || 2; // Default: Lavandería La Esperanza
+    const empresaId = req.query.empresa_id || 2; // Default: Thermoplástica, S.A.
     
     // Usar DISTINCT para eliminar duplicados de la BD
     const cuentas = await db.allAsync(`
@@ -73,7 +73,7 @@ router.get('/posicion', async (req, res) => {
 // GET /api/tesoreria/cxc
 router.get('/cxc', async (req, res) => {
   try {
-    const empresaId = req.query.empresa_id || 2; // Default: Lavandería La Esperanza
+    const empresaId = req.query.empresa_id || 2; // Default: Thermoplástica, S.A.
     
     // Para PostgreSQL: usar sintaxis compatible - evitar = 0 en CASE
     const distribucion = await db.getAsync(`
@@ -146,7 +146,7 @@ router.get('/cxc', async (req, res) => {
 // GET /api/tesoreria/cxp
 router.get('/cxp', async (req, res) => {
   try {
-    const empresaId = req.query.empresa_id || 2; // Default: Lavandería La Esperanza
+    const empresaId = req.query.empresa_id || 2; // Default: Thermoplástica, S.A.
     const dias = parseInt(req.query.proximos_dias) || 30;
     
     // Usar nombres de columnas PostgreSQL

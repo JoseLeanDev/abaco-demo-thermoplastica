@@ -1,7 +1,7 @@
 services:
   # Web Service - Backend API
   - type: web
-    name: abaco-demo-lavanderia
+    name: abaco-demo-thermoplastica
     env: node
     plan: starter
     buildCommand: cd backend && npm install && npm run migrate:postgres && npm run seed && cd ../frontend && npm install --include=dev && npm run build
@@ -13,14 +13,14 @@ services:
         value: 3000
       - key: DATABASE_URL
         fromDatabase:
-          name: abaco-demo-lavanderia-db
+          name: abaco-demo-thermoplastica-db
           property: connectionString
       - key: OPENROUTER_API_KEY
         sync: false
       - key: LLM_PROVIDER
         value: openrouter
       - key: APP_URL
-        value: https://abaco-demo-lavanderia.onrender.com
+        value: https://abaco-demo-thermoplastica.onrender.com
       - key: JWT_SECRET
         generateValue: true
       - key: DEFAULT_EMPRESA_ID
@@ -80,7 +80,7 @@ services:
 
   # Background Worker
   - type: worker
-    name: abaco-demo-lavanderia-scheduler
+    name: abaco-demo-thermoplastica-scheduler
     env: node
     plan: starter
     buildCommand: cd backend && npm install
@@ -90,14 +90,14 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: abaco-demo-lavanderia-db
+          name: abaco-demo-thermoplastica-db
           property: connectionString
       - key: OPENROUTER_API_KEY
         sync: false
       - key: LLM_PROVIDER
         value: openrouter
       - key: APP_URL
-        value: https://abaco-demo-lavanderia.onrender.com
+        value: https://abaco-demo-thermoplastica.onrender.com
       - key: JWT_SECRET
         generateValue: true
       - key: TZ
@@ -105,7 +105,7 @@ services:
     autoDeploy: true
 
 databases:
-  - name: abaco-demo-lavanderia-db
+  - name: abaco-demo-thermoplastica-db
     plan: basic-1gb
-    databaseName: abaco_lavanderia_db
-    user: abaco_lavanderia_db_user
+    databaseName: abaco_thermoplastica_db
+    user: abaco_thermoplastica_db_user

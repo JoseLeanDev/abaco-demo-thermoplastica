@@ -22,7 +22,7 @@ import {
  * - onAction: callback al ejecutar acción sugerida
  * - onViewAll: callback al ver todos los insights
  * - maxDisplay: número máximo de insights a mostrar (default 5)
- * - title: título del panel (default "Insights de IA")
+ * - title: título del panel (default "Análisis de IA")
  * - showHeader: mostrar header con contador (default true)
  */
 export default function InsightsPanel({
@@ -31,7 +31,7 @@ export default function InsightsPanel({
   onAction,
   onViewAll,
   maxDisplay = 5,
-  title = "Insights de IA",
+  title = "Análisis de IA",
   showHeader = true
 }) {
   const [dismissedIds, setDismissedIds] = useState(new Set())

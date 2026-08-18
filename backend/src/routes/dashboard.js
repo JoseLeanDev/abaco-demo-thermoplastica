@@ -8,7 +8,7 @@ const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes
 // GET /api/dashboard
 router.get('/', async (req, res) => {
   try {
-    const empresaId = req.query.empresa_id || 2; // Default: Lavandería La Esperanza
+    const empresaId = req.query.empresa_id || 2; // Default: Thermoplástica, S.A.
     
     // DEBUG: Log que el endpoint se ejecutó
     console.log('Dashboard endpoint called at', new Date().toISOString());

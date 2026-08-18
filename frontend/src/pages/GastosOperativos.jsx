@@ -37,17 +37,17 @@ const formatPct = (value) => {
 }
 
 // ============================================
-// DATOS DE DEMO - GASTOS OPERATIVOS LAVANDERÍA
+// DATOS DE DEMO - GASTOS OPERATIVOS THERMOPLÁSTICA
 // ============================================
 
 const CATEGORIAS_GASTO = [
   {
-    id: 'quimicos',
-    nombre: 'Químicos y Detergentes',
+    id: 'materias_primas',
+    nombre: 'Materias Primas',
     icono: BeakerIcon,
     color: '#3B82F6',
-    descripcion: 'Detergentes industriales, suavizantes, blanqueadores, químicos de tintorería',
-    proveedorPrincipal: 'Químicos y Detergentes INDUGUA',
+    descripcion: 'Resinas PET, PVC, PVDC, polietileno, polipropileno, aluminio',
+    proveedorPrincipal: 'Dow Chemical / Braskem',
     terminos: '2/10 n/30',
     frecuencia: 'semanal',
   },
@@ -56,7 +56,7 @@ const CATEGORIAS_GASTO = [
     nombre: 'Nómina y Salarios',
     icono: UsersIcon,
     color: '#10B981',
-    descripcion: 'Salarios operarios, supervisores, administrativos, cargas sociales',
+    descripcion: 'Salarios operarios, técnicos de extrusión, administrativos, cargas sociales',
     proveedorPrincipal: 'Nómina interna',
     terminos: 'quincenal',
     frecuencia: 'quincenal',
@@ -66,8 +66,8 @@ const CATEGORIAS_GASTO = [
     nombre: 'Servicios Públicos',
     icono: BoltIcon,
     color: '#F59E0B',
-    descripcion: 'Agua potable, energía eléctrica, gas propano para secadoras',
-    proveedorPrincipal: 'EEGSA / EMPAGUA',
+    descripcion: 'Energía eléctrica (alta tensión), gas natural, agua industrial',
+    proveedorPrincipal: 'EEGSA / TECO',
     terminos: 'n/15',
     frecuencia: 'mensual',
   },
@@ -76,17 +76,17 @@ const CATEGORIAS_GASTO = [
     nombre: 'Mantenimiento Equipos',
     icono: WrenchIcon,
     color: '#EF4444',
-    descripcion: 'Reparación lavadoras, secadoras, planchas, tintorería',
-    proveedorPrincipal: 'Servicio Técnico Lavadoras GT',
+    descripcion: 'Mantenimiento extrusoras, termoformadoras, impresoras flexográficas',
+    proveedorPrincipal: 'Servicio Técnico Industrial GT',
     terminos: 'contado',
     frecuencia: 'mensual',
   },
   {
     id: 'alquiler',
-    nombre: 'Alquiler Sucursales',
+    nombre: 'Alquiler Instalaciones',
     icono: BuildingOfficeIcon,
     color: '#8B5CF6',
-    descripcion: 'Alquiler de 4 locales comerciales (Zona 10, Zona 1, Zona 14, Mixco)',
+    descripcion: 'Planta industrial Zona 3, bodega Zona 12, oficinas corporativas',
     proveedorPrincipal: 'Alquileres Metropolitanos',
     terminos: 'n/5',
     frecuencia: 'mensual',
@@ -96,17 +96,17 @@ const CATEGORIAS_GASTO = [
     nombre: 'Transporte y Logística',
     icono: TruckIcon,
     color: '#06B6D4',
-    descripcion: 'Recolección y entrega a hoteles, restaurantes, hospitales',
-    proveedorPrincipal: 'Transporte Express Laundry',
+    descripcion: 'Entrega a clientes industriales, exportaciones, flete internacional',
+    proveedorPrincipal: 'Transporte Express Cargo',
     terminos: 'n/15',
     frecuencia: 'semanal',
   },
   {
     id: 'marketing',
-    nombre: 'Marketing y Publicidad',
+    nombre: 'Marketing y Ventas',
     icono: MegaphoneIcon,
     color: '#EC4899',
-    descripcion: 'Redes sociales, Google Ads, folletos, promociones B2B',
+    descripcion: 'Ferias industriales, visitas comerciales, catálogos técnicos, web',
     proveedorPrincipal: 'Publicidad y Marketing 360°',
     terminos: 'n/15',
     frecuencia: 'mensual',
@@ -116,7 +116,7 @@ const CATEGORIAS_GASTO = [
     nombre: 'Seguros y Otros',
     icono: ShieldCheckIcon,
     color: '#6366F1',
-    descripcion: 'Seguro de equipos, responsabilidad civil, seguridad privada',
+    descripcion: 'Seguro de maquinaria, responsabilidad civil, certificaciones ISO/SGS',
     proveedorPrincipal: 'Seguros El Roble, S.A.',
     terminos: 'n/30',
     frecuencia: 'mensual',
@@ -125,7 +125,7 @@ const CATEGORIAS_GASTO = [
 
 // Datos de gastos históricos (6 meses)
 const HISTORIAL_GASTOS = {
-  quimicos: [42000, 38500, 45100, 39800, 47500, 44200],
+  materias_primas: [420000, 385000, 451000, 398000, 475000, 442000],
   nomina: [125000, 125000, 132000, 132000, 132000, 138000],
   servicios: [28000, 26500, 31000, 29500, 33500, 32000],
   mantenimiento: [15000, 8500, 22000, 12000, 18500, 9500],
@@ -137,14 +137,14 @@ const HISTORIAL_GASTOS = {
 
 const MESES_HISTORIAL = ['Ene 2026', 'Feb 2026', 'Mar 2026', 'Abr 2026', 'May 2026', 'Jun 2026']
 
-// Servicios ofrecidos por la lavandería
+// Productos ofrecidos por Thermoplástica
 const SERVICIOS = [
-  { id: 1, nombre: 'Lavandería Industrial B2B', descripcion: 'Servicio a hoteles, restaurantes, hospitales', precioBase: 12.50, unidad: 'kg', volumenMensual: 8500, clientes: 14 },
-  { id: 2, nombre: 'Lavandería Doméstica B2C', descripcion: 'Servicio a clientes individuales', precioBase: 15.00, unidad: 'kg', volumenMensual: 1200, clientes: 85 },
-  { id: 3, nombre: 'Tintorería y Planchado', descripcion: 'Prendas delicadas, trajes, vestidos', precioBase: 45.00, unidad: 'prenda', volumenMensual: 650, clientes: 120 },
-  { id: 4, nombre: 'Lavado de Uniformes', descripcion: 'Empresas, gimnasios, clínicas', precioBase: 8.50, unidad: 'prenda', volumenMensual: 3200, clientes: 8 },
-  { id: 5, nombre: 'Lavado de Ropa de Cama', descripcion: 'Sábanas, fundas, toallas hoteleras', precioBase: 18.00, unidad: 'kg', volumenMensual: 4200, clientes: 6 },
-  { id: 6, nombre: 'Servicio Express (24h)', descripcion: 'Entrega rápida con premium', precioBase: 25.00, unidad: 'kg', volumenMensual: 450, clientes: 35 },
+  { id: 1, nombre: 'Termoformados Alimentarios', descripcion: 'Bandejas, contenedores, tapas para industria alimentaria', precioBase: 2.50, unidad: 'unidad', volumenMensual: 85000, clientes: 14 },
+  { id: 2, nombre: 'Envases PET para Bebidas', descripcion: 'Botellas, jarros, envases para líquidos', precioBase: 1.80, unidad: 'unidad', volumenMensual: 120000, clientes: 8 },
+  { id: 3, nombre: 'Liners y Sellos de Seguridad', descripcion: 'Liner para sellos de seguridad, material cut-to-size', precioBase: 0.45, unidad: 'unidad', volumenMensual: 650000, clientes: 25 },
+  { id: 4, nombre: 'Laminaciones Industriales', descripcion: 'Film laminado PVC, PVDC, aluminio para empaque', precioBase: 8.50, unidad: 'metro', volumenMensual: 32000, clientes: 12 },
+  { id: 5, nombre: 'Envases Polietileno Soplado', descripcion: 'Contenedores soplados PE/PP para industria química/cosmética', precioBase: 4.20, unidad: 'unidad', volumenMensual: 42000, clientes: 6 },
+  { id: 6, nombre: 'Equipos y Material Industrial', descripcion: 'Venta de maquinaria y equipos auxiliares', precioBase: 25000.00, unidad: 'equipo', volumenMensual: 3, clientes: 5 },
 ]
 
 // ============================================
@@ -281,7 +281,7 @@ export default function GastosOperativos() {
           <div>
             <h1 className="text-2xl font-semibold">Gastos Operativos</h1>
             <p className="text-sm text-[var(--text-muted)]">
-              Análisis de costos · Proyección · Control de gastos de lavandería
+              Análisis de costos · Proyección · Control de gastos de Thermoplástica
             </p>
           </div>
         </div>
@@ -608,12 +608,12 @@ export default function GastosOperativos() {
       </div>
 
       {/* ============================================
-          SERVICIOS OFRECIDOS (LAVANDERÍA)
+          PRODUCTOS OFRECIDOS (THERMOPLÁSTICA)
       ============================================ */}
       <div className="card">
         <div className="section-header">
           <InformationCircleIcon className="w-5 h-5 text-[var(--accent-blue)]" />
-          <h2 className="font-semibold">Servicios Ofrecidos por la Lavandería</h2>
+          <h2 className="font-semibold">Productos Ofrecidos por Thermoplástica</h2>
           <span className="ml-auto text-xs text-[var(--text-muted)]">
             Ingresos por línea de servicio
           </span>

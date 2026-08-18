@@ -65,7 +65,6 @@ export default function AgentChat() {
       'Análisis': '📊',
       'Cobranza': '📋',
       'Contabilidad': '📅',
-      'abaco Core': '🤖',
       'Orchestrator': '🎛️'
     };
     return emojis[agentName] || '🤖';

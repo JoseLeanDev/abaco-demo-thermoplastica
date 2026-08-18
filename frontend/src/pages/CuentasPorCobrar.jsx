@@ -88,7 +88,7 @@ export default function CuentasPorCobrar() {
         </button>
       </div>
 
-      {/* KPI Cards */}
+      {/* Indicadores Clave */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
           <span className="kpi-label">Total por Cobrar</span>
@@ -115,7 +115,7 @@ export default function CuentasPorCobrar() {
         </div>
       </div>
 
-      {/* Aging Chart */}
+      {/* Gráfica de Antigüedad */}
       <div className="card">
         <div className="section-header">
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
