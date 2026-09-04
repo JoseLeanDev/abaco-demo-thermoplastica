@@ -71,71 +71,169 @@ router.get('/posicion', async (req, res) => {
 });
 
 // GET /api/tesoreria/cxc
+// Resumen de cartera vigente + aging + top 5 deudores.
+// Fuente: thermoplastica.fact_cxc_snapshot_diario (snapshot del día más reciente).
 router.get('/cxc', async (req, res) => {
   try {
-    const empresaId = req.query.empresa_id || 2; // Default: Thermoplástica, S.A.
-    
-    // Para PostgreSQL: usar sintaxis compatible - evitar = 0 en CASE
     const distribucion = await db.getAsync(`
-      SELECT 
-        SUM(CASE WHEN dias_atraso IS NULL OR dias_atraso <= 0 THEN monto_total ELSE 0 END) as al_corriente,
-        SUM(CASE WHEN dias_atraso > 0 AND dias_atraso <= 30 THEN monto_total ELSE 0 END) as _30_dias,
-        SUM(CASE WHEN dias_atraso > 30 AND dias_atraso <= 60 THEN monto_total ELSE 0 END) as _60_dias,
-        SUM(CASE WHEN dias_atraso > 60 THEN monto_total ELSE 0 END) as _90_dias,
-        SUM(monto_total) as total
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? AND estado ${isPostgres ? "<> 'cobrada'" : "!= 'cobrada'"}
-    `, [empresaId]);
+      SELECT
+        COALESCE(SUM(porvencer), 0)                                       AS al_corriente,
+        COALESCE(SUM(v30), 0)                                             AS _30_dias,
+        COALESCE(SUM(v31a60), 0)                                          AS _60_dias,
+        COALESCE(SUM(v61a90) + SUM(v91a120) + SUM(v120), 0)               AS _90_dias,
+        COALESCE(SUM(saldo_total), 0)                                     AS total,
+        COUNT(*)                                                          AS facturas
+      FROM thermoplastica.fact_cxc_snapshot_diario
+      WHERE fecha_snapshot = (
+        SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario
+      )
+    `);
 
-    // Usar cliente_nombre y monto_total
     const topDeudores = await db.allAsync(`
-      SELECT cliente_nombre as cliente, monto_total as monto, dias_atraso as dias
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? AND estado ${isPostgres ? "<> 'cobrada'" : "!= 'cobrada'"}
-      ORDER BY monto_total DESC
+      SELECT
+        c.codigo_cliente                                                  AS codigo,
+        c.nombre                                                          AS cliente,
+        SUM(f.saldo_total)                                                AS monto,
+        SUM(f.vencido)                                                    AS vencido,
+        MAX(GREATEST((CURRENT_DATE - f.fecha_vencimiento)::int, 0))       AS dias
+      FROM thermoplastica.fact_cxc_snapshot_diario f
+      JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
+      WHERE f.fecha_snapshot = (
+        SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario
+      )
+      GROUP BY c.codigo_cliente, c.nombre
+      ORDER BY monto DESC
       LIMIT 5
-    `, [empresaId]);
+    `);
 
-    const promedioDias = await db.getAsync(`
-      SELECT AVG(CASE WHEN dias_atraso IS NULL THEN 0 ELSE dias_atraso END) as promedio
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? AND estado ${isPostgres ? "<> 'cobrada'" : "!= 'cobrada'"}
-    `, [empresaId]);
+    const promedio = await db.getAsync(`
+      SELECT AVG(GREATEST((CURRENT_DATE - fecha_vencimiento)::int, 0))    AS promedio
+      FROM thermoplastica.fact_cxc_snapshot_diario
+      WHERE fecha_snapshot = (
+        SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario
+      )
+    `);
 
-    const total = distribucion.total || 1;
+    const total = parseFloat(distribucion.total) || 1;
+    const pct = (v) => parseFloat(((parseFloat(v) || 0) / total * 100).toFixed(1));
 
     res.json({
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
         total_cxc: parseFloat(distribucion.total) || 0,
-        promedio_dias_cobro: Math.round(parseFloat(promedioDias.promedio) || 0),
+        facturas: parseInt(distribucion.facturas) || 0,
+        promedio_dias_cobro: Math.round(parseFloat(promedio.promedio) || 0),
         distribucion_aging: {
-          al_corriente: { 
-            monto: parseFloat(distribucion.al_corriente) || 0, 
-            porcentaje: parseFloat(((parseFloat(distribucion.al_corriente) || 0) / total * 100).toFixed(1))
-          },
-          _30_dias: { 
-            monto: parseFloat(distribucion._30_dias) || 0, 
-            porcentaje: parseFloat(((parseFloat(distribucion._30_dias) || 0) / total * 100).toFixed(1))
-          },
-          _60_dias: { 
-            monto: parseFloat(distribucion._60_dias) || 0, 
-            porcentaje: parseFloat(((parseFloat(distribucion._60_dias) || 0) / total * 100).toFixed(1))
-          },
-          _90_dias: { 
-            monto: parseFloat(distribucion._90_dias) || 0, 
-            porcentaje: parseFloat(((parseFloat(distribucion._90_dias) || 0) / total * 100).toFixed(1))
-          }
+          al_corriente: { monto: parseFloat(distribucion.al_corriente) || 0, porcentaje: pct(distribucion.al_corriente) },
+          _30_dias:     { monto: parseFloat(distribucion._30_dias)     || 0, porcentaje: pct(distribucion._30_dias) },
+          _60_dias:     { monto: parseFloat(distribucion._60_dias)     || 0, porcentaje: pct(distribucion._60_dias) },
+          _90_dias:     { monto: parseFloat(distribucion._90_dias)     || 0, porcentaje: pct(distribucion._90_dias) }
         },
         top_deudores: topDeudores.map(d => ({
-          ...d,
-          monto: parseFloat(d.monto) || 0
+          codigo: d.codigo,
+          cliente: d.cliente,
+          monto: parseFloat(d.monto) || 0,
+          vencido: parseFloat(d.vencido) || 0,
+          dias: parseInt(d.dias) || 0
         }))
-      },
-      ui_components: {
-        chart: 'aging_pie_chart',
-        table: 'cxc_detail_table'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/tesoreria/cxc/detalle
+// Listado paginado de facturas de la cartera vigente.
+// Query params: ?limit=200&offset=0&busqueda=&bucket=
+//   bucket ∈ 'al_corriente' | '_30_dias' | '_60_dias' | '_90_dias' | 'todos'
+router.get('/cxc/detalle', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit)  || 200, 1000);
+    const offset = parseInt(req.query.offset)         || 0;
+    const busqueda = (req.query.busqueda || '').trim();
+    const bucket = req.query.bucket || 'todos';
+
+    const where = [`f.fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)`];
+    const params = [];
+
+    if (busqueda) {
+      params.push(`%${busqueda}%`);
+      const p = `$${params.length}`;
+      where.push(`(c.nombre ILIKE ${p} OR c.codigo_cliente ILIKE ${p} OR f.documento::text ILIKE ${p})`);
+    }
+    if (bucket === 'al_corriente') where.push(`f.porvencer > 0 AND COALESCE(f.vencido, 0) = 0`);
+    else if (bucket === '_30_dias') where.push(`f.v30 > 0`);
+    else if (bucket === '_60_dias') where.push(`f.v31a60 > 0`);
+    else if (bucket === '_90_dias') where.push(`(f.v61a90 > 0 OR f.v91a120 > 0 OR f.v120 > 0)`);
+
+    const whereSql = where.join(' AND ');
+
+    const rows = await db.allAsync(`
+      SELECT
+        f.snapshot_id                                                     AS id,
+        c.codigo_cliente                                                  AS codigo_cliente,
+        c.nombre                                                          AS cliente,
+        c.forma_pago                                                      AS forma_pago,
+        s.codigo_sucursal                                                 AS codigo_sucursal,
+        s.nombre                                                          AS sucursal,
+        v.nombre                                                          AS vendedor,
+        f.tipo_documento                                                  AS tipo_documento,
+        f.documento                                                       AS documento,
+        f.fecha_emision                                                   AS fecha_emision,
+        f.fecha_vencimiento                                               AS fecha_vencimiento,
+        GREATEST((CURRENT_DATE - f.fecha_vencimiento)::int, 0)            AS dias_atraso,
+        f.saldo_total                                                     AS saldo_total,
+        f.porvencer                                                       AS porvencer,
+        f.vencido                                                         AS vencido,
+        f.v30, f.v31a60, f.v61a90, f.v91a120, f.v120,
+        f.estado_cxc                                                      AS estado_cxc
+      FROM thermoplastica.fact_cxc_snapshot_diario f
+      JOIN thermoplastica.dim_cliente   c ON c.cliente_id  = f.cliente_id
+      JOIN thermoplastica.dim_sucursal  s ON s.sucursal_id = f.sucursal_id
+      LEFT JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
+      WHERE ${whereSql}
+      ORDER BY f.saldo_total DESC, f.fecha_vencimiento ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `, params);
+
+    const totalRow = await db.getAsync(`
+      SELECT COUNT(*) AS total, COALESCE(SUM(f.saldo_total), 0) AS suma_saldo
+      FROM thermoplastica.fact_cxc_snapshot_diario f
+      JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
+      WHERE ${whereSql}
+    `, params);
+
+    res.json({
+      status: 'success',
+      timestamp: new Date().toISOString(),
+      data: {
+        total_filas: parseInt(totalRow.total) || 0,
+        suma_saldo: parseFloat(totalRow.suma_saldo) || 0,
+        filas: rows.map(r => ({
+          id: parseInt(r.id),
+          codigo_cliente: r.codigo_cliente,
+          cliente: r.cliente,
+          forma_pago: r.forma_pago,
+          codigo_sucursal: r.codigo_sucursal,
+          sucursal: r.sucursal,
+          vendedor: r.vendedor,
+          tipo_documento: r.tipo_documento,
+          documento: r.documento?.toString(),
+          fecha_emision: r.fecha_emision,
+          fecha_vencimiento: r.fecha_vencimiento,
+          dias_atraso: parseInt(r.dias_atraso) || 0,
+          saldo_total: parseFloat(r.saldo_total) || 0,
+          porvencer: parseFloat(r.porvencer) || 0,
+          vencido: parseFloat(r.vencido) || 0,
+          v30: parseFloat(r.v30) || 0,
+          v31a60: parseFloat(r.v31a60) || 0,
+          v61a90: parseFloat(r.v61a90) || 0,
+          v91a120: parseFloat(r.v91a120) || 0,
+          v120: parseFloat(r.v120) || 0,
+          estado_cxc: r.estado_cxc
+        }))
       }
     });
   } catch (error) {

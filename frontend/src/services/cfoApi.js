@@ -39,6 +39,7 @@ export const endpoints = {
     proyeccion: (semanas = 13) => cfoApi.get('/tesoreria/proyeccion', { params: { semanas } }),
     posicion: () => cfoApi.get('/tesoreria/posicion'),
     cxc: () => cfoApi.get('/tesoreria/cxc'),
+    cxcDetalle: (params = {}) => cfoApi.get('/tesoreria/cxc/detalle', { params }),
     cxp: () => cfoApi.get('/tesoreria/cxp')
   },
   contabilidad: {
