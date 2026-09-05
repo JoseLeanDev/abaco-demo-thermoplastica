@@ -6,64 +6,77 @@ const config = require('../config/financiera');
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
 // GET /api/tesoreria/posicion
+// Vista de working capital / posición neta.
+// Bancos no están disponibles en el ERP TP_A actual — se reportan como N/D.
 router.get('/posicion', async (req, res) => {
   try {
-    const empresaId = req.query.empresa_id || 2; // Default: Thermoplástica, S.A.
-    
-    // Usar DISTINCT para eliminar duplicados de la BD
-    const cuentas = await db.allAsync(`
-      SELECT DISTINCT
-        banco,
-        tipo,
-        saldo,
-        moneda,
-        ${isPostgres ? 'NULL' : "(CURRENT_DATE - ultima_conciliacion::date)"} as dias_sin_conciliar
-      FROM cuentas_bancarias 
-      WHERE empresa_id = ? AND activa = TRUE
-      ORDER BY saldo DESC
-    `, [empresaId]);
+    // 1. Cuentas por cobrar (snapshot vivo)
+    const cxc = await db.getAsync(`
+      SELECT
+        COALESCE(SUM(saldo_total), 0) AS total,
+        COALESCE(SUM(porvencer), 0)   AS por_vencer,
+        COALESCE(SUM(vencido), 0)     AS vencido,
+        COUNT(*)                      AS documentos,
+        AVG(GREATEST((CURRENT_DATE - fecha_vencimiento)::int, 0)) AS dias_promedio_vencido
+      FROM thermoplastica.fact_cxc_snapshot_diario
+      WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+    `);
 
-    const totales = await db.getAsync(`
-      SELECT 
-        SUM(CASE WHEN moneda = 'GTQ' THEN saldo ELSE 0 END) as total_gtq,
-        SUM(CASE WHEN moneda = 'USD' THEN saldo ELSE 0 END) as total_usd
-      FROM cuentas_bancarias 
-      WHERE empresa_id = ? AND activa = TRUE
-    `, [empresaId]);
+    // 2. Cuentas por pagar (proxy: MAX(saldo) por factura de compras, saldo > 0)
+    //    El saldo en vstCompras se repite en cada línea → agregamos por factura.
+    const cxp = await db.getAsync(`
+      WITH facturas AS (
+        SELECT fact_num, proveedor_id,
+               MAX(fecha_emision)               AS fecha_emision,
+               MAX(saldo)                       AS saldo,
+               MAX(fecha_emision) + INTERVAL '30 days' AS fecha_vencimiento_est
+        FROM thermoplastica.fact_compras_linea
+        GROUP BY fact_num, proveedor_id
+      )
+      SELECT
+        COALESCE(SUM(saldo), 0)            AS total,
+        COUNT(*)                           AS facturas,
+        COUNT(DISTINCT proveedor_id)       AS proveedores,
+        COALESCE(SUM(saldo) FILTER (WHERE fecha_vencimiento_est >= CURRENT_DATE), 0) AS por_vencer,
+        COALESCE(SUM(saldo) FILTER (WHERE fecha_vencimiento_est <  CURRENT_DATE), 0) AS vencido,
+        AVG(GREATEST((CURRENT_DATE - fecha_vencimiento_est::date)::int, 0)) AS dias_promedio_vencido
+      FROM facturas
+      WHERE saldo > 0;
+    `);
 
-    const tipoCambio = 7.75;
-    const totalGTQ = parseFloat(totales.total_gtq) || 0;
-    const totalUSD = parseFloat(totales.total_usd) || 0;
-    const totalConsolidado = totalGTQ + totalUSD * tipoCambio;
-    const diasOperacion = Math.floor(totalGTQ / config.liquidez.dias_operacion_default);
+    const cxcTotal = parseFloat(cxc.total) || 0;
+    const cxpTotal = parseFloat(cxp.total) || 0;
+    const posicionNeta = cxcTotal - cxpTotal;
+    const cobertura = cxpTotal > 0 ? cxcTotal / cxpTotal : null;
 
     res.json({
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
         fecha_corte: new Date().toISOString().split('T')[0],
-        total_disponible_gtq: totalGTQ,
-        total_disponible_usd: totalUSD,
-        tipo_cambio: tipoCambio,
-        total_consolidado_gtq: totalConsolidado,
-        dias_operacion: diasOperacion,
-        cuentas: cuentas.map(c => ({
-          ...c,
-          saldo: parseFloat(c.saldo) || 0,
-          dias_sin_conciliar: Math.floor(c.dias_sin_conciliar || 0)
-        }))
+        bancos: {
+          disponible: false,
+          nota: 'El ERP TP_A no expone saldos bancarios. Solicitar vista de cuentas bancarias al cliente para completar la posición.',
+        },
+        cxc: {
+          total: cxcTotal,
+          por_vencer: parseFloat(cxc.por_vencer) || 0,
+          vencido: parseFloat(cxc.vencido) || 0,
+          documentos: parseInt(cxc.documentos) || 0,
+          dias_promedio_vencido: Math.round(parseFloat(cxc.dias_promedio_vencido) || 0),
+        },
+        cxp: {
+          total: cxpTotal,
+          por_vencer: parseFloat(cxp.por_vencer) || 0,
+          vencido: parseFloat(cxp.vencido) || 0,
+          facturas: parseInt(cxp.facturas) || 0,
+          proveedores: parseInt(cxp.proveedores) || 0,
+          dias_promedio_vencido: Math.round(parseFloat(cxp.dias_promedio_vencido) || 0),
+          nota: 'Estimación del vencimiento a 30 días desde la emisión (el ERP no expone fecha de vencimiento en compras).',
+        },
+        posicion_neta_working_capital: posicionNeta,
+        ratio_cobertura_cxc_cxp: cobertura,
       },
-      ui_components: {
-        cards: 'bank_account_cards',
-        total_card: 'consolidated_position',
-        gauge: {
-          type: 'liquidity_days',
-          value: diasOperacion,
-          min: 0,
-          max: 90,
-          thresholds: { danger: 15, warning: 30, good: 45 }
-        }
-      }
     });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -242,45 +255,132 @@ router.get('/cxc/detalle', async (req, res) => {
 });
 
 // GET /api/tesoreria/cxp
+// Proxy de CxP construido desde vstCompras: MAX(saldo) por factura, > 0.
+// Vencimiento estimado a 30 días desde emisión (el ERP no expone fecha_venc).
 router.get('/cxp', async (req, res) => {
   try {
-    const empresaId = req.query.empresa_id || 2; // Default: Thermoplástica, S.A.
     const dias = parseInt(req.query.proximos_dias) || 30;
-    
-    // Usar nombres de columnas PostgreSQL
-    // Para PostgreSQL: fecha_vencimiento - CURRENT_DATE devuelve integer (días)
-    const cxp = await db.allAsync(`
-      SELECT 
-        proveedor_nombre as proveedor,
-        monto_total as monto,
-        fecha_vencimiento,
-        ${isPostgres ? '(fecha_vencimiento - CURRENT_DATE)::integer' : "CAST((fecha_vencimiento::date - CURRENT_DATE) AS INTEGER)"} as dias_restantes
-      FROM cuentas_pagar 
-      WHERE empresa_id = ? 
-        AND estado = 'pendiente'
-        AND fecha_vencimiento <= CURRENT_DATE + INTERVAL '${dias} days'
-      ORDER BY fecha_vencimiento
-    `, [empresaId]);
 
-    const total = await db.getAsync(`
-      SELECT SUM(monto_total) as total, 
-             AVG(${isPostgres ? '(fecha_vencimiento - CURRENT_DATE)::integer' : "CAST((fecha_vencimiento::date - CURRENT_DATE) AS INTEGER)"}) as promedio_dias
-      FROM cuentas_pagar 
-      WHERE empresa_id = ? AND estado = 'pendiente'
-    `, [empresaId]);
+    const resumen = await db.getAsync(`
+      WITH facturas AS (
+        SELECT fact_num, proveedor_id, MAX(fecha_emision) AS fecha_emision, MAX(saldo) AS saldo
+        FROM thermoplastica.fact_compras_linea
+        GROUP BY fact_num, proveedor_id
+      )
+      SELECT
+        COALESCE(SUM(saldo), 0)                                              AS total,
+        COUNT(*)                                                             AS facturas,
+        COUNT(DISTINCT proveedor_id)                                         AS proveedores,
+        AVG(GREATEST((CURRENT_DATE - (fecha_emision + INTERVAL '30 days')::date)::int, 0)) AS promedio_dias
+      FROM facturas
+      WHERE saldo > 0
+    `);
+
+    // Aging: por antigüedad de emisión (ya que no hay fecha_vencimiento real)
+    const aging = await db.getAsync(`
+      WITH facturas AS (
+        SELECT MAX(fecha_emision) AS fecha_emision, MAX(saldo) AS saldo
+        FROM thermoplastica.fact_compras_linea
+        GROUP BY fact_num, proveedor_id
+      )
+      SELECT
+        COALESCE(SUM(saldo) FILTER (WHERE fecha_emision + INTERVAL '30 days' >= CURRENT_DATE), 0)        AS por_vencer,
+        COALESCE(SUM(saldo) FILTER (WHERE fecha_emision + INTERVAL '30 days' <  CURRENT_DATE
+                                     AND fecha_emision + INTERVAL '60 days' >= CURRENT_DATE), 0)         AS v_1_30,
+        COALESCE(SUM(saldo) FILTER (WHERE fecha_emision + INTERVAL '60 days' <  CURRENT_DATE
+                                     AND fecha_emision + INTERVAL '90 days' >= CURRENT_DATE), 0)         AS v_31_60,
+        COALESCE(SUM(saldo) FILTER (WHERE fecha_emision + INTERVAL '90 days' <  CURRENT_DATE), 0)        AS v_60_mas
+      FROM facturas
+      WHERE saldo > 0
+    `);
+
+    // Próximos pagos (con vencimiento estimado en los siguientes N días)
+    const proximos = await db.allAsync(`
+      WITH facturas AS (
+        SELECT fact_num, proveedor_id, MAX(fecha_emision) AS fecha_emision, MAX(saldo) AS saldo
+        FROM thermoplastica.fact_compras_linea
+        GROUP BY fact_num, proveedor_id
+      )
+      SELECT
+        p.nombre                                        AS proveedor,
+        p.codigo_proveedor                              AS codigo,
+        f.fact_num,
+        f.fecha_emision,
+        (f.fecha_emision + INTERVAL '30 days')::date    AS fecha_vencimiento_est,
+        f.saldo                                         AS monto,
+        ((f.fecha_emision + INTERVAL '30 days')::date - CURRENT_DATE)::int AS dias_restantes
+      FROM facturas f
+      JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
+      WHERE f.saldo > 0
+        AND (f.fecha_emision + INTERVAL '30 days')::date <= CURRENT_DATE + (? || ' days')::interval
+      ORDER BY (f.fecha_emision + INTERVAL '30 days')::date ASC
+      LIMIT 100
+    `, [dias]);
+
+    // Top proveedores por CxP
+    const topProveedores = await db.allAsync(`
+      WITH facturas AS (
+        SELECT proveedor_id, MAX(saldo) AS saldo, fact_num
+        FROM thermoplastica.fact_compras_linea
+        GROUP BY proveedor_id, fact_num
+      )
+      SELECT
+        p.nombre                          AS proveedor,
+        p.codigo_proveedor                AS codigo,
+        COUNT(*)                          AS facturas,
+        COALESCE(SUM(f.saldo), 0)         AS monto
+      FROM facturas f
+      JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
+      WHERE f.saldo > 0
+      GROUP BY p.nombre, p.codigo_proveedor
+      ORDER BY monto DESC
+      LIMIT 10
+    `);
+
+    const total = parseFloat(resumen.total) || 0;
 
     res.json({
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
-        total_cxp: parseFloat(total.total) || 0,
-        promedio_dias_pago: Math.round(parseFloat(total.promedio_dias) || 0),
-        proximos_pagos: cxp.map(p => ({
-          ...p,
+        total_cxp: total,
+        facturas: parseInt(resumen.facturas) || 0,
+        proveedores: parseInt(resumen.proveedores) || 0,
+        promedio_dias_pago: Math.round(parseFloat(resumen.promedio_dias) || 0),
+        distribucion_aging: {
+          por_vencer: {
+            monto: parseFloat(aging.por_vencer) || 0,
+            porcentaje: total > 0 ? Math.round((parseFloat(aging.por_vencer) || 0) / total * 1000) / 10 : 0,
+          },
+          v_1_30: {
+            monto: parseFloat(aging.v_1_30) || 0,
+            porcentaje: total > 0 ? Math.round((parseFloat(aging.v_1_30) || 0) / total * 1000) / 10 : 0,
+          },
+          v_31_60: {
+            monto: parseFloat(aging.v_31_60) || 0,
+            porcentaje: total > 0 ? Math.round((parseFloat(aging.v_31_60) || 0) / total * 1000) / 10 : 0,
+          },
+          v_60_mas: {
+            monto: parseFloat(aging.v_60_mas) || 0,
+            porcentaje: total > 0 ? Math.round((parseFloat(aging.v_60_mas) || 0) / total * 1000) / 10 : 0,
+          },
+        },
+        proximos_pagos: proximos.map(p => ({
+          proveedor: p.proveedor,
+          codigo: p.codigo,
+          fact_num: p.fact_num,
+          fecha_emision: p.fecha_emision,
+          fecha_vencimiento: p.fecha_vencimiento_est,
           monto: parseFloat(p.monto) || 0,
-          dias_restantes: Math.ceil(parseFloat(p.dias_restantes)),
-          ahorro_si_paga_hoy: 0
-        }))
+          dias_restantes: parseInt(p.dias_restantes) || 0,
+        })),
+        top_proveedores: topProveedores.map(p => ({
+          proveedor: p.proveedor,
+          codigo: p.codigo,
+          facturas: parseInt(p.facturas) || 0,
+          monto: parseFloat(p.monto) || 0,
+        })),
+        nota: 'CxP construida desde vstCompras (MAX saldo por factura). Fecha de vencimiento estimada a 30 días desde emisión — el ERP no expone la fecha real.',
       },
       ui_components: {
         timeline: 'payment_timeline',
