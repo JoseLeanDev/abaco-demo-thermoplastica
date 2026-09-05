@@ -1,742 +1,436 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
+import { endpoints } from '../services/cfoApi'
 import {
   ShoppingCartIcon,
-  ExclamationTriangleIcon,
+  ArrowLeftIcon,
+  ArrowDownTrayIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  MinusIcon,
-  TruckIcon,
-  CubeIcon,
-  ClockIcon,
-  CurrencyDollarIcon,
+  BuildingOfficeIcon,
   ChartBarIcon,
-  SparklesIcon,
-  ArrowPathIcon,
-  CalculatorIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  CheckCircleIcon,
-  InformationCircleIcon,
+  CubeIcon,
+  ExclamationTriangleIcon,
+  MagnifyingGlassIcon,
+  Squares2X2Icon,
+  UserGroupIcon,
+  ReceiptPercentIcon,
 } from '@heroicons/react/24/outline'
 import {
-  demoLineasProducto,
-  demoProductosStock,
-  demoMesesHistorial,
-  demoMesesProyeccion,
-} from '../data/demoData'
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+} from 'recharts'
 
-const formatGTQ = (value) => {
-  if (!value && value !== 0) return 'Q 0'
-  return 'Q ' + Math.round(value).toLocaleString('es-GT')
+// -------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------
+const fmtQ = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
+const fmtQfull = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
+const fmtNum = (n) => Number(n || 0).toLocaleString('es-GT')
+const fmtDate = (d) => (d ? String(d).slice(0, 10) : '—')
+const fmtPeriod = (p) => {
+  if (!p) return ''
+  const [y, m] = p.split('-')
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+  return `${meses[+m - 1]} ${y.slice(2)}`
 }
 
-const formatNum = (value) => {
-  if (!value && value !== 0) return '0'
-  return value.toLocaleString('es-GT')
+const rangoDesde = (rango) => {
+  const hoy = new Date()
+  const d = new Date(hoy)
+  if (rango === '3m')  d.setMonth(hoy.getMonth() - 2, 1)
+  if (rango === '6m')  d.setMonth(hoy.getMonth() - 5, 1)
+  if (rango === '12m') d.setMonth(hoy.getMonth() - 11, 1)
+  if (rango === '24m') d.setMonth(hoy.getMonth() - 23, 1)
+  if (rango === 'ytd') { d.setMonth(0, 1) }
+  return d.toISOString().slice(0, 10)
 }
 
-// ============================================
-// MOTOR DE PROYECCIÓN Y RECOMENDACIONES
-// ============================================
-
-function calcularProyeccion(historial) {
-  // Proyección por tendencia lineal simple (últimos 3 meses vs primeros 3)
-  const primeros3 = historial.slice(0, 3).reduce((a, b) => a + b, 0) / 3
-  const ultimos3 = historial.slice(3, 6).reduce((a, b) => a + b, 0) / 3
-  const tendencia = (ultimos3 - primeros3) / primeros3 // % de crecimiento
-  
-  const promedio = historial.reduce((a, b) => a + b, 0) / historial.length
-  const proyeccion3meses = [
-    Math.round(promedio * (1 + tendencia * 0.3)),
-    Math.round(promedio * (1 + tendencia * 0.5)),
-    Math.round(promedio * (1 + tendencia * 0.7)),
-  ]
-  return { proyeccion3meses, tendencia, promedioMensual: Math.round(promedio) }
-}
-
-function calcularRecomendacion(linea, proyeccion) {
-  const totalProyeccion = proyeccion.proyeccion3meses.reduce((a, b) => a + b, 0)
-  const stockSeguridad = Math.round(proyeccion.promedioMensual * (linea.tiempoEntregaDias / 30) * 1.5)
-  const cantidadRecomendada = Math.max(0, totalProyeccion + stockSeguridad - linea.stockActual)
-  const valorCompra = cantidadRecomendada * linea.costoUnitarioPromedio
-  
-  // Determinar prioridad
-  let prioridad = 'Baja'
-  const diasCobertura = linea.stockActual / (proyeccion.promedioMensual / 30)
-  
-  if (linea.stockActual < linea.stockMinimo) {
-    prioridad = 'Urgente'
-  } else if (diasCobertura < linea.tiempoEntregaDias * 1.5) {
-    prioridad = 'Alta'
-  } else if (diasCobertura < linea.tiempoEntregaDias * 3) {
-    prioridad = 'Media'
-  }
-  
-  return {
-    cantidadRecomendada,
-    valorCompra,
-    stockSeguridad,
-    diasCobertura: Math.round(diasCobertura),
-    prioridad,
-  }
-}
-
-function calcularEstadoProducto(producto) {
-  const diasCobertura = producto.stock / (producto.ventaPromedioMensual / 30)
-  const cantidadRecomendada = Math.max(0, producto.ventaPromedioMensual + producto.stockMin - producto.stock)
-  const valorCompra = cantidadRecomendada * producto.costoUnitario
-  
-  let estado = 'OK'
-  if (producto.stock < producto.stockMin) estado = 'Crítico'
-  else if (diasCobertura < producto.diasEntrega * 2) estado = 'Bajo'
-  else if (diasCobertura < producto.diasEntrega * 4) estado = 'Atención'
-  
-  return { diasCobertura: Math.round(diasCobertura), cantidadRecomendada, valorCompra, estado }
-}
-
-// ============================================
-// COMPONENTE BARRA DE PROGRESO (histórico + proyección)
-// ============================================
-function BarraHistorialProyeccion({ historial, proyeccion, maxValor, color = '#001639' }) {
-  const todos = [...historial, ...proyeccion]
-  const max = maxValor || Math.max(...todos) * 1.1
-  
-  return (
-    <div className="flex items-end gap-1 h-16">
-      {historial.map((v, i) => (
-        <div key={`h-${i}`} className="flex-1 flex flex-col items-center gap-1">
-          <div
-            className="w-full rounded-t transition-all"
-            style={{
-              height: `${(v / max) * 100}%`,
-              backgroundColor: color,
-              opacity: 0.8,
-            }}
-          />
-        </div>
-      ))}
-      {proyeccion.map((v, i) => (
-        <div key={`p-${i}`} className="flex-1 flex flex-col items-center gap-1">
-          <div
-            className="w-full rounded-t transition-all border-2 border-dashed"
-            style={{
-              height: `${(v / max) * 100}%`,
-              backgroundColor: color,
-              opacity: 0.35,
-              borderColor: color,
-            }}
-          />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ============================================
-// PÁGINA PRINCIPAL
-// ============================================
 export default function Compras() {
-  const [lineaSeleccionada, setLineaSeleccionada] = useState('todas')
-  const [vistaExpandida, setVistaExpandida] = useState(false)
-  const [mostrarSoloCriticos, setMostrarSoloCriticos] = useState(false)
+  const [rango, setRango]                 = useState('12m')
+  const [incluirGastos, setIncluirGastos] = useState(false)
+  const [busqueda, setBusqueda]           = useState('')
+  const [proveedorSel, setProveedorSel]   = useState('')
+  const [categoriaSel, setCategoriaSel]   = useState('')
 
-  // Calcular proyecciones y recomendaciones
-  const datosLineas = useMemo(() => {
-    return demoLineasProducto.map(linea => {
-      const proyeccion = calcularProyeccion(linea.historialVentas)
-      const recomendacion = calcularRecomendacion(linea, proyeccion)
-      return { ...linea, ...proyeccion, ...recomendacion }
-    })
-  }, [])
+  const desde = useMemo(() => rangoDesde(rango), [rango])
+  const hasta = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const commonParams = { desde, hasta, incluir_gastos: incluirGastos }
 
-  const datosProductos = useMemo(() => {
-    return demoProductosStock.map(p => {
-      const estado = calcularEstadoProducto(p)
-      return { ...p, ...estado }
-    })
-  }, [])
-
-  // Filtrar
-  const lineasFiltradas = lineaSeleccionada === 'todas'
-    ? datosLineas
-    : datosLineas.filter(l => l.id === lineaSeleccionada)
-
-  const productosFiltrados = lineaSeleccionada === 'todas'
-    ? datosProductos
-    : datosProductos.filter(p => p.linea === datosLineas.find(l => l.id === lineaSeleccionada)?.nombre)
-
-  const productosCriticos = mostrarSoloCriticos
-    ? productosFiltrados.filter(p => p.estado === 'Crítico' || p.estado === 'Bajo')
-    : productosFiltrados
-
-  // KPIs globales
-  const valorInventarioTotal = datosProductos.reduce((s, p) => s + p.stock * p.costoUnitario, 0)
-  const lineasEnCritico = datosLineas.filter(l => l.stockActual < l.stockMinimo).length
-  const totalAComprar = datosLineas.reduce((s, l) => s + l.valorCompra, 0)
-  const coberturaPromedio = Math.round(
-    datosLineas.reduce((s, l) => s + l.diasCobertura, 0) / datosLineas.length
+  const { data: resumenRes, isLoading: loadingResumen } = useQuery(
+    ['compras-resumen', desde, hasta, incluirGastos],
+    () => endpoints.compras.resumen(commonParams),
+    { keepPreviousData: true }
   )
-  const rotacionPromedio = (
-    datosLineas.reduce((s, l) => s + l.promedioMensual * 6, 0) / valorInventarioTotal * 12
-  ).toFixed(1)
+  const { data: catRes } = useQuery(
+    ['compras-categorias', desde, hasta, incluirGastos],
+    () => endpoints.compras.categorias({ ...commonParams, limit: 10 }),
+    { keepPreviousData: true }
+  )
+  const { data: provRes } = useQuery(
+    ['compras-proveedores', desde, hasta, incluirGastos],
+    () => endpoints.compras.proveedores({ ...commonParams, limit: 10 }),
+    { keepPreviousData: true }
+  )
+  const { data: detalleRes, isFetching: fetchingDetalle } = useQuery(
+    ['compras-detalle', desde, hasta, incluirGastos, busqueda, proveedorSel, categoriaSel],
+    () => endpoints.compras.detalle({
+      ...commonParams, busqueda, codigo_proveedor: proveedorSel, categoria: categoriaSel,
+      limit: 300, offset: 0,
+    }),
+    { keepPreviousData: true }
+  )
 
-  // Alertas de stock crítico (top 5 productos más urgentes)
-  const alertasCriticas = [...datosProductos]
-    .filter(p => p.estado === 'Crítico')
-    .sort((a, b) => a.diasCobertura - b.diasCobertura)
-    .slice(0, 5)
+  const resumen = resumenRes?.data || {}
+  const serie   = resumen.serie_mensual || []
+  const cats    = catRes?.data?.categorias || []
+  const provs   = provRes?.data?.proveedores || []
+  const filas   = detalleRes?.data?.filas || []
+  const totalFilas   = detalleRes?.data?.total_filas || 0
+  const sumaFiltrada = detalleRes?.data?.suma_sin_iva_filtrada || 0
 
-  // Productos con mayor cantidad recomendada
-  const topRecomendaciones = [...datosProductos]
-    .filter(p => p.cantidadRecomendada > 0)
-    .sort((a, b) => b.valorCompra - a.valorCompra)
-    .slice(0, 8)
+  // Tendencia mes actual vs promedio de meses previos
+  const tendenciaMensual = useMemo(() => {
+    if (serie.length < 2) return null
+    const ult = serie[serie.length - 1].gasto_sin_iva
+    const prev = serie.slice(0, -1)
+    const avgPrev = prev.reduce((a, b) => a + (b.gasto_sin_iva || 0), 0) / prev.length
+    if (avgPrev === 0) return null
+    return ((ult - avgPrev) / avgPrev) * 100
+  }, [serie])
 
-  const getPrioridadStyles = (prioridad) => {
-    switch (prioridad) {
-      case 'Urgente': return 'bg-red-50 text-red-700 border-red-200'
-      case 'Alta': return 'bg-orange-50 text-orange-700 border-orange-200'
-      case 'Media': return 'bg-yellow-50 text-yellow-700 border-yellow-200'
-      default: return 'bg-green-50 text-green-700 border-green-200'
-    }
-  }
-
-  const getEstadoStyles = (estado) => {
-    switch (estado) {
-      case 'Crítico': return 'badge-danger'
-      case 'Bajo': return 'badge-warning'
-      case 'Atención': return 'badge-info'
-      default: return 'badge-success'
-    }
-  }
+  const alertaConcentracion = provs.length > 0 && provs[0].porcentaje >= 25
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl">
-      {/* ============================================
-          HEADER
-      ============================================ */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-[#001639] flex items-center justify-center shadow-lg">
-            <ShoppingCartIcon className="w-6 h-6 text-white" />
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-4">
+          <Link
+            to="/"
+            className="w-10 h-10 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors"
+          >
+            <ArrowLeftIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          </Link>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#001639] flex items-center justify-center">
+              <ShoppingCartIcon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold">Compras</h1>
+              <p className="text-sm text-[var(--text-muted)]">
+                {loadingResumen
+                  ? 'Cargando…'
+                  : `${fmtNum(resumen.facturas)} facturas · ${fmtNum(resumen.proveedores)} proveedores · ${fmtNum(resumen.lineas)} líneas`}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-semibold">Compras Inteligentes</h1>
-            <p className="text-sm text-[var(--text-muted)]">
-              Análisis de ventas · Proyección · Recomendaciones de inventario
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select value={rango} onChange={(e) => setRango(e.target.value)} className="input">
+            <option value="3m">Últimos 3 meses</option>
+            <option value="6m">Últimos 6 meses</option>
+            <option value="12m">Últimos 12 meses</option>
+            <option value="24m">Últimos 24 meses</option>
+            <option value="ytd">Año en curso</option>
+          </select>
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none px-3 py-2 rounded-lg bg-[var(--bg-secondary)]">
+            <input
+              type="checkbox"
+              checked={incluirGastos}
+              onChange={(e) => setIncluirGastos(e.target.checked)}
+              className="accent-[#001639]"
+            />
+            Incluir gastos operativos
+          </label>
+          <button className="btn-secondary flex items-center gap-2">
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            Exportar
+          </button>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="kpi-card card-hover">
+          <span className="kpi-label">Gasto en compras (sin IVA)</span>
+          <p className="kpi-value">{fmtQ(resumen.gasto_sin_iva)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            Con IVA: {fmtQ(resumen.gasto_con_iva)}
+          </p>
+        </div>
+
+        <div className="kpi-card card-hover">
+          <span className="kpi-label">IVA acreditable</span>
+          <p className="kpi-value">{fmtQ(resumen.iva_acreditable)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            {resumen.gasto_sin_iva > 0
+              ? `${((resumen.iva_acreditable / resumen.gasto_sin_iva) * 100).toFixed(1)}% de la base`
+              : '—'}
+          </p>
+        </div>
+
+        <div className="kpi-card card-hover">
+          <span className="kpi-label">Devoluciones</span>
+          <p className="kpi-value">{fmtQ(resumen.devoluciones_sin_iva)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            Gasto neto: {fmtQ(resumen.gasto_neto_sin_iva)}
+          </p>
+        </div>
+
+        <div className="kpi-card card-hover">
+          <span className="kpi-label">Tendencia mes actual</span>
+          {tendenciaMensual === null ? (
+            <p className="kpi-value text-[var(--text-muted)]">—</p>
+          ) : (
+            <p className={`kpi-value ${tendenciaMensual >= 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>
+              {tendenciaMensual >= 0 ? '+' : ''}{tendenciaMensual.toFixed(1)}%
+            </p>
+          )}
+          <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1">
+            {tendenciaMensual === null ? 'sin base comparable' : (
+              <>
+                {tendenciaMensual >= 0
+                  ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
+                  : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
+                vs promedio de meses previos
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* Alerta concentración */}
+      {alertaConcentracion && (
+        <div className="rounded-lg border border-[var(--warning)] bg-[var(--warning-bg,#fff7ed)] p-4 flex items-start gap-3">
+          <ExclamationTriangleIcon className="w-5 h-5 text-[var(--warning)] flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-[var(--warning)]">Alta concentración con un proveedor</p>
+            <p className="text-[var(--text-secondary)]">
+              <strong>{provs[0].proveedor}</strong> representa el <strong>{provs[0].porcentaje}%</strong> del gasto del período.
+              Un problema en ese proveedor te expone. Considerá segundas fuentes.
             </p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--text-muted)]">Análisis actualizado:</span>
-          <span className="badge-success text-[10px] flex items-center gap-1">
-            <CheckCircleIcon className="w-3 h-3" />
-            {new Date().toLocaleDateString('es-GT', { day: 'numeric', month: 'short', year: 'numeric' })}
-          </span>
-        </div>
-      </div>
-
-      {/* Link al historial de ventas */}
-      <div className="flex items-center gap-3 p-4 bg-[var(--accent-blue-subtle)] rounded-lg border border-[var(--accent-blue)]/20">
-        <ChartBarIcon className="w-5 h-5 text-[var(--accent-blue)]" />
-        <div className="flex-1">
-          <p className="text-sm font-medium text-[var(--text-primary)]">
-            ¿Necesitas ver el detalle de ventas por producto?
-          </p>
-          <p className="text-xs text-[var(--text-muted)]">
-            Análisis completo de ventas históricas por línea y producto individual
-          </p>
-        </div>
-        <Link
-          to="/compras/historial-ventas"
-          className="btn-primary text-sm flex items-center gap-2 whitespace-nowrap"
-        >
-          <ChartBarIcon className="w-4 h-4" />
-          Ver Historial de Ventas
-        </Link>
-      </div>
-
-      {/* ============================================
-          KPIs PRINCIPALES
-      ============================================ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="kpi-card card-hover">
-          <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Valor Inventario</span>
-            <CubeIcon className="w-4 h-4 text-[var(--text-muted)]" />
-          </div>
-          <div className="kpi-value">{formatGTQ(valorInventarioTotal)}</div>
-          <span className="text-xs text-[var(--text-muted)]">{datosProductos.length} productos</span>
-        </div>
-
-        <div className="kpi-card card-hover">
-          <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Cobertura Promedio</span>
-            <ClockIcon className="w-4 h-4 text-[var(--text-muted)]" />
-          </div>
-          <div className="kpi-value">{coberturaPromedio} días</div>
-          <span className="text-xs text-[var(--text-muted)]">Stock vs ventas</span>
-        </div>
-
-        <div className="kpi-card card-hover">
-          <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Stock Crítico</span>
-            <ExclamationTriangleIcon className="w-4 h-4 text-[var(--danger)]" />
-          </div>
-          <div className="kpi-value text-[var(--danger)]">{lineasEnCritico} líneas</div>
-          <span className="text-xs text-[var(--text-muted)]">
-            {datosProductos.filter(p => p.estado === 'Crítico').length} productos
-          </span>
-        </div>
-
-        <div className="kpi-card card-hover">
-          <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Compra Recomendada</span>
-            <CurrencyDollarIcon className="w-4 h-4 text-[var(--success)]" />
-          </div>
-          <div className="kpi-value text-[var(--accent-orange)]">{formatGTQ(totalAComprar)}</div>
-          <span className="text-xs text-[var(--text-muted)]">Próximo trimestre</span>
-        </div>
-      </div>
-
-      {/* ============================================
-          ALERTAS DE STOCK CRÍTICO
-      ============================================ */}
-      {alertasCriticas.length > 0 && (
-        <div className="card border-l-4 border-l-[var(--danger)]">
-          <div className="section-header">
-            <ExclamationTriangleIcon className="w-5 h-5 text-[var(--danger)]" />
-            <h2 className="font-semibold text-[var(--danger)]">⚠️ Alertas de Stock Crítico — Reordenar Urgente</h2>
-            <span className="ml-auto badge-danger text-[10px]">{alertasCriticas.length} productos</span>
-          </div>
-          <div className="p-5 pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-              {alertasCriticas.map((producto) => (
-                <div key={producto.id} className="p-4 rounded-lg bg-[var(--danger-bg)] border border-[var(--danger)]/20">
-                  <div className="flex items-start justify-between mb-2">
-                    <span className="text-xs font-medium text-[var(--danger)] uppercase">{producto.linea}</span>
-                    <span className="badge-danger text-[10px]">{producto.diasCobertura} días</span>
-                  </div>
-                  <p className="text-sm font-medium text-[var(--text-primary)] line-clamp-2">{producto.nombre}</p>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-[var(--text-muted)]">Stock: <b>{producto.stock}</b> und</span>
-                    <span className="text-xs font-mono text-[var(--danger)] font-medium">
-                      +{formatNum(producto.cantidadRecomendada)} und
-                    </span>
-                  </div>
-                  <div className="mt-2 text-xs text-[var(--text-muted)]">
-                    Valor: <span className="font-mono text-[var(--text-primary)]">{formatGTQ(producto.valorCompra)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
       )}
 
-      {/* ============================================
-          FILTRO POR LÍNEA + VISTAS
-      ============================================ */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setLineaSeleccionada('todas')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
-              lineaSeleccionada === 'todas'
-                ? 'bg-[#001639] text-white'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--border-strong)]'
-            }`}
-          >
-            Todas las líneas
-          </button>
-          {datosLineas.map(linea => (
-            <button
-              key={linea.id}
-              onClick={() => setLineaSeleccionada(linea.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
-                lineaSeleccionada === linea.id
-                  ? 'bg-[#001639] text-white'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--border-strong)]'
-              }`}
-            >
-              {linea.nombre}
-            </button>
-          ))}
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setMostrarSoloCriticos(!mostrarSoloCriticos)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
-              mostrarSoloCriticos
-                ? 'bg-[var(--danger-bg)] text-[var(--danger)] border border-[var(--danger)]/30'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--border-strong)]'
-            }`}
-          >
-            <ExclamationTriangleIcon className="w-3.5 h-3.5" />
-            Solo críticos
-          </button>
-          <button
-            onClick={() => setVistaExpandida(!vistaExpandida)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--border-strong)] transition-all"
-          >
-            {vistaExpandida ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
-            {vistaExpandida ? 'Compactar' : 'Expandir'}
-          </button>
-        </div>
-      </div>
-
-      {/* ============================================
-          ANÁLISIS POR LÍNEA: HISTÓRICO + PROYECCIÓN
-      ============================================ */}
+      {/* Gráfico mensual */}
       <div className="card">
         <div className="section-header">
-          <ChartBarIcon className="w-5 h-5 text-[var(--accent-blue)]" />
-          <h2 className="font-semibold">Análisis de Ventas por Línea</h2>
-          <span className="ml-auto text-xs text-[var(--text-muted)]">
-            Histórico 6 meses → Proyección 3 meses
-          </span>
+          <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <h2 className="font-semibold">Gasto mensual en compras</h2>
         </div>
-        
-        <div className={`p-5 pt-0 grid gap-4 ${vistaExpandida ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3'}`}>
-          {lineasFiltradas.map((linea) => {
-            const color = linea.tendencia === 'up' ? '#059669' : linea.tendencia === 'down' ? '#DC2626' : '#2563EB'
-            const totalHistorico = linea.historialVentas.reduce((a, b) => a + b, 0)
-            const totalProyeccion = linea.proyeccion3meses.reduce((a, b) => a + b, 0)
-            const crecimiento = ((totalProyeccion - totalHistorico / 2) / (totalHistorico / 2) * 100).toFixed(1)
-            
-            return (
-              <div key={linea.id} className="p-4 bg-[var(--bg-secondary)] rounded-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-sm">{linea.nombre}</h3>
-                    <p className="text-xs text-[var(--text-muted)]">{linea.descripcion.slice(0, 50)}...</p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`badge text-[10px] ${getPrioridadStyles(linea.prioridad)}`}>
-                      {linea.prioridad}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Gráfica mini */}
-                <BarraHistorialProyeccion
-                  historial={linea.historialVentas}
-                  proyeccion={linea.proyeccion3meses}
-                  color={color}
+        <div className="p-5 pt-0">
+          {serie.length === 0 ? (
+            <div className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos en el rango.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
+                <YAxis tickFormatter={(v) => `Q${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={60} />
+                <Tooltip
+                  formatter={(v) => fmtQ(v)}
+                  labelFormatter={fmtPeriod}
+                  contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8 }}
                 />
-                
-                {/* Labels */}
-                <div className="flex gap-1 mt-1 mb-3">
-                  {demoMesesHistorial.map((m, i) => (
-                    <div key={i} className="flex-1 text-center">
-                      <span className="text-[9px] text-[var(--text-muted)]">{m.split(' ')[0]}</span>
-                    </div>
-                  ))}
-                  {demoMesesProyeccion.map((m, i) => (
-                    <div key={`p-${i}`} className="flex-1 text-center">
-                      <span className="text-[9px] text-[var(--text-muted)] italic">{m.split(' ')[0]}</span>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="p-2 bg-white rounded">
-                    <p className="text-[10px] text-[var(--text-muted)] uppercase">Histórico 6M</p>
-                    <p className="text-sm font-bold font-mono">{formatNum(totalHistorico)} und</p>
-                  </div>
-                  <div className="p-2 bg-white rounded">
-                    <p className="text-[10px] text-[var(--text-muted)] uppercase">Proyección 3M</p>
-                    <p className="text-sm font-bold font-mono">{formatNum(totalProyeccion)} und</p>
-                  </div>
-                  <div className="p-2 bg-white rounded">
-                    <p className="text-[10px] text-[var(--text-muted)] uppercase">Crecimiento</p>
-                    <p className={`text-sm font-bold font-mono ${parseFloat(crecimiento) > 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
-                      {parseFloat(crecimiento) > 0 ? '+' : ''}{crecimiento}%
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Stock actual vs proyección */}
-                <div className="mt-3 p-2 bg-white rounded">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-[var(--text-muted)]">Stock actual vs necesidad trimestral</span>
-                    <span className="font-mono font-medium">
-                      {linea.stockActual} / {formatNum(totalProyeccion + linea.stockSeguridad)} und
-                    </span>
-                  </div>
-                  <div className="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${Math.min(100, (linea.stockActual / (totalProyeccion + linea.stockSeguridad)) * 100)}%`,
-                        backgroundColor: linea.stockActual < totalProyeccion + linea.stockSeguridad ? 'var(--danger)' : 'var(--success)',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+                <Bar dataKey="gasto_sin_iva" fill="#001639" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
-      {/* ============================================
-          TABLA DE RECOMENDACIONES POR LÍNEA
-      ============================================ */}
-      <div className="card">
-        <div className="section-header">
-          <CalculatorIcon className="w-5 h-5 text-[var(--accent-orange)]" />
-          <h2 className="font-semibold">Recomendaciones de Compra por Línea</h2>
-          <span className="ml-auto text-xs text-[var(--text-muted)]">
-            <SparklesIcon className="w-3.5 h-3.5 inline mr-1" />
-            Calculado con proyección + stock de seguridad
-          </span>
-        </div>
-        
-        <div className="table-container mx-5 mb-5">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Línea</th>
-                <th className="text-right">Stock Actual</th>
-                <th className="text-right">Prom. Mensual</th>
-                <th className="text-right">Proyección 3M</th>
-                <th className="text-right">Stock Seg.</th>
-                <th className="text-right">Cantidad a Comprar</th>
-                <th className="text-right">Valor Estimado</th>
-                <th className="text-center">Prioridad</th>
-                <th className="text-center">Cobertura</th>
-                <th>Proveedor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lineasFiltradas.map((linea) => (
-                <tr key={linea.id} className={linea.prioridad === 'Urgente' ? 'bg-red-50/50' : ''}>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{
-                        backgroundColor: linea.tendencia === 'up' ? 'var(--success)' : linea.tendencia === 'down' ? 'var(--danger)' : 'var(--accent-blue)'
-                      }} />
-                      <div>
-                        <p className="font-medium text-sm">{linea.nombre}</p>
-                        <p className="text-[10px] text-[var(--text-muted)]">Entrega: {linea.tiempoEntregaDias} días</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="text-right font-mono text-sm">{formatNum(linea.stockActual)}</td>
-                  <td className="text-right font-mono text-sm">{formatNum(linea.promedioMensual)}</td>
-                  <td className="text-right font-mono text-sm">{formatNum(linea.proyeccion3meses.reduce((a, b) => a + b, 0))}</td>
-                  <td className="text-right font-mono text-sm text-[var(--text-muted)]">{formatNum(linea.stockSeguridad)}</td>
-                  <td className="text-right font-mono font-semibold text-[var(--accent-orange)]">
-                    {linea.cantidadRecomendada > 0 ? formatNum(linea.cantidadRecomendada) : <span className="text-[var(--success)] text-xs">Suficiente</span>}
-                  </td>
-                  <td className="text-right font-mono font-medium">
-                    {linea.valorCompra > 0 ? formatGTQ(linea.valorCompra) : <span className="text-[var(--success)] text-xs">—</span>}
-                  </td>
-                  <td className="text-center">
-                    <span className={`badge text-[10px] ${getPrioridadStyles(linea.prioridad)}`}>
-                      {linea.prioridad}
-                    </span>
-                  </td>
-                  <td className="text-center">
-                    <span className={`font-mono text-xs ${linea.diasCobertura < linea.tiempoEntregaDias * 2 ? 'text-[var(--danger)]' : linea.diasCobertura < 30 ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>
-                      {linea.diasCobertura} d
-                    </span>
-                  </td>
-                  <td>
-                    <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
-                      <TruckIcon className="w-3 h-3 text-[var(--text-muted)]" />
-                      {linea.proveedorPrincipal}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {/* Resumen del pedido recomendado */}
-        <div className="px-5 pb-5">
-          <div className="p-4 bg-[var(--accent-orange-subtle)] rounded-lg border border-[var(--accent-orange)]/20">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <CalculatorIcon className="w-5 h-5 text-[var(--accent-orange)]" />
-                <div>
-                  <p className="font-semibold text-sm text-[var(--text-primary)]">Pedido Recomendado Consolidado</p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {lineasFiltradas.filter(l => l.cantidadRecomendada > 0).length} líneas necesitan reabastecimiento
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="text-right">
-                  <p className="text-xs text-[var(--text-muted)]">Total Unidades</p>
-                  <p className="text-lg font-bold font-mono text-[var(--accent-orange)]">
-                    {formatNum(lineasFiltradas.reduce((s, l) => s + l.cantidadRecomendada, 0))}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-[var(--text-muted)]">Inversión Total</p>
-                  <p className="text-xl font-bold font-mono text-[var(--accent-orange)]">
-                    {formatGTQ(lineasFiltradas.reduce((s, l) => s + l.valorCompra, 0))}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ============================================
-          TOP PRODUCTOS A REORDENAR
-      ============================================ */}
-      {topRecomendaciones.length > 0 && (
+      {/* Top categorías + Top proveedores side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Categorías */}
         <div className="card">
           <div className="section-header">
-            <ArrowPathIcon className="w-5 h-5 text-[var(--accent-blue)]" />
-            <h2 className="font-semibold">Productos Prioritarios a Reordenar</h2>
-            <span className="ml-auto text-xs text-[var(--text-muted)]">Ordenados por valor de compra</span>
+            <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Top categorías por gasto</h2>
           </div>
-          <div className="p-5 pt-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            {topRecomendaciones.map((producto) => (
-              <div key={producto.id} className="p-4 bg-[var(--bg-secondary)] rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase font-medium text-[var(--text-muted)]">{producto.linea}</span>
-                  <span className={`badge text-[10px] ${getEstadoStyles(producto.estado)}`}>{producto.estado}</span>
-                </div>
-                <p className="text-sm font-medium line-clamp-2 mb-2">{producto.nombre}</p>
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-muted)]">Stock actual:</span>
-                    <span className="font-mono">{producto.stock} und</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-muted)]">A ordenar:</span>
-                    <span className="font-mono font-semibold text-[var(--accent-orange)]">+{formatNum(producto.cantidadRecomendada)} und</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-muted)]">Cobertura:</span>
-                    <span className={`font-mono ${producto.diasCobertura < 15 ? 'text-[var(--danger)]' : 'text-[var(--warning)]'}`}>
-                      {producto.diasCobertura} días
+          <div className="p-5 pt-0 space-y-3">
+            {cats.length === 0 && <p className="text-sm text-[var(--text-muted)]">Sin datos.</p>}
+            {cats.map((c, i) => (
+              <button
+                key={`${c.categoria}-${c.linea}`}
+                onClick={() => setCategoriaSel(c.categoria === categoriaSel ? '' : c.categoria)}
+                className="w-full text-left space-y-1.5 hover:opacity-90 transition-opacity"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
+                    <span className="text-sm truncate">
+                      {c.categoria} <span className="text-[var(--text-muted)]">· {c.linea}</span>
                     </span>
                   </div>
-                  <div className="flex justify-between pt-1 border-t border-[var(--border-default)]">
-                    <span className="text-[var(--text-muted)]">Inversión:</span>
-                    <span className="font-mono font-medium">{formatGTQ(producto.valorCompra)}</span>
-                  </div>
+                  <span className="text-sm font-semibold tabular-nums whitespace-nowrap">
+                    {fmtQ(c.gasto_sin_iva)} <span className="text-xs text-[var(--text-muted)]">({c.porcentaje}%)</span>
+                  </span>
                 </div>
-                <div className="mt-2 flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
-                  <TruckIcon className="w-3 h-3" />
-                  {producto.proveedor} · {producto.diasEntrega} días
+                <div className="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      categoriaSel === c.categoria ? 'bg-[#001639]' : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.max(c.porcentaje, 1)}%` }}
+                  />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
-      )}
 
-      {/* ============================================
-          TABLA DETALLADA POR PRODUCTO
-      ============================================ */}
-      <div className="card">
-        <div className="section-header">
-          <CubeIcon className="w-5 h-5 text-[var(--text-primary)]" />
-          <h2 className="font-semibold">Inventario Detallado por Producto</h2>
-          <span className="ml-auto text-xs text-[var(--text-muted)]">
-            {productosCriticos.length} productos
+        {/* Proveedores */}
+        <div className="card">
+          <div className="section-header">
+            <BuildingOfficeIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Top proveedores</h2>
+          </div>
+          <div className="p-5 pt-0">
+            <table className="w-full">
+              <thead>
+                <tr className="text-xs text-[var(--text-muted)] uppercase">
+                  <th className="text-left  font-semibold pb-2">Proveedor</th>
+                  <th className="text-right font-semibold pb-2">Facturas</th>
+                  <th className="text-right font-semibold pb-2">Gasto</th>
+                  <th className="text-right font-semibold pb-2">%</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-default)]">
+                {provs.length === 0 && (
+                  <tr><td colSpan={4} className="py-3 text-sm text-[var(--text-muted)]">Sin datos.</td></tr>
+                )}
+                {provs.map((p) => (
+                  <tr
+                    key={p.codigo}
+                    className={`text-sm hover:bg-[var(--bg-secondary)] cursor-pointer ${proveedorSel === p.codigo ? 'bg-[var(--bg-secondary)]' : ''}`}
+                    onClick={() => setProveedorSel(p.codigo === proveedorSel ? '' : p.codigo)}
+                  >
+                    <td className="py-2 pr-2">
+                      <p className="font-medium truncate max-w-[220px]">{p.proveedor}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{p.codigo}{p.rif ? ` · ${p.rif}` : ''}</p>
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{fmtNum(p.facturas)}</td>
+                    <td className="py-2 text-right tabular-nums font-semibold">{fmtQ(p.gasto_sin_iva)}</td>
+                    <td className={`py-2 text-right tabular-nums font-semibold ${
+                      p.porcentaje >= 25 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'
+                    }`}>
+                      {p.porcentaje}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(proveedorSel || categoriaSel) && (
+              <button
+                onClick={() => { setProveedorSel(''); setCategoriaSel('') }}
+                className="mt-3 text-xs text-[var(--accent-blue)] hover:underline"
+              >
+                Limpiar filtros seleccionados
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Filtros y detalle */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <MagnifyingGlassIcon className="w-5 h-5 text-[var(--text-muted)] absolute left-4 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Buscar por proveedor, artículo o número de factura…"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="input w-full pl-12"
+          />
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)] flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <ReceiptPercentIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <span className="text-sm text-[var(--text-muted)]">
+              {fetchingDetalle ? 'Actualizando…' : `${fmtNum(filas.length)} de ${fmtNum(totalFilas)} líneas`}
+              {(proveedorSel || categoriaSel) && (
+                <>
+                  {' · filtro: '}
+                  {proveedorSel && <span className="badge-warning ml-1">{proveedorSel}</span>}
+                  {categoriaSel && <span className="badge-warning ml-1">{categoriaSel}</span>}
+                </>
+              )}
+            </span>
+          </div>
+          <span className="text-sm font-semibold">
+            Total filtrado sin IVA: {fmtQfull(sumaFiltrada)}
           </span>
         </div>
-        
-        <div className="table-container mx-5 mb-5">
-          <table className="table">
-            <thead>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-[var(--bg-secondary)] border-b border-[var(--border-default)]">
               <tr>
-                <th>Producto</th>
-                <th>Línea</th>
-                <th className="text-right">Stock</th>
-                <th className="text-right">Mínimo</th>
-                <th className="text-right">Venta/Mes</th>
-                <th className="text-right">Cobertura</th>
-                <th className="text-center">Estado</th>
-                <th className="text-right">Cantidad a Ordenar</th>
-                <th className="text-right">Valor Compra</th>
-                <th>Proveedor</th>
+                <th className="px-3 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Fecha</th>
+                <th className="px-3 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Doc</th>
+                <th className="px-3 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Proveedor</th>
+                <th className="px-3 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Artículo</th>
+                <th className="px-3 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Categoría</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Unid.</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Sin IVA</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">IVA</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Con IVA</th>
               </tr>
             </thead>
-            <tbody>
-              {productosCriticos.map((producto) => (
-                <tr 
-                  key={producto.id} 
-                  className={producto.estado === 'Crítico' ? 'bg-red-50/30' : producto.estado === 'Bajo' ? 'bg-orange-50/30' : ''}
-                >
-                  <td>
-                    <p className="font-medium text-sm">{producto.nombre}</p>
-                    <p className="text-[10px] text-[var(--text-muted)]">Q {producto.costoUnitario}/und · Entrega: {producto.diasEntrega}d</p>
+            <tbody className="divide-y divide-[var(--border-default)]">
+              {filas.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                    {fetchingDetalle ? 'Cargando…' : 'Sin líneas que coincidan con el filtro.'}
                   </td>
-                  <td>
-                    <span className="badge-neutral text-[10px]">{producto.linea}</span>
+                </tr>
+              )}
+              {filas.map(r => (
+                <tr key={r.id} className="hover:bg-[var(--bg-secondary)] transition-colors">
+                  <td className="px-3 py-2 text-sm text-[var(--text-secondary)] tabular-nums whitespace-nowrap">{fmtDate(r.fecha_emision)}</td>
+                  <td className="px-3 py-2 text-sm">
+                    <p className="font-medium">{r.tipo_doc} {r.fact_num}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{r.sucursal}</p>
                   </td>
-                  <td className="text-right font-mono text-sm">{producto.stock}</td>
-                  <td className="text-right font-mono text-sm text-[var(--text-muted)]">{producto.stockMin}</td>
-                  <td className="text-right font-mono text-sm">{producto.ventaPromedioMensual}</td>
-                  <td className="text-right font-mono text-sm">
-                    <span className={producto.diasCobertura < 15 ? 'text-[var(--danger)] font-medium' : producto.diasCobertura < 30 ? 'text-[var(--warning)]' : 'text-[var(--success)]'}>
-                      {producto.diasCobertura} d
-                    </span>
+                  <td className="px-3 py-2 text-sm max-w-[200px]">
+                    <p className="font-medium truncate">{r.proveedor}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{r.codigo_proveedor}</p>
                   </td>
-                  <td className="text-center">
-                    <span className={`badge text-[10px] ${getEstadoStyles(producto.estado)}`}>
-                      {producto.estado}
-                    </span>
+                  <td className="px-3 py-2 text-sm max-w-[220px]">
+                    <p className="truncate flex items-center gap-1">
+                      <CubeIcon className="w-3.5 h-3.5 text-[var(--text-muted)] flex-shrink-0" />
+                      <span className="truncate">{r.articulo || r.codigo_articulo}</span>
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">{r.codigo_articulo}</p>
                   </td>
-                  <td className="text-right font-mono font-semibold">
-                    {producto.cantidadRecomendada > 0 ? (
-                      <span className="text-[var(--accent-orange)]">+{formatNum(producto.cantidadRecomendada)}</span>
-                    ) : (
-                      <span className="text-[var(--success)] text-xs">OK</span>
-                    )}
+                  <td className="px-3 py-2 text-sm">
+                    <p className="text-[var(--text-secondary)]">{r.categoria}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{r.linea}</p>
                   </td>
-                  <td className="text-right font-mono font-medium">
-                    {producto.valorCompra > 0 ? formatGTQ(producto.valorCompra) : <span className="text-[var(--success)] text-xs">—</span>}
-                  </td>
-                  <td>
-                    <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
-                      <TruckIcon className="w-3 h-3 text-[var(--text-muted)]" />
-                      {producto.proveedor}
-                    </span>
-                  </td>
+                  <td className="px-3 py-2 text-right text-sm tabular-nums">{fmtNum(r.unidades)}</td>
+                  <td className="px-3 py-2 text-right text-sm tabular-nums font-semibold">{fmtQ(r.total_sin_iva)}</td>
+                  <td className="px-3 py-2 text-right text-sm tabular-nums text-[var(--text-muted)]">{fmtQ(r.iva)}</td>
+                  <td className="px-3 py-2 text-right text-sm tabular-nums font-semibold">{fmtQ(r.total_con_iva)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        
-        {/* Leyenda */}
-        <div className="px-5 pb-5">
-          <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-muted)]">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded bg-red-100 border border-red-300" />
-              <span>Crítico: stock {'<'} mínimo</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded bg-orange-100 border border-orange-300" />
-              <span>Bajo: cobertura {'<'} 2x entrega</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded bg-blue-100 border border-blue-300" />
-              <span>Atención: cobertura {'<'} 4x entrega</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <InformationCircleIcon className="w-4 h-4 text-[var(--text-muted)]" />
-              <span>Proyección basada en tendencia de los últimos 6 meses</span>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* Nota metodológica */}
+      <p className="text-xs text-[var(--text-muted)] italic">
+        Datos del ERP (vista <code>vstCompras</code>) sincronizados diariamente.
+        {' '}Toggle <em>Incluir gastos operativos</em> {incluirGastos ? 'activo' : 'desactivado'}
+        {' '}(categoría <em>Gastos de Operación</em> {incluirGastos ? 'incluida' : 'excluida'} de los totales).
+      </p>
     </div>
   )
 }

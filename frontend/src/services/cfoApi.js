@@ -42,6 +42,12 @@ export const endpoints = {
     cxcDetalle: (params = {}) => cfoApi.get('/tesoreria/cxc/detalle', { params }),
     cxp: () => cfoApi.get('/tesoreria/cxp')
   },
+  compras: {
+    resumen: (params = {}) => cfoApi.get('/compras', { params }),
+    categorias: (params = {}) => cfoApi.get('/compras/categorias', { params }),
+    proveedores: (params = {}) => cfoApi.get('/compras/proveedores', { params }),
+    detalle: (params = {}) => cfoApi.get('/compras/detalle', { params })
+  },
   contabilidad: {
     libroDiario: (params) => cfoApi.get('/contabilidad/libro_diario', { params }),
     conciliacion: (banco) => cfoApi.get('/contabilidad/conciliacion', { params: { banco } }),

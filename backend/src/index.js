@@ -25,6 +25,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/tesoreria', require('./routes/tesoreria'));
+app.use('/api/compras', require('./routes/compras'));
 app.use('/api/contabilidad', require('./routes/contabilidad'));
 app.use('/api/sat', require('./routes/sat'));
 app.use('/api/analisis', require('./routes/analisis'));
