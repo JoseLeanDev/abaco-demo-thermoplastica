@@ -55,6 +55,10 @@ export const endpoints = {
     proveedores: (params = {}) => cfoApi.get('/gastos/proveedores', { params }),
     detalle: (params = {}) => cfoApi.get('/gastos/detalle', { params })
   },
+  inventario: {
+    resumen: () => cfoApi.get('/inventario'),
+    detalle: (params = {}) => cfoApi.get('/inventario/detalle', { params }),
+  },
   contabilidad: {
     libroDiario: (params) => cfoApi.get('/contabilidad/libro_diario', { params }),
     conciliacion: (banco) => cfoApi.get('/contabilidad/conciliacion', { params: { banco } }),
