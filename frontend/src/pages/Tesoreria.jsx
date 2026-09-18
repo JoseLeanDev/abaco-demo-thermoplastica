@@ -133,7 +133,7 @@ export default function Tesoreria() {
               <ArrowTrendingUpIcon className="w-5 h-5 text-[var(--text-muted)]" />
               <h2 className="font-semibold">Cuentas por Cobrar</h2>
             </div>
-            <Link to="/tesoreria/cxc" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
+            <Link to="/tesoreria/cuentas-por-cobrar" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
               Ver detalle <ArrowRightIcon className="w-3 h-3" />
             </Link>
           </div>
@@ -174,7 +174,9 @@ export default function Tesoreria() {
               <ArrowTrendingDownIcon className="w-5 h-5 text-[var(--text-muted)]" />
               <h2 className="font-semibold">Cuentas por Pagar</h2>
             </div>
-            <span className="text-xs text-[var(--text-muted)]">antigüedad desde emisión</span>
+            <Link to="/tesoreria/cuentas-por-pagar" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
+              Ver detalle <ArrowRightIcon className="w-3 h-3" />
+            </Link>
           </div>
           <div className="p-5 pt-0 space-y-4">
             <div>
@@ -183,14 +185,14 @@ export default function Tesoreria() {
                 <span className="text-lg font-semibold tabular-nums">{fmtQ(cxpDetalle.total_cxp || cxp.total)}</span>
               </div>
               <p className="text-xs text-[var(--text-muted)]">
-                {fmtNum(cxpDetalle.facturas || cxp.facturas)} facturas · {fmtNum(cxpDetalle.proveedores || cxp.proveedores)} proveedores
+                {fmtNum(cxpDetalle.facturas || cxp.facturas)} facturas · {fmtNum(cxpDetalle.proveedores || cxp.proveedores)} proveedores · crédito prom {cxpDetalle.dias_credito_promedio || 0}d
               </p>
             </div>
 
-            {['por_vencer', 'v_1_30', 'v_31_60', 'v_60_mas'].map(k => {
+            {['por_vencer', 'v_1_30', 'v_31_60', 'v_61_90', 'v_90_mas'].map(k => {
               const bucket = cxpAging[k] || {}
-              const labels = { por_vencer: '< 30 días', v_1_30: '30-60 días', v_31_60: '60-90 días', v_60_mas: '90+ días' }
-              const colors = { por_vencer: 'bg-emerald-500', v_1_30: 'bg-amber-500', v_31_60: 'bg-orange-500', v_60_mas: 'bg-rose-500' }
+              const labels = { por_vencer: 'Por vencer', v_1_30: '1-30 días', v_31_60: '31-60 días', v_61_90: '61-90 días', v_90_mas: '90+ días' }
+              const colors = { por_vencer: 'bg-emerald-500', v_1_30: 'bg-amber-500', v_31_60: 'bg-orange-500', v_61_90: 'bg-rose-500', v_90_mas: 'bg-red-600' }
               return (
                 <div key={k} className="space-y-1.5">
                   <div className="flex items-center justify-between text-sm">
@@ -309,10 +311,9 @@ export default function Tesoreria() {
         <div className="text-xs text-[var(--text-muted)] leading-relaxed">
           <p><strong>Origen de los datos:</strong> ERP TP_A sincronizado diariamente via n8n.</p>
           <p className="mt-1">
-            <strong>Nota sobre CxP:</strong> el ERP no expone una vista dedicada de cuentas por pagar.
-            Construimos el CxP tomando el saldo pendiente de cada factura de compra (<code>MAX(saldo)</code> por factura de <code>vstCompras</code>).
-            La fecha de vencimiento se estima a 30 días desde la emisión — no refleja los términos reales acordados con cada proveedor
-            (Klockner y otros importadores probablemente tienen 60-90 días). El aging muestra <em>antigüedad desde emisión</em>, no atraso real de pago.
+            CxC de <code>vstCuentaPorCobrar</code> (snapshot vivo). CxP de <code>vstAnalisisCxP</code> con
+            fecha de vencimiento real acordada con cada proveedor y días de crédito según ficha.
+            El aging usa fecha de vencimiento verdadera (no estimada).
           </p>
         </div>
       </div>

@@ -2,80 +2,70 @@ import { useState } from 'react'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
-import { 
-  ArrowTrendingDownIcon, 
+import {
+  ArrowTrendingDownIcon,
   ArrowLeftIcon,
   ArrowDownTrayIcon,
   MagnifyingGlassIcon,
   ClockIcon,
   BuildingOfficeIcon,
-  CalendarIcon,
-  CheckIcon,
-  CreditCardIcon,
-  TagIcon,
-  TruckIcon
+  ExclamationCircleIcon,
+  CheckCircleIcon,
+  UserGroupIcon,
+  ChartBarIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline'
 
+const fmtQ = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
+const fmtM = (n) => {
+  const v = Number(n) || 0
+  if (Math.abs(v) >= 1e6) return `Q${(v / 1e6).toFixed(1)}M`
+  if (Math.abs(v) >= 1e3) return `Q${Math.round(v / 1e3)}k`
+  return fmtQ(v)
+}
+const fmtDate = (d) => {
+  if (!d) return '—'
+  return String(d).slice(0, 10)
+}
+
+const badgeForDias = (dias) => {
+  if (dias <= 0)  return { label: 'Vigente',        color: 'badge-success', icon: CheckCircleIcon }
+  if (dias <= 30) return { label: `${dias}d`,       color: 'badge-warning', icon: ClockIcon }
+  if (dias <= 60) return { label: `${dias}d`,       color: 'badge-warning', icon: ExclamationCircleIcon }
+  return                { label: `${dias}d`,       color: 'badge-danger',  icon: ExclamationCircleIcon }
+}
+
 export default function CuentasPorPagar() {
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroUrgencia, setFiltroUrgencia] = useState('todos')
-  
-  const { data: cxpData, isLoading } = useQuery('cxp-detalle', () => endpoints.tesoreria.cxp({ proximos_dias: 90 }))
-  
-  const data = cxpData?.data || {}
-  const proximosPagos = data.proximos_pagos || []
-  
-  // Mock data extendido
-  const todasLasCxP = [
-    { proveedor: 'Importaciones del Pacífico', nit: '1234567-8', monto: 345000, dias_restantes: 3, descuento_pronto_pago: true, factura: 'FAC-PROV-452', vencimiento: '2026-04-10', tipo: 'Importación', condicion: '2% a 7 días' },
-    { proveedor: 'Servicios Eléctricos S.A.', nit: '8765432-1', monto: 89000, dias_restantes: 5, descuento_pronto_pago: false, factura: 'FAC-PROV-453', vencimiento: '2026-04-12', tipo: 'Servicios', condicion: 'Neto 30' },
-    { proveedor: 'Papelera Nacional', nit: '5678901-2', monto: 45000, dias_restantes: 8, descuento_pronto_pago: true, factura: 'FAC-PROV-450', vencimiento: '2026-04-15', tipo: 'Insumos', condicion: '3% a 10 días' },
-    { proveedor: 'Tecnología Avanzada S.A.', nit: '1098765-4', monto: 275000, dias_restantes: 12, descuento_pronto_pago: false, factura: 'FAC-PROV-448', vencimiento: '2026-04-20', tipo: 'Equipos', condicion: 'Neto 30' },
-    { proveedor: 'Transporte Rápido', nit: '3456789-0', monto: 28000, dias_restantes: 15, descuento_pronto_pago: false, factura: 'FAC-PROV-455', vencimiento: '2026-04-23', tipo: 'Logística', condicion: 'Neto 15' },
-    { proveedor: 'Químicos Industriales', nit: '6543210-9', monto: 156000, dias_restantes: 18, descuento_pronto_pago: true, factura: 'FAC-PROV-445', vencimiento: '2026-04-25', tipo: 'Materia Prima', condicion: '5% a 15 días' },
-    { proveedor: 'Seguridad Corporativa', nit: '7890123-4', monto: 45000, dias_restantes: 22, descuento_pronto_pago: false, factura: 'FAC-PROV-460', vencimiento: '2026-04-30', tipo: 'Servicios', condicion: 'Neto 30' },
-    { proveedor: 'Marketing Digital Pro', nit: '4567890-1', monto: 72000, dias_restantes: 25, descuento_pronto_pago: false, factura: 'FAC-PROV-462', vencimiento: '2026-05-02', tipo: 'Marketing', condicion: 'Neto 30' },
-    { proveedor: 'Mantenimiento Industrial', nit: '2345678-9', monto: 125000, dias_restantes: 28, descuento_pronto_pago: false, factura: 'FAC-PROV-440', vencimiento: '2026-05-05', tipo: 'Servicios', condicion: 'Neto 30' },
-    { proveedor: 'Consultoría Estratégica', nit: '8901234-5', monto: 180000, dias_restantes: 35, descuento_pronto_pago: false, factura: 'FAC-PROV-435', vencimiento: '2026-05-15', tipo: 'Consultoría', condicion: 'Neto 45' },
-  ]
+  const [busqueda, setBusqueda]     = useState('')
+  const [bucket, setBucket]         = useState('todos')
+  const [proveedorSel, setProveedor] = useState('')
 
-  const cxpFiltradas = todasLasCxP.filter(cxp => {
-    const matchBusqueda = busqueda === '' || 
-      cxp.proveedor.toLowerCase().includes(busqueda.toLowerCase()) ||
-      cxp.factura.toLowerCase().includes(busqueda.toLowerCase()) ||
-      cxp.nit.includes(busqueda)
-    
-    let matchUrgencia = true
-    if (filtroUrgencia === 'critico') matchUrgencia = cxp.dias_restantes <= 5
-    else if (filtroUrgencia === 'urgente') matchUrgencia = cxp.dias_restantes > 5 && cxp.dias_restantes <= 10
-    else if (filtroUrgencia === 'descuento') matchUrgencia = cxp.descuento_pronto_pago
-    else if (filtroUrgencia === 'proximo') matchUrgencia = cxp.dias_restantes > 10 && cxp.dias_restantes <= 20
-    
-    return matchBusqueda && matchUrgencia
-  })
+  const { data: cxpData, isLoading: loadingResumen } = useQuery('cxp', endpoints.tesoreria.cxp)
 
-  const getUrgenciaConfig = (dias) => {
-    if (dias <= 5) return { color: 'bg-rose-500', label: 'Crítico', badgeClass: 'badge-danger' }
-    if (dias <= 10) return { color: 'bg-amber-500', label: 'Urgente', badgeClass: 'badge-warning' }
-    if (dias <= 20) return { color: 'bg-blue-500', label: 'Próximo', badgeClass: 'badge-info' }
-    return { color: 'bg-emerald-500', label: 'Normal', badgeClass: 'badge-success' }
-  }
+  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, proveedor: proveedorSel }
+  const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
+    ['cxp-detalle', busqueda, bucket, proveedorSel],
+    () => endpoints.tesoreria.cxpDetalle(detalleParams),
+    { keepPreviousData: true }
+  )
 
-  const totalFiltrado = cxpFiltradas.reduce((sum, c) => sum + c.monto, 0)
-  const totalDescuentos = cxpFiltradas
-    .filter(c => c.descuento_pronto_pago)
-    .reduce((sum, c) => sum + (c.monto * 0.03), 0)
+  const resumen       = cxpData?.data || {}
+  const distribucion  = resumen.distribucion_aging || {}
+  const topProv       = resumen.top_proveedores || []
+  const proximos      = resumen.proximos_pagos || []
+  const totalFacturas = resumen.facturas || 0
 
-  const pagosCriticos = todasLasCxP.filter(c => c.dias_restantes <= 5).length
-  const pagosConDescuento = todasLasCxP.filter(c => c.descuento_pronto_pago).length
+  const filas = detalleData?.data?.filas || []
+  const totalFilas   = detalleData?.data?.total_filas || 0
+  const sumaFiltrada = detalleData?.data?.suma_saldo || 0
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-6xl">
+    <div className="space-y-6 animate-fade-in max-w-7xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
-          <Link 
-            to="/tesoreria" 
+          <Link
+            to="/tesoreria"
             className="w-10 h-10 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors"
           >
             <ArrowLeftIcon className="w-5 h-5 text-[var(--text-muted)]" />
@@ -86,163 +76,324 @@ export default function CuentasPorPagar() {
             </div>
             <div>
               <h1 className="text-2xl font-semibold">Cuentas por Pagar</h1>
-              <p className="text-sm text-[var(--text-muted)]">{todasLasCxP.length} facturas pendientes • Promedio {data.promedio_dias_pago} días</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                {loadingResumen
+                  ? 'Cargando…'
+                  : `${totalFacturas.toLocaleString()} facturas abiertas · DPO promedio vencido ${resumen.promedio_dias_pago || 0} días · Crédito promedio pactado ${resumen.dias_credito_promedio || 0} días`}
+              </p>
             </div>
           </div>
         </div>
-        
+
         <button className="btn-secondary flex items-center gap-2">
           <ArrowDownTrayIcon className="w-4 h-4" />
           Exportar
         </button>
       </div>
 
-      {/* Alert Banner */}
-      {pagosCriticos > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center">
-            <ClockIcon className="w-5 h-5 text-rose-600" />
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-rose-800">⚠️ {pagosCriticos} pagos críticos en los próximos 5 días</p>
-            <p className="text-sm text-rose-600">Revisa las facturas marcadas en rojo para evitar recargos por mora.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Indicadores Clave */}
+      {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
           <span className="kpi-label">Total por Pagar</span>
-          <p className="kpi-value">Q{(data.total_cxp || 0).toLocaleString()}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">{todasLasCxP.length} facturas</p>
+          <p className="kpi-value">{fmtQ(resumen.total_cxp)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{totalFacturas.toLocaleString()} facturas · {resumen.proveedores || 0} proveedores</p>
         </div>
-        
+
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Pagos Críticos (&lt;5 días)</span>
-          <p className="kpi-value text-[var(--danger)]">{pagosCriticos}</p>
-          <p className="text-xs text-[var(--danger)] mt-1">Atención inmediata</p>
+          <span className="kpi-label">Por Vencer</span>
+          <p className="kpi-value text-[var(--success)]">{fmtQ(distribucion.por_vencer?.monto)}</p>
+          <p className="text-xs text-[var(--success)] mt-1">{distribucion.por_vencer?.porcentaje || 0}%</p>
         </div>
-        
+
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Descuentos Disponibles</span>
-          <p className="kpi-value text-[var(--success)]">{pagosConDescuento}</p>
-          <p className="text-xs text-[var(--success)] mt-1">Ahorro potencial: Q{Math.round(totalDescuentos).toLocaleString()}</p>
+          <span className="kpi-label">1-30 días vencido</span>
+          <p className="kpi-value text-[var(--warning)]">{fmtQ(distribucion.v_1_30?.monto)}</p>
+          <p className="text-xs text-[var(--warning)] mt-1">{distribucion.v_1_30?.porcentaje || 0}%</p>
         </div>
-        
+
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Promedio Días Pago</span>
-          <p className="kpi-value">{data.promedio_dias_pago || 0}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">días</p>
+          <span className="kpi-label">+60 días (riesgo)</span>
+          <p className="kpi-value text-[var(--danger)]">{fmtQ((distribucion.v_61_90?.monto || 0) + (distribucion.v_90_mas?.monto || 0))}</p>
+          <p className="text-xs text-[var(--danger)] mt-1">Atención requerida</p>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Aging */}
+      <div className="card">
+        <div className="section-header">
+          <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <h2 className="font-semibold">Distribución por Antigüedad (vs fecha de vencimiento real)</h2>
+        </div>
+        <div className="p-5 pt-0 space-y-4">
+          {[
+            { key: 'por_vencer', label: 'Por vencer',            color: 'bg-emerald-500' },
+            { key: 'v_1_30',     label: '1-30 días vencido',     color: 'bg-amber-500' },
+            { key: 'v_31_60',    label: '31-60 días vencido',    color: 'bg-orange-500' },
+            { key: 'v_61_90',    label: '61-90 días vencido',    color: 'bg-rose-500' },
+            { key: 'v_90_mas',   label: '90+ días vencido',      color: 'bg-red-600' }
+          ].map(r => {
+            const val = distribucion[r.key]
+            return (
+              <div key={r.key} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[var(--text-secondary)]">{r.label}</span>
+                  <span className="text-sm font-semibold tabular-nums">
+                    {fmtQ(val?.monto)} ({val?.porcentaje || 0}%)
+                  </span>
+                </div>
+                <div className="h-3 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${r.color} transition-all duration-700`}
+                    style={{ width: `${val?.porcentaje || 0}%` }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Top proveedores + Próximos pagos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card">
+          <div className="section-header">
+            <BuildingOfficeIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Top proveedores con saldo</h2>
+          </div>
+          <div className="p-5 pt-0 overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-xs text-[var(--text-muted)] uppercase">
+                  <th className="text-left  font-semibold pb-2">Proveedor</th>
+                  <th className="text-right font-semibold pb-2">Facturas</th>
+                  <th className="text-right font-semibold pb-2">Crédito</th>
+                  <th className="text-right font-semibold pb-2">Saldo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-default)]">
+                {topProv.length === 0 && (
+                  <tr><td colSpan={4} className="py-3 text-sm text-[var(--text-muted)]">Cargando…</td></tr>
+                )}
+                {topProv.map((p) => (
+                  <tr
+                    key={p.codigo}
+                    className={`text-sm hover:bg-[var(--bg-secondary)] cursor-pointer ${proveedorSel === p.codigo ? 'bg-[var(--bg-secondary)]' : ''}`}
+                    onClick={() => setProveedor(p.codigo === proveedorSel ? '' : p.codigo)}
+                  >
+                    <td className="py-2 pr-2">
+                      <p className="font-medium truncate max-w-[240px]">{p.proveedor}</p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {p.codigo}
+                        {p.facturas_vencidas > 0 && (
+                          <span className="ml-1 text-[var(--danger)]">· {p.facturas_vencidas} vencidas</span>
+                        )}
+                      </p>
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{p.facturas}</td>
+                    <td className="py-2 text-right tabular-nums text-[var(--text-secondary)]">
+                      {p.dias_credito > 0 ? `${p.dias_credito}d` : '—'}
+                    </td>
+                    <td className="py-2 text-right tabular-nums font-semibold">{fmtM(p.monto)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {proveedorSel && (
+              <button
+                onClick={() => setProveedor('')}
+                className="mt-3 text-xs text-[var(--accent-blue)] hover:underline"
+              >
+                Limpiar filtro de proveedor
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="section-header">
+            <ClockIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Próximos pagos (30 días)</h2>
+          </div>
+          <div className="p-5 pt-0 overflow-x-auto">
+            {proximos.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)] py-4 text-center">Sin pagos previstos en los próximos 30 días.</p>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs text-[var(--text-muted)] uppercase">
+                    <th className="text-left  font-semibold pb-2">Vence</th>
+                    <th className="text-left  font-semibold pb-2">Proveedor</th>
+                    <th className="text-right font-semibold pb-2">Días</th>
+                    <th className="text-right font-semibold pb-2">Monto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-default)]">
+                  {proximos.slice(0, 12).map((p, i) => (
+                    <tr key={`${p.numero_interno}-${i}`} className="text-sm hover:bg-[var(--bg-secondary)]">
+                      <td className="py-2 pr-2 tabular-nums text-[var(--text-secondary)]">{fmtDate(p.fecha_vencimiento)}</td>
+                      <td className="py-2 pr-2">
+                        <p className="font-medium truncate max-w-[220px]">{p.proveedor}</p>
+                        <p className="text-xs text-[var(--text-muted)]">#{p.numero_interno}</p>
+                      </td>
+                      <td className={`py-2 text-right tabular-nums font-semibold ${
+                        p.dias_restantes <= 7 ? 'text-[var(--danger)]' : p.dias_restantes <= 15 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'
+                      }`}>{p.dias_restantes}d</td>
+                      <td className="py-2 text-right tabular-nums font-semibold">{fmtM(p.monto)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <MagnifyingGlassIcon className="w-5 h-5 text-[var(--text-muted)] absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar proveedor, factura, NIT..."
+            placeholder="Buscar por proveedor, código o número de factura…"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             className="input w-full pl-12"
           />
         </div>
-        <select 
-          value={filtroUrgencia} 
-          onChange={(e) => setFiltroUrgencia(e.target.value)}
-          className="input min-w-[180px]"
+        <select
+          value={bucket}
+          onChange={(e) => setBucket(e.target.value)}
+          className="input min-w-[200px]"
         >
-          <option value="todos">Todos los pagos</option>
-          <option value="critico">🚨 Críticos (&lt;5 días)</option>
-          <option value="urgente">⚠️ Urgentes (5-10 días)</option>
-          <option value="descuento">💰 Con descuento PP</option>
-          <option value="proximo">📅 Próximos (10-20 días)</option>
+          <option value="todos">Todos los buckets</option>
+          <option value="por_vencer">Por vencer</option>
+          <option value="v_1_30">1-30 días vencido</option>
+          <option value="v_31_60">31-60 días vencido</option>
+          <option value="v_61_90">61-90 días vencido</option>
+          <option value="v_90_mas">90+ días vencido</option>
         </select>
       </div>
 
-      {/* Table */}
+      {/* Tabla detalle */}
       <div className="card overflow-hidden">
-        <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)]">
+        <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)] flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <TruckIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <span className="text-sm text-[var(--text-muted)]">{cxpFiltradas.length} resultados</span>
+            <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <span className="text-sm text-[var(--text-muted)]">
+              {loadingDetalle ? 'Cargando…' : `${filas.length.toLocaleString()} de ${totalFilas.toLocaleString()} facturas`}
+              {isFetching && !loadingDetalle && ' · actualizando…'}
+            </span>
           </div>
-          <span className="text-sm font-semibold">
-            Total: Q{totalFiltrado.toLocaleString()}
-          </span>
+          <span className="text-sm font-semibold">Total filtrado: {fmtQ(sumaFiltrada)}</span>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-[var(--bg-secondary)] border-b border-[var(--border-default)]">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">Proveedor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">Factura</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Monto</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Urgencia</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Días</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)] uppercase">Vencimiento</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Descuento</th>
+                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Proveedor</th>
+                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Factura</th>
+                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Emisión</th>
+                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Vencimiento</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Crédito<br /><span className="normal-case font-normal">ficha · factura</span></th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Saldo</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
-              {cxpFiltradas.map((cxp) => {
-                const urgencia = getUrgenciaConfig(cxp.dias_restantes)
-                const ahorro = cxp.descuento_pronto_pago ? cxp.monto * 0.03 : 0
+              {loadingDetalle && filas.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                    Cargando facturas desde el ERP…
+                  </td>
+                </tr>
+              )}
+              {!loadingDetalle && filas.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                    No hay facturas que coincidan con el filtro.
+                  </td>
+                </tr>
+              )}
+              {filas.map(row => {
+                const badge = badgeForDias(row.dias_atraso)
+                const BadgeIcon = badge.icon
+                const desviacion = row.dias_segun_facturas - row.dias_credito_ficha
                 return (
-                  <tr key={cxp.factura} className="hover:bg-[var(--bg-secondary)] transition-colors">
-                    <td className="px-4 py-4">
+                  <tr key={row.id} className="hover:bg-[var(--bg-secondary)] transition-colors">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
-                          <BuildingOfficeIcon className="w-5 h-5 text-[var(--text-muted)]" />
+                        <div className="w-9 h-9 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
+                          <BuildingOfficeIcon className="w-4 h-4 text-[var(--text-muted)]" />
                         </div>
-                        <div>
-                          <p className="font-medium text-[var(--text-primary)]">{cxp.proveedor}</p>
-                          <p className="text-xs text-[var(--text-muted)]">NIT: {cxp.nit} • {cxp.tipo}</p>
+                        <div className="min-w-0">
+                          <p className="font-medium text-[var(--text-primary)] truncate max-w-[240px]">{row.proveedor}</p>
+                          <p className="text-xs text-[var(--text-muted)]">
+                            {row.codigo_proveedor}
+                            {row.sucursal && ` · ${row.sucursal}`}
+                          </p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm font-medium">{cxp.factura}</span>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <span className="font-bold tabular-nums">Q{cxp.monto.toLocaleString()}</span>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className={`badge ${urgencia.badgeClass}`}>
-                        <span className={`inline-block w-2 h-2 rounded-full ${urgencia.color} mr-1`} />
-                        {urgencia.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className={`text-sm font-semibold ${
-                        cxp.dias_restantes <= 5 ? 'text-[var(--danger)]' : 
-                        cxp.dias_restantes <= 10 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'
-                      }`}>
-                        {cxp.dias_restantes} días
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm text-[var(--text-secondary)]">{cxp.vencimiento}</span>
-                      <p className="text-xs text-[var(--text-muted)]">{cxp.condicion}</p>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      {cxp.descuento_pronto_pago ? (
-                        <div className="badge-success text-[10px]">
-                          <TagIcon className="w-3 h-3 inline mr-1" />
-                          Ahorro: Q{ahorro.toLocaleString()}
-                        </div>
-                      ) : (
-                        <span className="text-[var(--text-muted)] text-xs">—</span>
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium">#{row.numero_interno}</p>
+                      {row.factura_proveedor && (
+                        <p className="text-xs text-[var(--text-muted)]">Prov: {row.factura_proveedor}</p>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-sm text-[var(--text-secondary)] tabular-nums">{fmtDate(row.fecha_emision)}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-sm text-[var(--text-secondary)] tabular-nums">{fmtDate(row.fecha_vencimiento)}</p>
+                      {row.dias_atraso > 0 && (
+                        <p className="text-xs text-[var(--danger)] tabular-nums">{row.dias_atraso}d atraso</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <p className="text-sm tabular-nums">
+                        <span className="text-[var(--text-muted)]">{row.dias_credito_ficha}d</span>
+                        <span className="mx-1 text-[var(--text-muted)]">·</span>
+                        <span className={`font-semibold ${
+                          desviacion > 5 ? 'text-[var(--warning)]' :
+                          desviacion < -5 ? 'text-[var(--success)]' : ''
+                        }`}>{row.dias_segun_facturas}d</span>
+                      </p>
+                      {Math.abs(desviacion) > 5 && (
+                        <p className={`text-xs tabular-nums ${desviacion > 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>
+                          {desviacion > 0 ? '+' : ''}{desviacion}d
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="font-bold tabular-nums">{fmtQ(row.saldo)}</span>
+                      {row.valor && row.valor !== row.saldo && (
+                        <p className="text-xs text-[var(--text-muted)] tabular-nums">Valor: {fmtM(row.valor)}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center gap-1.5 ${badge.color}`}>
+                        <BadgeIcon className="w-3.5 h-3.5" />
+                        {row.estado || badge.label}
+                      </span>
                     </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Nota metodológica */}
+      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 flex items-start gap-3">
+        <InformationCircleIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <p>
+            Fuente: <code>vstAnalisisCxP</code> del ERP. La fecha de vencimiento es la real acordada con cada proveedor.
+            La columna <em>Crédito</em> muestra días según ficha del proveedor · días efectivamente otorgados en la factura;
+            las desviaciones {'>'} 5 días se marcan en color. Sincronización diaria via n8n.
+          </p>
         </div>
       </div>
     </div>

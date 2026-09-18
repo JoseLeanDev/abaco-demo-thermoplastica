@@ -258,7 +258,7 @@ export default function Dashboard() {
           nameKey="cliente"
           codigoKey="codigo"
           alertaPct={20}
-          linkTo="/tesoreria/cxc"
+          linkTo="/tesoreria/cuentas-por-cobrar"
           linkLabel="Ver cartera"
         />
         <ConcentracionCard
@@ -281,7 +281,7 @@ export default function Dashboard() {
               <ClockIcon className="w-5 h-5 text-[var(--danger)]" />
               <h2 className="font-semibold">Acción esta semana — CxC con más de 60 días de atraso</h2>
             </div>
-            <Link to="/tesoreria/cxc" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
+            <Link to="/tesoreria/cuentas-por-cobrar" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
               Ver todo <ArrowRightIcon className="w-3 h-3" />
             </Link>
           </div>
