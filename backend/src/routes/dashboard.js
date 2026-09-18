@@ -70,35 +70,57 @@ router.get('/', async (req, res) => {
       LIMIT 5
     `);
 
-    // ---------- CxP proxy ----------
+    // ---------- CxP real (desde fact_cxp_factura con fecha_vencimiento del ERP) ----------
     const cxp = await db.getAsync(`
-      WITH facturas AS (
-        SELECT proveedor_id, MAX(saldo) AS saldo
-        FROM thermoplastica.fact_compras_linea
-        GROUP BY fact_num, proveedor_id
-      )
-      SELECT COALESCE(SUM(saldo), 0)          AS total,
-             COUNT(*)                         AS facturas,
-             COUNT(DISTINCT proveedor_id)     AS proveedores
-      FROM facturas WHERE saldo > 0
+      SELECT COALESCE(SUM(saldo), 0)                                                  AS total,
+             COUNT(*)                                                                 AS facturas,
+             COUNT(DISTINCT proveedor_id)                                             AS proveedores,
+             COALESCE(SUM(saldo) FILTER (WHERE fecha_vencimiento < CURRENT_DATE), 0)  AS vencido
+      FROM thermoplastica.fact_cxp_factura WHERE saldo > 0
     `);
 
-    // Top 5 proveedores por CxP
+    // Top 5 proveedores por CxP con dias_credito y facturas vencidas
     const topProveedores = await db.allAsync(`
-      WITH facturas AS (
-        SELECT proveedor_id, fact_num, MAX(saldo) AS saldo
-        FROM thermoplastica.fact_compras_linea
-        GROUP BY proveedor_id, fact_num
-      )
       SELECT p.codigo_proveedor AS codigo, p.nombre AS proveedor,
-             COUNT(*)                  AS facturas,
-             COALESCE(SUM(saldo), 0)   AS monto
-      FROM facturas f
+             COUNT(*)                                                        AS facturas,
+             COALESCE(SUM(f.saldo), 0)                                       AS monto,
+             AVG(f.dias_credito_ficha) FILTER (WHERE f.dias_credito_ficha > 0) AS dias_credito,
+             COUNT(*) FILTER (WHERE f.fecha_vencimiento < CURRENT_DATE)      AS facturas_vencidas
+      FROM thermoplastica.fact_cxp_factura f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE f.saldo > 0
       GROUP BY p.codigo_proveedor, p.nombre
       ORDER BY monto DESC
       LIMIT 5
+    `);
+
+    // Proveedores con ALTO riesgo: 100% vencidos + crédito ficha = 0 + monto material
+    // (típico de importadores con L/C o dispute pendiente)
+    const proveedoresRiesgo = await db.allAsync(`
+      SELECT p.nombre AS proveedor, p.codigo_proveedor AS codigo,
+             COUNT(*) AS facturas,
+             COALESCE(SUM(f.saldo), 0) AS monto
+      FROM thermoplastica.fact_cxp_factura f
+      JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
+      WHERE f.saldo > 0
+      GROUP BY p.nombre, p.codigo_proveedor
+      HAVING BOOL_AND(f.dias_credito_ficha = 0)
+         AND BOOL_AND(f.fecha_vencimiento < CURRENT_DATE)
+         AND SUM(f.saldo) > 1000000
+      ORDER BY monto DESC
+      LIMIT 3
+    `);
+
+    // CxC: clientes con plazos otorgados mayores al pactado (dias_segun_facturas > dias_credito_ficha)
+    const cxcDesviacion = await db.getAsync(`
+      SELECT
+        COUNT(*) FILTER (WHERE dias_segun_facturas > dias_credito_ficha) AS facturas_extendidas,
+        COUNT(*)                                                          AS total_facturas,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE dias_segun_facturas > dias_credito_ficha) / NULLIF(COUNT(*), 0), 1) AS pct_extension
+      FROM thermoplastica.fact_cxc_factura
+      WHERE dias_credito_ficha IS NOT NULL
+        AND dias_segun_facturas IS NOT NULL
+        AND fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
     `);
 
     // Concentración de compras (top proveedor por gasto 12m)
@@ -186,7 +208,7 @@ router.get('/', async (req, res) => {
           tipo: 'atencion',
           titulo: `${pctVencido.toFixed(1)}% de la cartera está vencida`,
           detalle: `Q${Math.round(cxc.vencido / 1e6 * 10) / 10}M en cobros atrasados. Priorizar cobranza.`,
-          link: '/tesoreria/cxc',
+          link: '/tesoreria/cuentas-por-cobrar',
         });
       }
     }
@@ -207,6 +229,38 @@ router.get('/', async (req, res) => {
         detalle: `Ventas Q${(ventas12m / 1e6).toFixed(1)}M − compras materia prima Q${(compras12m / 1e6).toFixed(1)}M = Q${(margenBrutoMP / 1e6).toFixed(1)}M. Sin descontar gastos operativos ni mano de obra.`,
         link: '/margenes',
       });
+    }
+
+    // Proveedores importadores con 100% vencido y crédito ficha 0 — típico dispute o L/C sin registrar
+    if (proveedoresRiesgo && proveedoresRiesgo.length > 0) {
+      const top = proveedoresRiesgo[0];
+      const totalRiesgo = proveedoresRiesgo.reduce((s, r) => s + parseFloat(r.monto), 0);
+      insights.push({
+        tipo: 'riesgo',
+        titulo: `${proveedoresRiesgo.length} proveedor(es) con saldo pendiente sin condiciones de crédito`,
+        detalle: `${top.proveedor} (Q${(parseFloat(top.monto) / 1e6).toFixed(1)}M) y ${proveedoresRiesgo.length - 1} más suman Q${(totalRiesgo / 1e6).toFixed(1)}M todos vencidos con ficha en 0 días de crédito. Probable disputa o pago por L/C no registrado en el ERP. Confirmar con contabilidad.`,
+        link: '/tesoreria/cuentas-por-pagar',
+      });
+    }
+
+    // CxC: disciplina de crédito — % de facturas dadas por encima del plazo pactado
+    if (cxcDesviacion && parseInt(cxcDesviacion.total_facturas) > 0) {
+      const pct = parseFloat(cxcDesviacion.pct_extension);
+      if (pct >= 10) {
+        insights.push({
+          tipo: 'atencion',
+          titulo: `${pct}% de las facturas CxC dieron más plazo del acordado`,
+          detalle: `${cxcDesviacion.facturas_extendidas} de ${cxcDesviacion.total_facturas} facturas (últimos 12m) otorgaron más días de crédito de los pactados en la ficha del cliente. Revisar disciplina comercial.`,
+          link: '/tesoreria/cuentas-por-cobrar',
+        });
+      } else if (pct > 0 && pct < 8) {
+        insights.push({
+          tipo: 'positivo',
+          titulo: `Disciplina de crédito CxC: solo ${pct}% de facturas por encima del contrato`,
+          detalle: `${cxcDesviacion.facturas_extendidas} de ${cxcDesviacion.total_facturas} facturas dieron plazo mayor al pactado. Muy sano.`,
+          link: '/tesoreria/cuentas-por-cobrar',
+        });
+      }
     }
 
     res.json({
@@ -250,6 +304,8 @@ router.get('/', async (req, res) => {
           facturas: parseInt(t.facturas) || 0,
           monto: parseFloat(t.monto) || 0,
           porcentaje: cxpTotal > 0 ? Math.round(parseFloat(t.monto) / cxpTotal * 1000) / 10 : 0,
+          dias_credito: Math.round(parseFloat(t.dias_credito) || 0),
+          facturas_vencidas: parseInt(t.facturas_vencidas) || 0,
         })),
         concentracion_compras: concentracionCompras.map(c => ({
           codigo: c.codigo, proveedor: c.proveedor,

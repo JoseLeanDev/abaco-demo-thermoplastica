@@ -185,6 +185,7 @@ export default function CuentasPorCobrar() {
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Documento</th>
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Emisión</th>
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Vencimiento</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Crédito<br /><span className="normal-case font-normal">ficha · factura</span></th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Saldo</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Días</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Estado</th>
@@ -193,14 +194,14 @@ export default function CuentasPorCobrar() {
             <tbody className="divide-y divide-[var(--border-default)]">
               {loadingDetalle && filas.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
                     Cargando cartera desde el ERP…
                   </td>
                 </tr>
               )}
               {!loadingDetalle && filas.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
                     No hay documentos que coincidan con el filtro.
                   </td>
                 </tr>
@@ -237,6 +238,30 @@ export default function CuentasPorCobrar() {
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-sm text-[var(--text-secondary)] tabular-nums">{fmtDate(row.fecha_vencimiento)}</p>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {row.dias_credito_ficha !== null && row.dias_segun_facturas !== null ? (
+                        <>
+                          <p className="text-sm tabular-nums">
+                            <span className="text-[var(--text-muted)]">{row.dias_credito_ficha}d</span>
+                            <span className="mx-1 text-[var(--text-muted)]">·</span>
+                            <span className={`font-semibold ${
+                              (row.dias_segun_facturas - row.dias_credito_ficha) > 5 ? 'text-[var(--warning)]' :
+                              (row.dias_segun_facturas - row.dias_credito_ficha) < -5 ? 'text-[var(--success)]' : ''
+                            }`}>{row.dias_segun_facturas}d</span>
+                          </p>
+                          {Math.abs(row.dias_segun_facturas - row.dias_credito_ficha) > 5 && (
+                            <p className={`text-xs tabular-nums ${
+                              (row.dias_segun_facturas - row.dias_credito_ficha) > 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]'
+                            }`}>
+                              {(row.dias_segun_facturas - row.dias_credito_ficha) > 0 ? '+' : ''}
+                              {row.dias_segun_facturas - row.dias_credito_ficha}d
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="font-bold tabular-nums">{fmtQ(row.saldo_total)}</span>
