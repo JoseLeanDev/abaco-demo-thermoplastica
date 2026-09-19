@@ -15,6 +15,7 @@ import {
   ShoppingCartIcon,
   ShoppingBagIcon,
   TagIcon,
+  CubeIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Ventas', href: '/ventas', icon: ShoppingBagIcon },
   { name: 'Gastos Operativos', href: '/gastos-operativos', icon: BanknotesIconNav },
   { name: 'Compras', href: '/compras', icon: ShoppingCartIcon },
+  { name: 'Inventario', href: '/inventario', icon: CubeIcon },
   { name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon },
   // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
   { name: 'Análisis', href: '/analisis', icon: ChartBarIcon },

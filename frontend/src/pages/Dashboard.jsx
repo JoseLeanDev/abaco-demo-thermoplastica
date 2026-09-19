@@ -93,7 +93,7 @@ export default function Dashboard() {
               <p className="text-2xl font-semibold tabular-nums">{fmtM(k.ventas_12m)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs uppercase tracking-widest text-white/60">Margen bruto MP</p>
+              <p className="text-xs uppercase tracking-widest text-white/60">Margen bruto real</p>
               <p className="text-2xl font-semibold tabular-nums text-emerald-300">{fmtPct(k.margen_bruto_pct)}</p>
             </div>
             <div className="text-right">
@@ -111,19 +111,19 @@ export default function Dashboard() {
         <KpiCard
           label="Ventas rolling 12m"
           value={fmtM(k.ventas_12m)}
-          sublabel={k.tendencia_mes_pct !== null
-            ? `mes anterior ${k.tendencia_mes_pct >= 0 ? '+' : ''}${k.tendencia_mes_pct?.toFixed(1)}% vs promedio`
+          sublabel={k.facturas_12m
+            ? `${k.facturas_12m.toLocaleString('es-GT')} facturas · ${k.clientes_activos_12m || 0} clientes activos`
             : '—'}
           icon={ArrowTrendingUpIcon}
           tone={k.tendencia_mes_pct >= 0 ? 'success' : 'warning'}
-          to="/compras"
+          to="/ventas"
         />
         <KpiCard
-          label="Compras materia prima 12m"
-          value={fmtM(k.compras_12m)}
-          sublabel={k.ventas_12m ? `${((k.compras_12m / k.ventas_12m) * 100).toFixed(1)}% de las ventas` : '—'}
+          label="COGS 12m"
+          value={fmtM(k.costo_ventas_12m)}
+          sublabel={k.ventas_12m ? `${((k.costo_ventas_12m / k.ventas_12m) * 100).toFixed(1)}% de las ventas · costo real ERP` : '—'}
           icon={ArrowTrendingDownIcon}
-          to="/compras"
+          to="/ventas"
         />
         <KpiCard
           label="Gastos operativos 12m"

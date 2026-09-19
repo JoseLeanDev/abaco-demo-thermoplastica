@@ -18,16 +18,16 @@ router.get('/', async (req, res) => {
     `);
 
     // ---------- KPIs financieros ----------
-    // Ventas rolling 12 meses (excluye mes en curso incompleto)
+    // Ventas rolling 12 meses desde ventas al detalle (fuente REAL, línea a línea)
     const ventasKpi = await db.getAsync(`
-      WITH periodo_actual AS (
-        SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS y, EXTRACT(MONTH FROM CURRENT_DATE)::int AS m
-      )
-      SELECT COALESCE(SUM(monto), 0) AS ventas_12m
-      FROM thermoplastica.fact_ventas_mensuales, periodo_actual
-      WHERE (anio * 100 + mes) BETWEEN
-              ((y - 1) * 100 + m)     -- 12 meses atrás
-          AND (y * 100 + (m - 1))     -- mes anterior
+      SELECT COALESCE(SUM(total_sin_iva), 0)          AS ventas_12m,
+             COALESCE(SUM(costo_total_facturado), 0)  AS costo_ventas_12m,
+             COALESCE(SUM(margen_bruto), 0)           AS margen_bruto_real_12m,
+             COUNT(DISTINCT fact_num)                 AS facturas_12m,
+             COUNT(DISTINCT cliente_id)               AS clientes_activos_12m
+      FROM thermoplastica.fact_ventas_linea
+      WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
+        AND tipo_doc = 'FACT'
     `);
 
     // Compras materia prima últ 12 meses
@@ -160,15 +160,60 @@ router.get('/', async (req, res) => {
       LIMIT 5
     `);
 
+    // Top cliente + top vendedor por ventas 12m (para insights)
+    const topClienteVentas = await db.getAsync(`
+      WITH tot AS (
+        SELECT COALESCE(SUM(total_sin_iva), 0) AS total
+        FROM thermoplastica.fact_ventas_linea
+        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND tipo_doc = 'FACT'
+      )
+      SELECT c.codigo_cliente AS codigo, c.nombre AS cliente,
+             COALESCE(SUM(f.total_sin_iva), 0) AS ventas,
+             CASE WHEN (SELECT total FROM tot) > 0
+                  THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
+                  ELSE 0 END AS porcentaje
+      FROM thermoplastica.fact_ventas_linea f
+      JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
+      WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND f.tipo_doc = 'FACT'
+      GROUP BY c.codigo_cliente, c.nombre
+      ORDER BY ventas DESC LIMIT 1
+    `);
+
+    const topVendedor = await db.getAsync(`
+      WITH tot AS (
+        SELECT COALESCE(SUM(total_sin_iva), 0) AS total
+        FROM thermoplastica.fact_ventas_linea
+        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND tipo_doc = 'FACT'
+      )
+      SELECT v.nombre AS vendedor, v.codigo_vendedor AS codigo,
+             COUNT(DISTINCT f.cliente_id) AS clientes,
+             COALESCE(SUM(f.total_sin_iva), 0) AS ventas,
+             CASE WHEN SUM(f.total_sin_iva) > 0
+                  THEN ROUND(SUM(f.margen_bruto) / SUM(f.total_sin_iva) * 100, 1)
+                  ELSE NULL END AS margen_pct,
+             CASE WHEN (SELECT total FROM tot) > 0
+                  THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
+                  ELSE 0 END AS porcentaje
+      FROM thermoplastica.fact_ventas_linea f
+      JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
+      WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND f.tipo_doc = 'FACT'
+      GROUP BY v.nombre, v.codigo_vendedor
+      ORDER BY ventas DESC LIMIT 1
+    `);
+
     // ---------- Derivados ----------
-    const ventas12m  = parseFloat(ventasKpi.ventas_12m) || 0;
+    const ventas12m       = parseFloat(ventasKpi.ventas_12m) || 0;
+    const costoVentas12m  = parseFloat(ventasKpi.costo_ventas_12m) || 0;
+    const margenRealVentas = parseFloat(ventasKpi.margen_bruto_real_12m) || 0;
+    const margenRealPct   = ventas12m > 0 ? (margenRealVentas / ventas12m * 100) : null;
     const compras12m = parseFloat(comprasKpi.compras_12m) || 0;
     const gastos12m  = parseFloat(gastosKpi.gastos_12m) || 0;
     const cxcTotal   = parseFloat(cxc.total) || 0;
     const cxpTotal   = parseFloat(cxp.total) || 0;
-    const margenBrutoMP = ventas12m - compras12m;  // margen bruto sobre materia prima
-    const margenMPct = ventas12m > 0 ? (margenBrutoMP / ventas12m * 100) : null;
-    const ebitdaEstimado = ventas12m - compras12m - gastos12m;
+    // Margen bruto ahora es el REAL (ventas - COGS al costo promedio facturado)
+    const margenBrutoMP = margenRealVentas;
+    const margenMPct = margenRealPct;
+    const ebitdaEstimado = margenRealVentas - gastos12m;  // margen bruto real menos gastos operativos
     const ebitdaPct = ventas12m > 0 ? (ebitdaEstimado / ventas12m * 100) : null;
     const posicionNetaWC = cxcTotal - cxpTotal;
     const coberturaCxCCxP = cxpTotal > 0 ? cxcTotal / cxpTotal : null;
@@ -225,9 +270,31 @@ router.get('/', async (req, res) => {
     if (margenMPct !== null) {
       insights.push({
         tipo: margenMPct >= 30 ? 'positivo' : 'atencion',
-        titulo: `Margen bruto sobre materia prima: ${margenMPct.toFixed(1)}%`,
-        detalle: `Ventas Q${(ventas12m / 1e6).toFixed(1)}M − compras materia prima Q${(compras12m / 1e6).toFixed(1)}M = Q${(margenBrutoMP / 1e6).toFixed(1)}M. Sin descontar gastos operativos ni mano de obra.`,
-        link: '/margenes',
+        titulo: `Margen bruto real (ventas): ${margenMPct.toFixed(1)}%`,
+        detalle: `Ventas Q${(ventas12m / 1e6).toFixed(1)}M − COGS Q${(costoVentas12m / 1e6).toFixed(1)}M = Q${(margenRealVentas / 1e6).toFixed(1)}M. Costo tomado del costo_promedio_facturado del ERP en cada línea de venta.`,
+        link: '/ventas',
+      });
+    }
+
+    // Concentración de cliente en ventas (top 1 >= 15% del total)
+    if (topClienteVentas && parseFloat(topClienteVentas.porcentaje) >= 15) {
+      insights.push({
+        tipo: 'riesgo',
+        titulo: `Concentración de cliente: ${topClienteVentas.cliente}`,
+        detalle: `Representa el ${topClienteVentas.porcentaje}% de las ventas de los últimos 12m (Q${(parseFloat(topClienteVentas.ventas) / 1e6).toFixed(1)}M). Un problema con este cliente afecta un porcentaje material de la facturación.`,
+        link: '/ventas',
+      });
+    }
+
+    // Vendedor estrella (>= 20% del total con margen sano)
+    if (topVendedor && parseFloat(topVendedor.porcentaje) >= 20) {
+      const pct = parseFloat(topVendedor.porcentaje);
+      const margenV = topVendedor.margen_pct !== null ? parseFloat(topVendedor.margen_pct) : null;
+      insights.push({
+        tipo: pct >= 40 ? 'atencion' : 'positivo',
+        titulo: `Vendedor top: ${topVendedor.vendedor} (${pct}% del total)`,
+        detalle: `${topVendedor.clientes} clientes, Q${(parseFloat(topVendedor.ventas) / 1e6).toFixed(1)}M facturados${margenV !== null ? `, margen ${margenV}%` : ''}. ${pct >= 40 ? 'Concentración alta: revisar plan de sucesión / distribución de cartera.' : 'Performance destacado del equipo comercial.'}`,
+        link: '/ventas',
       });
     }
 
@@ -271,6 +338,10 @@ router.get('/', async (req, res) => {
         fecha_corte: new Date().toISOString().split('T')[0],
         kpis: {
           ventas_12m: ventas12m,
+          costo_ventas_12m: costoVentas12m,
+          margen_bruto_real_12m: margenRealVentas,
+          facturas_12m: parseInt(ventasKpi.facturas_12m) || 0,
+          clientes_activos_12m: parseInt(ventasKpi.clientes_activos_12m) || 0,
           compras_12m: compras12m,
           gastos_operativos_12m: gastos12m,
           margen_bruto_materia_prima: margenBrutoMP,
