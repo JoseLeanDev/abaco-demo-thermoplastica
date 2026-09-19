@@ -59,6 +59,13 @@ export const endpoints = {
     resumen: () => cfoApi.get('/inventario'),
     detalle: (params = {}) => cfoApi.get('/inventario/detalle', { params }),
   },
+  ventas: {
+    resumen: (params = {}) => cfoApi.get('/ventas', { params }),
+    clientes: (params = {}) => cfoApi.get('/ventas/clientes', { params }),
+    vendedores: (params = {}) => cfoApi.get('/ventas/vendedores', { params }),
+    articulos: (params = {}) => cfoApi.get('/ventas/articulos', { params }),
+    detalle: (params = {}) => cfoApi.get('/ventas/detalle', { params }),
+  },
   contabilidad: {
     libroDiario: (params) => cfoApi.get('/contabilidad/libro_diario', { params }),
     conciliacion: (banco) => cfoApi.get('/contabilidad/conciliacion', { params: { banco } }),

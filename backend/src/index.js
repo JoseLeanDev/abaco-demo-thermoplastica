@@ -28,6 +28,7 @@ app.use('/api/tesoreria', require('./routes/tesoreria'));
 app.use('/api/compras', require('./routes/compras'));
 app.use('/api/gastos', require('./routes/gastos'));
 app.use('/api/inventario', require('./routes/inventario'));
+app.use('/api/ventas', require('./routes/ventas'));
 app.use('/api/contabilidad', require('./routes/contabilidad'));
 app.use('/api/sat', require('./routes/sat'));
 app.use('/api/analisis', require('./routes/analisis'));
