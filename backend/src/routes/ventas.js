@@ -244,6 +244,155 @@ router.get('/articulos', async (req, res) => {
   }
 });
 
+// GET /api/ventas/lineas   Ventas por línea de producto (agregado)
+router.get('/lineas', async (req, res) => {
+  try {
+    const { desde, hasta } = parseWindow(req);
+    const rows = await db.allAsync(`
+      WITH tot AS (
+        SELECT COALESCE(SUM(total_sin_iva), 0) AS total
+        FROM thermoplastica.fact_ventas_linea
+        WHERE fecha_emision BETWEEN ? AND ? AND tipo_doc = 'FACT'
+      )
+      SELECT
+        COALESCE(a.linea, 'Sin línea')          AS linea,
+        COUNT(DISTINCT f.fact_num)              AS facturas,
+        COUNT(DISTINCT f.cliente_id)            AS clientes,
+        COUNT(DISTINCT f.articulo_id)           AS skus,
+        COALESCE(SUM(f.unidades), 0)            AS unidades,
+        COALESCE(SUM(f.total_sin_iva), 0)       AS ventas,
+        COALESCE(SUM(f.costo_total_facturado), 0) AS costo,
+        COALESCE(SUM(f.margen_bruto), 0)        AS margen,
+        CASE WHEN SUM(f.total_sin_iva) > 0
+             THEN ROUND((SUM(f.margen_bruto) / SUM(f.total_sin_iva) * 100)::numeric, 1)
+             ELSE NULL END                       AS margen_pct,
+        CASE WHEN (SELECT total FROM tot) > 0
+             THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
+             ELSE 0 END                          AS porcentaje
+      FROM thermoplastica.fact_ventas_linea f
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+      WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
+      GROUP BY a.linea
+      ORDER BY ventas DESC
+    `, [desde, hasta, desde, hasta]);
+
+    res.json({
+      status: 'success',
+      data: {
+        ventana: { desde, hasta },
+        lineas: rows.map(r => ({
+          linea: r.linea,
+          facturas: parseInt(r.facturas) || 0,
+          clientes: parseInt(r.clientes) || 0,
+          skus: parseInt(r.skus) || 0,
+          unidades: parseFloat(r.unidades) || 0,
+          ventas: parseFloat(r.ventas) || 0,
+          costo: parseFloat(r.costo) || 0,
+          margen: parseFloat(r.margen) || 0,
+          margen_pct: r.margen_pct !== null ? parseFloat(r.margen_pct) : null,
+          porcentaje: parseFloat(r.porcentaje) || 0,
+        })),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/ventas/serie-vendedores   Serie mensual de los top N vendedores
+router.get('/serie-vendedores', async (req, res) => {
+  try {
+    const { desde, hasta } = parseWindow(req);
+    const limit = Math.min(parseInt(req.query.limit) || 5, 20);
+    const rows = await db.allAsync(`
+      WITH top_v AS (
+        SELECT vendedor_id
+        FROM thermoplastica.fact_ventas_linea
+        WHERE fecha_emision BETWEEN ? AND ? AND tipo_doc = 'FACT' AND vendedor_id IS NOT NULL
+        GROUP BY vendedor_id
+        ORDER BY SUM(total_sin_iva) DESC
+        LIMIT ${limit}
+      )
+      SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM') AS periodo,
+             v.nombre AS vendedor,
+             COALESCE(SUM(f.total_sin_iva), 0) AS ventas
+      FROM thermoplastica.fact_ventas_linea f
+      JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
+      JOIN top_v tv ON tv.vendedor_id = f.vendedor_id
+      WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
+      GROUP BY 1, v.nombre
+      ORDER BY 1
+    `, [desde, hasta, desde, hasta]);
+
+    // Pivot: { periodo, 'MARIA JOSE MARTINEZ': 12345, 'SERGIO SOSA': 6789, ... }
+    const periodos = {};
+    const vendedoresSet = new Set();
+    rows.forEach(r => {
+      vendedoresSet.add(r.vendedor);
+      if (!periodos[r.periodo]) periodos[r.periodo] = { periodo: r.periodo };
+      periodos[r.periodo][r.vendedor] = parseFloat(r.ventas) || 0;
+    });
+
+    res.json({
+      status: 'success',
+      data: {
+        ventana: { desde, hasta },
+        vendedores: [...vendedoresSet],
+        serie: Object.values(periodos).sort((a,b) => a.periodo.localeCompare(b.periodo)),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/ventas/serie-lineas   Serie mensual de las top N líneas
+router.get('/serie-lineas', async (req, res) => {
+  try {
+    const { desde, hasta } = parseWindow(req);
+    const limit = Math.min(parseInt(req.query.limit) || 5, 20);
+    const rows = await db.allAsync(`
+      WITH top_l AS (
+        SELECT a.linea
+        FROM thermoplastica.fact_ventas_linea f
+        JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+        WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT' AND a.linea IS NOT NULL
+        GROUP BY a.linea
+        ORDER BY SUM(f.total_sin_iva) DESC
+        LIMIT ${limit}
+      )
+      SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM') AS periodo,
+             a.linea AS linea,
+             COALESCE(SUM(f.total_sin_iva), 0) AS ventas
+      FROM thermoplastica.fact_ventas_linea f
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+      JOIN top_l tl ON tl.linea = a.linea
+      WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
+      GROUP BY 1, a.linea
+      ORDER BY 1
+    `, [desde, hasta, desde, hasta]);
+
+    const periodos = {};
+    const lineasSet = new Set();
+    rows.forEach(r => {
+      lineasSet.add(r.linea);
+      if (!periodos[r.periodo]) periodos[r.periodo] = { periodo: r.periodo };
+      periodos[r.periodo][r.linea] = parseFloat(r.ventas) || 0;
+    });
+
+    res.json({
+      status: 'success',
+      data: {
+        ventana: { desde, hasta },
+        lineas: [...lineasSet],
+        serie: Object.values(periodos).sort((a,b) => a.periodo.localeCompare(b.periodo)),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // GET /api/ventas/detalle   Listado paginado
 router.get('/detalle', async (req, res) => {
   try {

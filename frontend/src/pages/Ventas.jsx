@@ -7,8 +7,8 @@ import {
   ArrowDownTrayIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  BuildingOfficeIcon,
   ChartBarIcon,
+  ChartPieIcon,
   CubeIcon,
   ExclamationTriangleIcon,
   MagnifyingGlassIcon,
@@ -16,12 +16,16 @@ import {
   UserGroupIcon,
   UsersIcon,
   ReceiptPercentIcon,
-  ChartPieIcon,
+  BuildingOffice2Icon,
 } from '@heroicons/react/24/outline'
 import {
-  ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
+  ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
+  CartesianGrid, Legend, PieChart, Pie, Cell,
 } from 'recharts'
 
+// -------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------
 const fmtQ    = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtM    = (n) => {
   const v = Number(n) || 0
@@ -47,7 +51,7 @@ const rangoDesde = (rango) => {
   if (rango === '6m')  d.setMonth(hoy.getMonth() - 5, 1)
   if (rango === '12m') d.setMonth(hoy.getMonth() - 11, 1)
   if (rango === '24m') d.setMonth(hoy.getMonth() - 23, 1)
-  if (rango === 'ytd') { d.setMonth(0, 1) }
+  if (rango === 'ytd') d.setMonth(0, 1)
   return d.toISOString().slice(0, 10)
 }
 
@@ -58,11 +62,17 @@ const margenTone = (pct) => {
   return 'text-[var(--danger)]'
 }
 
+const PIE_COLORS = ['#001639', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#a855f7']
+
+// -------------------------------------------------------------------
+// Página
+// -------------------------------------------------------------------
 export default function Ventas() {
-  const [rango, setRango]           = useState('12m')
-  const [busqueda, setBusqueda]     = useState('')
-  const [clienteSel, setCliente]    = useState('')
-  const [vendedorSel, setVendedor]  = useState('')
+  const [rango, setRango]         = useState('12m')
+  const [tab, setTab]             = useState('resumen')
+  const [busqueda, setBusqueda]   = useState('')
+  const [clienteSel, setCliente]  = useState('')
+  const [vendedorSel, setVendedor] = useState('')
 
   const desde = useMemo(() => rangoDesde(rango), [rango])
   const hasta = useMemo(() => new Date().toISOString().slice(0, 10), [])
@@ -75,7 +85,7 @@ export default function Ventas() {
   )
   const { data: cRes } = useQuery(
     ['ventas-clientes', desde, hasta],
-    () => endpoints.ventas.clientes({ ...commonParams, limit: 12 }),
+    () => endpoints.ventas.clientes({ ...commonParams, limit: 30 }),
     { keepPreviousData: true }
   )
   const { data: vRes } = useQuery(
@@ -85,8 +95,23 @@ export default function Ventas() {
   )
   const { data: aRes } = useQuery(
     ['ventas-articulos', desde, hasta],
-    () => endpoints.ventas.articulos({ ...commonParams, limit: 12 }),
+    () => endpoints.ventas.articulos({ ...commonParams, limit: 15 }),
     { keepPreviousData: true }
+  )
+  const { data: lRes } = useQuery(
+    ['ventas-lineas', desde, hasta],
+    () => endpoints.ventas.lineas(commonParams),
+    { keepPreviousData: true }
+  )
+  const { data: svRes } = useQuery(
+    ['ventas-serie-vend', desde, hasta],
+    () => endpoints.ventas.serieVendedores({ ...commonParams, limit: 5 }),
+    { keepPreviousData: true, enabled: tab === 'vendedores' }
+  )
+  const { data: slRes } = useQuery(
+    ['ventas-serie-lin', desde, hasta],
+    () => endpoints.ventas.serieLineas({ ...commonParams, limit: 5 }),
+    { keepPreviousData: true, enabled: tab === 'lineas' }
   )
   const { data: dRes, isFetching: fetchingDetalle } = useQuery(
     ['ventas-detalle', desde, hasta, busqueda, clienteSel, vendedorSel],
@@ -94,15 +119,18 @@ export default function Ventas() {
       ...commonParams, busqueda, codigo_cliente: clienteSel, vendedor: vendedorSel,
       limit: 300, offset: 0,
     }),
-    { keepPreviousData: true }
+    { keepPreviousData: true, enabled: tab === 'resumen' }
   )
 
-  const r         = rRes?.data || {}
-  const serie     = r.serie_mensual || []
-  const clientes  = cRes?.data?.clientes || []
+  const r          = rRes?.data || {}
+  const serie      = r.serie_mensual || []
+  const clientes   = cRes?.data?.clientes || []
   const vendedores = vRes?.data?.vendedores || []
-  const articulos = aRes?.data?.articulos || []
-  const filas     = dRes?.data?.filas || []
+  const articulos  = aRes?.data?.articulos || []
+  const lineas     = lRes?.data?.lineas || []
+  const serieVend  = svRes?.data
+  const serieLin   = slRes?.data
+  const filas      = dRes?.data?.filas || []
   const totalFilas   = dRes?.data?.total_filas || 0
   const sumaFiltrada = dRes?.data?.suma_ventas || 0
 
@@ -111,12 +139,8 @@ export default function Ventas() {
     const ult = serie[serie.length - 1].ventas
     const prev = serie.slice(0, -1)
     const avg = prev.reduce((s, x) => s + (x.ventas || 0), 0) / prev.length
-    if (avg === 0) return null
-    return ((ult - avg) / avg) * 100
+    return avg > 0 ? ((ult - avg) / avg) * 100 : null
   }, [serie])
-
-  const clienteTop = clientes[0]
-  const alertaConcentracionCliente = clienteTop && clienteTop.porcentaje >= 15
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl">
@@ -154,65 +178,116 @@ export default function Ventas() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="kpi-card card-hover">
-          <span className="kpi-label">Ventas (sin IVA)</span>
-          <p className="kpi-value">{fmtM(r.ventas_sin_iva)}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">
-            Con IVA: {fmtM(r.ventas_con_iva)}
-          </p>
-        </div>
-        <div className="kpi-card card-hover">
-          <span className="kpi-label">Margen bruto</span>
-          <p className={`kpi-value ${margenTone(r.margen_bruto_pct)}`}>{fmtM(r.margen_bruto)}</p>
-          <p className={`text-xs mt-1 ${margenTone(r.margen_bruto_pct)}`}>
-            {fmtPct(r.margen_bruto_pct)} · costo {fmtM(r.costo_total)}
-          </p>
-        </div>
-        <div className="kpi-card card-hover">
-          <span className="kpi-label">Ticket promedio</span>
-          <p className="kpi-value">{fmtM(r.ticket_promedio)}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">
-            {fmtInt(r.lineas)} líneas facturadas
-          </p>
-        </div>
-        <div className="kpi-card card-hover">
-          <span className="kpi-label">Tendencia mes actual</span>
-          {tendencia === null ? (
-            <p className="kpi-value text-[var(--text-muted)]">—</p>
-          ) : (
-            <p className={`kpi-value ${tendencia >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
-              {tendencia >= 0 ? '+' : ''}{tendencia.toFixed(1)}%
-            </p>
-          )}
-          <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1">
-            {tendencia === null ? 'sin base comparable' : (
-              <>
-                {tendencia >= 0
-                  ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
-                  : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
-                vs promedio de meses previos
-              </>
-            )}
-          </p>
-        </div>
+      {/* KPIs globales */}
+      <KPIs r={r} tendencia={tendencia} />
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-[var(--border-default)] overflow-x-auto">
+        {[
+          { id: 'resumen',   label: 'Resumen',     icon: ChartBarIcon },
+          { id: 'vendedores',label: 'Vendedores',  icon: UsersIcon },
+          { id: 'lineas',    label: 'Líneas',      icon: Squares2X2Icon },
+          { id: 'clientes',  label: 'Clientes',    icon: UserGroupIcon },
+        ].map(t => {
+          const Icon = t.icon
+          const active = tab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                active
+                  ? 'border-[#001639] text-[var(--text-primary)]'
+                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Icon className="w-4 h-4" />{t.label}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Alerta concentración */}
-      {alertaConcentracionCliente && (
-        <div className="rounded-lg border border-[var(--warning)] bg-[var(--warning-bg,#fff7ed)] p-4 flex items-start gap-3">
-          <ExclamationTriangleIcon className="w-5 h-5 text-[var(--warning)] flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-semibold text-[var(--warning)]">Concentración de cliente</p>
-            <p className="text-[var(--text-secondary)]">
-              <strong>{clienteTop.cliente}</strong> representa el <strong>{clienteTop.porcentaje}%</strong> de las ventas del período ({fmtM(clienteTop.ventas)}).
-              Un problema con este cliente afecta un porcentaje material de la facturación.
-            </p>
-          </div>
-        </div>
+      {/* Content por tab */}
+      {tab === 'resumen'    && (
+        <TabResumen
+          serie={serie} articulos={articulos} filas={filas} totalFilas={totalFilas}
+          sumaFiltrada={sumaFiltrada} fetchingDetalle={fetchingDetalle}
+          busqueda={busqueda} setBusqueda={setBusqueda}
+          clienteSel={clienteSel} vendedorSel={vendedorSel}
+          setCliente={setCliente} setVendedor={setVendedor}
+        />
+      )}
+      {tab === 'vendedores' && (
+        <TabVendedores vendedores={vendedores} serieVend={serieVend} totalVentas={r.ventas_sin_iva} />
+      )}
+      {tab === 'lineas'     && (
+        <TabLineas lineas={lineas} serieLin={serieLin} />
+      )}
+      {tab === 'clientes'   && (
+        <TabClientes clientes={clientes} totalVentas={r.ventas_sin_iva} />
       )}
 
+      <p className="text-xs text-[var(--text-muted)] italic">
+        Fuente: <code>vstFacturas_Devoluciones</code>. Margen = <em>total_sin_iva − (unidades × costo_promedio_facturado)</em>.
+      </p>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------------
+// KPIs globales
+// -------------------------------------------------------------------
+function KPIs({ r, tendencia }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="kpi-card card-hover">
+        <span className="kpi-label">Ventas (sin IVA)</span>
+        <p className="kpi-value">{fmtM(r.ventas_sin_iva)}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">Con IVA: {fmtM(r.ventas_con_iva)}</p>
+      </div>
+      <div className="kpi-card card-hover">
+        <span className="kpi-label">Margen bruto</span>
+        <p className={`kpi-value ${margenTone(r.margen_bruto_pct)}`}>{fmtM(r.margen_bruto)}</p>
+        <p className={`text-xs mt-1 ${margenTone(r.margen_bruto_pct)}`}>
+          {fmtPct(r.margen_bruto_pct)} · costo {fmtM(r.costo_total)}
+        </p>
+      </div>
+      <div className="kpi-card card-hover">
+        <span className="kpi-label">Ticket promedio</span>
+        <p className="kpi-value">{fmtM(r.ticket_promedio)}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(r.lineas)} líneas facturadas</p>
+      </div>
+      <div className="kpi-card card-hover">
+        <span className="kpi-label">Tendencia mes</span>
+        {tendencia === null ? (
+          <p className="kpi-value text-[var(--text-muted)]">—</p>
+        ) : (
+          <p className={`kpi-value ${tendencia >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+            {tendencia >= 0 ? '+' : ''}{tendencia.toFixed(1)}%
+          </p>
+        )}
+        <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1">
+          {tendencia === null ? 'sin base' : (
+            <>
+              {tendencia >= 0 ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" /> : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
+              vs promedio previos
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------------
+// TAB: RESUMEN
+// -------------------------------------------------------------------
+function TabResumen({
+  serie, articulos, filas, totalFilas, sumaFiltrada, fetchingDetalle,
+  busqueda, setBusqueda, clienteSel, vendedorSel, setCliente, setVendedor,
+}) {
+  return (
+    <div className="space-y-6">
       {/* Serie mensual: ventas + margen */}
       <div className="card">
         <div className="section-header">
@@ -222,7 +297,7 @@ export default function Ventas() {
           </div>
           <div className="text-xs text-[var(--text-muted)] flex items-center gap-3">
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#001639] rounded-sm" /> Ventas</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-emerald-500 rounded-sm" /> Margen bruto</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-emerald-500 rounded-sm" /> Margen</span>
             <span className="flex items-center gap-1"><span className="inline-block w-4 h-0.5 bg-amber-500" /> Margen %</span>
           </div>
         </div>
@@ -234,122 +309,19 @@ export default function Ventas() {
               <ComposedChart data={serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
                 <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
-                <YAxis
-                  yAxisId="q"
-                  tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`}
-                  tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70}
-                />
-                <YAxis
-                  yAxisId="pct" orientation="right" domain={[0, 100]}
-                  tickFormatter={(v) => `${v}%`}
-                  tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={45}
-                />
+                <YAxis yAxisId="q" tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
+                <YAxis yAxisId="pct" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={45} />
                 <Tooltip
                   formatter={(v, k) => k === 'margen_pct' ? `${Number(v).toFixed(1)}%` : fmtQ(v)}
                   labelFormatter={fmtPeriod}
                   contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8 }}
                 />
-                <Bar   yAxisId="q"   dataKey="ventas"     fill="#001639"   radius={[6, 6, 0, 0]} />
-                <Bar   yAxisId="q"   dataKey="margen"     fill="#10b981"   radius={[6, 6, 0, 0]} />
-                <Line  yAxisId="pct" dataKey="margen_pct" stroke="#f59e0b" strokeWidth={2} dot={false} name="Margen %" />
+                <Bar  yAxisId="q"   dataKey="ventas" fill="#001639" radius={[6,6,0,0]} />
+                <Bar  yAxisId="q"   dataKey="margen" fill="#10b981" radius={[6,6,0,0]} />
+                <Line yAxisId="pct" dataKey="margen_pct" stroke="#f59e0b" strokeWidth={2} dot={false} name="Margen %" />
               </ComposedChart>
             </ResponsiveContainer>
           )}
-        </div>
-      </div>
-
-      {/* Top clientes + Top vendedores */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <div className="section-header">
-            <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">Top clientes por facturación</h2>
-          </div>
-          <div className="p-5 pt-0 overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] uppercase">
-                  <th className="text-left  font-semibold pb-2">Cliente</th>
-                  <th className="text-right font-semibold pb-2">Ventas</th>
-                  <th className="text-right font-semibold pb-2">Margen</th>
-                  <th className="text-right font-semibold pb-2">%</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-default)]">
-                {clientes.length === 0 && (
-                  <tr><td colSpan={4} className="py-3 text-sm text-[var(--text-muted)]">Sin datos.</td></tr>
-                )}
-                {clientes.map((c) => (
-                  <tr key={c.codigo}
-                      className={`text-sm hover:bg-[var(--bg-secondary)] cursor-pointer ${clienteSel === c.codigo ? 'bg-[var(--bg-secondary)]' : ''}`}
-                      onClick={() => setCliente(c.codigo === clienteSel ? '' : c.codigo)}>
-                    <td className="py-2 pr-2">
-                      <p className="font-medium truncate max-w-[240px]">{c.cliente}</p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {c.codigo}{c.forma_pago ? ` · ${c.forma_pago}` : ''}
-                      </p>
-                    </td>
-                    <td className="py-2 text-right tabular-nums font-semibold">{fmtM(c.ventas)}</td>
-                    <td className={`py-2 text-right tabular-nums ${margenTone(c.margen_pct)}`}>
-                      {c.margen_pct !== null ? `${c.margen_pct.toFixed(1)}%` : '—'}
-                    </td>
-                    <td className={`py-2 text-right tabular-nums font-semibold ${
-                      c.porcentaje >= 15 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'
-                    }`}>{c.porcentaje}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="section-header">
-            <UsersIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">Ranking de vendedores</h2>
-          </div>
-          <div className="p-5 pt-0 overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] uppercase">
-                  <th className="text-left  font-semibold pb-2">Vendedor</th>
-                  <th className="text-right font-semibold pb-2">Clientes</th>
-                  <th className="text-right font-semibold pb-2">Ventas</th>
-                  <th className="text-right font-semibold pb-2">Margen%</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-default)]">
-                {vendedores.length === 0 && (
-                  <tr><td colSpan={4} className="py-3 text-sm text-[var(--text-muted)]">Sin datos.</td></tr>
-                )}
-                {vendedores.slice(0, 10).map((v) => (
-                  <tr key={v.vendedor}
-                      className={`text-sm hover:bg-[var(--bg-secondary)] cursor-pointer ${vendedorSel === v.vendedor ? 'bg-[var(--bg-secondary)]' : ''}`}
-                      onClick={() => setVendedor(v.vendedor === vendedorSel ? '' : v.vendedor)}>
-                    <td className="py-2 pr-2">
-                      <p className="font-medium truncate max-w-[200px]">{v.vendedor}</p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {v.codigo || '—'} · {v.porcentaje}% del total
-                      </p>
-                    </td>
-                    <td className="py-2 text-right tabular-nums">{fmtInt(v.clientes)}</td>
-                    <td className="py-2 text-right tabular-nums font-semibold">{fmtM(v.ventas)}</td>
-                    <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(v.margen_pct)}`}>
-                      {v.margen_pct !== null ? `${v.margen_pct.toFixed(1)}%` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {(clienteSel || vendedorSel) && (
-              <button
-                onClick={() => { setCliente(''); setVendedor('') }}
-                className="mt-3 text-xs text-[var(--accent-blue)] hover:underline"
-              >
-                Limpiar filtros
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
@@ -357,7 +329,7 @@ export default function Ventas() {
       <div className="card">
         <div className="section-header">
           <CubeIcon className="w-5 h-5 text-[var(--text-muted)]" />
-          <h2 className="font-semibold">Top artículos por facturación</h2>
+          <h2 className="font-semibold">Top 15 artículos por facturación</h2>
         </div>
         <div className="p-5 pt-0 overflow-x-auto">
           <table className="w-full">
@@ -373,10 +345,7 @@ export default function Ventas() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
-              {articulos.length === 0 && (
-                <tr><td colSpan={7} className="py-3 text-sm text-[var(--text-muted)]">Cargando…</td></tr>
-              )}
-              {articulos.map((a) => (
+              {articulos.map(a => (
                 <tr key={a.codigo} className="text-sm hover:bg-[var(--bg-secondary)]">
                   <td className="py-2 pr-3">
                     <p className="font-medium truncate max-w-[260px]">{a.descripcion}</p>
@@ -412,6 +381,11 @@ export default function Ventas() {
             className="input w-full pl-12"
           />
         </div>
+        {(clienteSel || vendedorSel) && (
+          <button onClick={() => { setCliente(''); setVendedor('') }} className="btn-secondary">
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -426,7 +400,6 @@ export default function Ventas() {
           </div>
           <span className="text-sm font-semibold">Total filtrado sin IVA: {fmtM(sumaFiltrada)}</span>
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-[var(--bg-secondary)] border-b border-[var(--border-default)]">
@@ -438,14 +411,13 @@ export default function Ventas() {
                 <th className="px-3 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Artículo</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Unid.</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Sin IVA</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Margen</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Margen%</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
               {filas.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
                     {fetchingDetalle ? 'Cargando…' : 'Sin líneas que coincidan con el filtro.'}
                   </td>
                 </tr>
@@ -470,7 +442,6 @@ export default function Ventas() {
                   </td>
                   <td className="px-3 py-2 text-right text-sm tabular-nums">{fmtNum(f.unidades)}</td>
                   <td className="px-3 py-2 text-right text-sm tabular-nums font-semibold">{fmtM(f.total_sin_iva)}</td>
-                  <td className="px-3 py-2 text-right text-sm tabular-nums">{fmtM(f.margen_bruto)}</td>
                   <td className={`px-3 py-2 text-right text-sm tabular-nums font-semibold ${margenTone(f.margen_bruto_pct)}`}>
                     {f.margen_bruto_pct !== null ? `${f.margen_bruto_pct.toFixed(1)}%` : '—'}
                   </td>
@@ -480,11 +451,415 @@ export default function Ventas() {
           </table>
         </div>
       </div>
+    </div>
+  )
+}
 
-      <p className="text-xs text-[var(--text-muted)] italic">
-        Fuente: <code>vstFacturas_Devoluciones</code> del ERP. Margen bruto por línea =
-        <em> total_sin_iva − (unidades × costo_promedio_facturado)</em>. Sincronización diaria via n8n.
-      </p>
+// -------------------------------------------------------------------
+// TAB: VENDEDORES
+// -------------------------------------------------------------------
+function TabVendedores({ vendedores, serieVend, totalVentas }) {
+  const top5 = vendedores.slice(0, 5)
+  const topVendedor = vendedores[0]
+  const topPct = topVendedor?.porcentaje || 0
+  const clientesTotales = vendedores.reduce((s, v) => s + v.clientes, 0)
+
+  return (
+    <div className="space-y-6">
+      {/* Insights */}
+      {topVendedor && (
+        <div className={`rounded-lg border p-4 flex items-start gap-3 ${
+          topPct >= 40
+            ? 'border-[var(--warning)] bg-[var(--warning-bg,#fff7ed)]'
+            : 'border-[var(--border-default)] bg-[var(--bg-secondary)]'
+        }`}>
+          {topPct >= 40
+            ? <ExclamationTriangleIcon className="w-5 h-5 text-[var(--warning)] flex-shrink-0 mt-0.5" />
+            : <ArrowTrendingUpIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0 mt-0.5" />}
+          <div className="text-sm">
+            <p className="font-semibold">
+              {topPct >= 40 ? '⚠ Concentración alta en un vendedor' : `Vendedor top: ${topVendedor.vendedor}`}
+            </p>
+            <p className="text-[var(--text-secondary)]">
+              <strong>{topVendedor.vendedor}</strong> concentra el <strong>{topPct}%</strong> de las ventas ({fmtM(topVendedor.ventas)})
+              con {topVendedor.clientes} clientes {topVendedor.margen_pct !== null ? `y margen del ${topVendedor.margen_pct}%` : ''}.
+              {topPct >= 40 ? ' Revisar plan de sucesión y redistribución de cartera.' : ''}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Serie mensual top 5 vendedores */}
+      <div className="card">
+        <div className="section-header">
+          <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <h2 className="font-semibold">Evolución mensual de los top 5 vendedores</h2>
+        </div>
+        <div className="p-5 pt-0">
+          {!serieVend || serieVend.serie?.length === 0 ? (
+            <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={serieVend.serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
+                <YAxis tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
+                <Tooltip
+                  formatter={(v) => fmtQ(v)}
+                  labelFormatter={fmtPeriod}
+                  contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {(serieVend.vendedores || []).map((v, i) => (
+                  <Line key={v} type="monotone" dataKey={v} stroke={PIE_COLORS[i % PIE_COLORS.length]} strokeWidth={2} dot={false} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Ranking + Pie de participación */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Pie participación */}
+        <div className="card lg:col-span-1">
+          <div className="section-header">
+            <ChartPieIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Participación (top 5)</h2>
+          </div>
+          <div className="p-5 pt-0">
+            {top5.length === 0 ? (
+              <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie
+                    data={top5.map(v => ({ name: v.vendedor, value: v.ventas }))}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={40}
+                    outerRadius={90}
+                    paddingAngle={2}
+                  >
+                    {top5.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => fmtM(v)} contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+            <div className="space-y-1.5 mt-3">
+              {top5.map((v, i) => (
+                <div key={v.vendedor} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <span className="truncate">{v.vendedor}</span>
+                  </div>
+                  <span className="tabular-nums font-semibold">{v.porcentaje}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Ranking completo */}
+        <div className="card lg:col-span-2">
+          <div className="section-header">
+            <UsersIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Ranking de vendedores ({vendedores.length})</h2>
+          </div>
+          <div className="p-5 pt-0 overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-xs text-[var(--text-muted)] uppercase">
+                  <th className="text-left  font-semibold pb-2">Vendedor</th>
+                  <th className="text-right font-semibold pb-2">Clientes</th>
+                  <th className="text-right font-semibold pb-2">Facturas</th>
+                  <th className="text-right font-semibold pb-2">Ventas</th>
+                  <th className="text-right font-semibold pb-2">Margen%</th>
+                  <th className="text-right font-semibold pb-2">Share</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-default)]">
+                {vendedores.map((v, i) => (
+                  <tr key={v.vendedor} className="text-sm hover:bg-[var(--bg-secondary)]">
+                    <td className="py-2 pr-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate max-w-[220px]">{v.vendedor}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{v.codigo || '—'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{fmtInt(v.clientes)}</td>
+                    <td className="py-2 text-right tabular-nums">{fmtInt(v.facturas)}</td>
+                    <td className="py-2 text-right tabular-nums font-semibold">{fmtM(v.ventas)}</td>
+                    <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(v.margen_pct)}`}>
+                      {v.margen_pct !== null ? `${v.margen_pct.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className={`py-2 text-right tabular-nums font-semibold ${v.porcentaje >= 20 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
+                      {v.porcentaje}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-xs text-[var(--text-muted)] mt-3">
+              Total clientes atendidos por el equipo (con duplicados entre vendedores): {fmtInt(clientesTotales)}.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------------
+// TAB: LÍNEAS
+// -------------------------------------------------------------------
+function TabLineas({ lineas, serieLin }) {
+  const top10 = lineas.slice(0, 10)
+  return (
+    <div className="space-y-6">
+      {/* Distribución + Serie */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Pie distribución */}
+        <div className="card lg:col-span-1">
+          <div className="section-header">
+            <ChartPieIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Mix por línea (top 10)</h2>
+          </div>
+          <div className="p-5 pt-0">
+            {top10.length === 0 ? (
+              <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie
+                      data={top10.map(l => ({ name: l.linea, value: l.ventas }))}
+                      dataKey="value" nameKey="name"
+                      innerRadius={40} outerRadius={90} paddingAngle={2}
+                    >
+                      {top10.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v) => fmtM(v)} contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-1.5 mt-3">
+                  {top10.map((l, i) => (
+                    <div key={l.linea} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                        <span className="truncate">{l.linea}</span>
+                      </div>
+                      <span className="tabular-nums font-semibold">{l.porcentaje}%</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Serie mensual top 5 líneas */}
+        <div className="card lg:col-span-2">
+          <div className="section-header">
+            <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Evolución mensual (top 5 líneas)</h2>
+          </div>
+          <div className="p-5 pt-0">
+            {!serieLin || serieLin.serie?.length === 0 ? (
+              <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={serieLin.serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                  <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
+                  <YAxis tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
+                  <Tooltip formatter={(v) => fmtQ(v)} labelFormatter={fmtPeriod} contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {(serieLin.lineas || []).map((l, i) => (
+                    <Line key={l} type="monotone" dataKey={l} stroke={PIE_COLORS[i % PIE_COLORS.length]} strokeWidth={2} dot={false} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Ranking completo */}
+      <div className="card">
+        <div className="section-header">
+          <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
+          <h2 className="font-semibold">Detalle por línea de producto</h2>
+        </div>
+        <div className="p-5 pt-0 overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-xs text-[var(--text-muted)] uppercase">
+                <th className="text-left  font-semibold pb-2">Línea</th>
+                <th className="text-right font-semibold pb-2">SKUs</th>
+                <th className="text-right font-semibold pb-2">Clientes</th>
+                <th className="text-right font-semibold pb-2">Unidades</th>
+                <th className="text-right font-semibold pb-2">Ventas</th>
+                <th className="text-right font-semibold pb-2">Margen%</th>
+                <th className="text-right font-semibold pb-2">Share</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-default)]">
+              {lineas.map((l, i) => (
+                <tr key={l.linea} className="text-sm hover:bg-[var(--bg-secondary)]">
+                  <td className="py-2 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
+                      <span className="font-medium">{l.linea}</span>
+                    </div>
+                  </td>
+                  <td className="py-2 text-right tabular-nums">{fmtInt(l.skus)}</td>
+                  <td className="py-2 text-right tabular-nums">{fmtInt(l.clientes)}</td>
+                  <td className="py-2 text-right tabular-nums">{fmtNum(l.unidades)}</td>
+                  <td className="py-2 text-right tabular-nums font-semibold">{fmtM(l.ventas)}</td>
+                  <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(l.margen_pct)}`}>
+                    {l.margen_pct !== null ? `${l.margen_pct.toFixed(1)}%` : '—'}
+                  </td>
+                  <td className="py-2 text-right tabular-nums font-semibold">{l.porcentaje}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------------
+// TAB: CLIENTES
+// -------------------------------------------------------------------
+function TabClientes({ clientes, totalVentas }) {
+  // Concentración pareto: acumulado por rank
+  const paretoData = useMemo(() => {
+    let acum = 0
+    return clientes.map((c, i) => {
+      acum += c.ventas
+      return {
+        rank: i + 1,
+        cliente: c.cliente,
+        ventas: c.ventas,
+        acumulado: acum,
+        acum_pct: totalVentas > 0 ? Math.min(100, Math.round(acum / totalVentas * 1000) / 10) : 0,
+      }
+    })
+  }, [clientes, totalVentas])
+
+  const top10Pct = paretoData[9]?.acum_pct || 0
+  const top20Pct = paretoData[19]?.acum_pct || 0
+
+  return (
+    <div className="space-y-6">
+      {/* Métricas de concentración */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="kpi-card">
+          <span className="kpi-label">Top 10 clientes</span>
+          <p className={`kpi-value ${top10Pct >= 50 ? 'text-[var(--warning)]' : 'text-[var(--text-primary)]'}`}>{top10Pct}%</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">del total facturado</p>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Top 20 clientes</span>
+          <p className="kpi-value">{top20Pct}%</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">del total facturado</p>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Clientes en top 30</span>
+          <p className="kpi-value">{fmtInt(clientes.length)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">con ventas ≥ Q10k anuales</p>
+        </div>
+      </div>
+
+      {/* Pareto: barras + línea acumulada */}
+      <div className="card">
+        <div className="section-header">
+          <div className="flex items-center gap-2">
+            <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Concentración Pareto (top 30 clientes)</h2>
+          </div>
+          <div className="text-xs text-[var(--text-muted)] flex items-center gap-3">
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#001639] rounded-sm" /> Ventas</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-4 h-0.5 bg-amber-500" /> % acumulado</span>
+          </div>
+        </div>
+        <div className="p-5 pt-0">
+          {paretoData.length === 0 ? (
+            <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={paretoData} margin={{ top: 10, right: 10, bottom: 40, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                <XAxis dataKey="rank" tick={{ fontSize: 11 }} stroke="var(--text-muted)" label={{ value: 'Rank cliente', position: 'insideBottom', offset: -5, fontSize: 11 }} />
+                <YAxis yAxisId="q" tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
+                <YAxis yAxisId="pct" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={45} />
+                <Tooltip
+                  formatter={(v, k) => k === 'acum_pct' ? `${Number(v).toFixed(1)}%` : fmtQ(v)}
+                  labelFormatter={(l) => `Cliente #${l}`}
+                  contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }}
+                />
+                <Bar yAxisId="q" dataKey="ventas" fill="#001639" radius={[3,3,0,0]} />
+                <Line yAxisId="pct" dataKey="acum_pct" stroke="#f59e0b" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Ranking clientes */}
+      <div className="card">
+        <div className="section-header">
+          <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <h2 className="font-semibold">Top 30 clientes por facturación</h2>
+        </div>
+        <div className="p-5 pt-0 overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-xs text-[var(--text-muted)] uppercase">
+                <th className="text-left  font-semibold pb-2">Cliente</th>
+                <th className="text-right font-semibold pb-2">Facturas</th>
+                <th className="text-right font-semibold pb-2">Ventas</th>
+                <th className="text-right font-semibold pb-2">Margen</th>
+                <th className="text-right font-semibold pb-2">Margen%</th>
+                <th className="text-right font-semibold pb-2">Share</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-default)]">
+              {clientes.map((c, i) => (
+                <tr key={c.codigo} className="text-sm hover:bg-[var(--bg-secondary)]">
+                  <td className="py-2 pr-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
+                      <div className="min-w-0">
+                        <p className="font-medium truncate max-w-[280px]">{c.cliente}</p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {c.codigo}{c.forma_pago ? ` · ${c.forma_pago}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-2 text-right tabular-nums">{fmtInt(c.facturas)}</td>
+                  <td className="py-2 text-right tabular-nums font-semibold">{fmtM(c.ventas)}</td>
+                  <td className="py-2 text-right tabular-nums">{fmtM(c.margen)}</td>
+                  <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(c.margen_pct)}`}>
+                    {c.margen_pct !== null ? `${c.margen_pct.toFixed(1)}%` : '—'}
+                  </td>
+                  <td className={`py-2 text-right tabular-nums font-semibold ${c.porcentaje >= 15 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
+                    {c.porcentaje}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }
