@@ -51,41 +51,6 @@ const MD = {
   a: ({ children, href }) => <a href={href} className="text-primary-600 underline" target="_blank" rel="noreferrer">{children}</a>,
 }
 
-function Trazabilidad({ consultas, meta }) {
-  const [abierto, setAbierto] = useState(false)
-  if (!consultas?.length) return null
-
-  return (
-    <div className="mt-2.5 pt-2 border-t border-gray-200/70">
-      <button
-        onClick={() => setAbierto(!abierto)}
-        className="text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1 transition-colors"
-      >
-        <svg className={`w-3 h-3 transition-transform ${abierto ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-        {consultas.length} {consultas.length === 1 ? 'consulta' : 'consultas'} a la base de datos
-      </button>
-
-      {abierto && (
-        <div className="mt-1.5 space-y-1.5">
-          {consultas.map(q => (
-            <div key={q.id} className="bg-gray-900 rounded-lg p-2 overflow-x-auto">
-              {q.proposito && <p className="text-[10px] text-gray-400 mb-1">{q.proposito}</p>}
-              <pre className="text-[10px] text-green-300 font-mono whitespace-pre-wrap break-words">{q.sql}</pre>
-              <p className="text-[10px] text-gray-500 mt-1">{q.num_filas} filas</p>
-            </div>
-          ))}
-          {meta && (
-            <p className="text-[10px] text-gray-400">
-              {meta.modelo?.split('/').pop()} · {(meta.ms / 1000).toFixed(1)}s · ${meta.costo_usd}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 /**
  * Conversacion del agente SQL. Sin cromo propio: el contenedor (widget flotante
@@ -213,7 +178,6 @@ export default function ChatConversacion({ fullPage = false }) {
                     {msg.content}
                   </ReactMarkdown>
                   {msg.bloques?.map((b, i) => <BloqueVisual key={i} bloque={b} />)}
-                  <Trazabilidad consultas={msg.consultas} meta={msg.meta} />
                 </div>
               )}
             </div>
