@@ -97,6 +97,11 @@ export const endpoints = {
   // Multi-Agent System
   agents: {
     chat: (message) => cfoApi.post('/agents/chat', { message }),
+    // El agente SQL da varias vueltas al modelo: 10-25s es normal, por eso
+    // lleva su propio timeout en vez del de 30s del cliente general.
+    chatAgente: (message, historial = []) =>
+      cfoApi.post('/agents/chat-agente', { message, historial }, { timeout: 120000 }),
+    saludAgente: () => cfoApi.get('/agents/chat-agente/salud'),
     status: () => cfoApi.get('/agents/status'),
     history: () => cfoApi.get('/agents/history'),
     clear: () => cfoApi.post('/agents/clear'),
@@ -115,5 +120,7 @@ export const endpoints = {
 
 // Helper para chat de agentes
 export const chatWithAgents = (message) => endpoints.agents.chat(message)
+export const chatConAgenteSQL = (message, historial) => endpoints.agents.chatAgente(message, historial)
+export const saludAgenteSQL = () => endpoints.agents.saludAgente()
 
 export default cfoApi

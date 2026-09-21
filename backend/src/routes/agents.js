@@ -3,6 +3,7 @@ const router = express.Router();
 const { execSync } = require('child_process');
 const { ejecutarTareasPendientesWakeUp } = require('../services/wakeUpScheduler');
 const aiService = require('../services/aiService');
+const agenteSQL = require('../services/agenteSQL');
 const config = require('../config/financiera');
 
 // GET /api/agents/version - Versión del código desplegado
@@ -596,6 +597,97 @@ router.post('/chat', async (req, res) => {
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
+});
+
+/**
+ * POST /api/agents/chat-agente
+ *
+ * El agente que consulta la base de datos escribiendo su propio SQL.
+ * A diferencia de /chat (que arma un contexto fijo antes de preguntar),
+ * aqui el modelo decide que consultar, ejecuta, se corrige si falla, y
+ * devuelve texto + bloques visuales referenciados a los datos reales.
+ */
+router.post('/chat-agente', async (req, res) => {
+  const t0 = Date.now();
+  const { message, historial } = req.body || {};
+
+  if (!message || !String(message).trim()) {
+    return res.status(400).json({ success: false, error: 'Se requiere un mensaje' });
+  }
+
+  try {
+    const r = await agenteSQL.correr(String(message).trim(), {
+      historial: Array.isArray(historial) ? historial.slice(-6) : []
+    });
+
+    // Traza: cada respuesta queda con el SQL que la produjo.
+    try {
+      const db = req.app.get('db');
+      if (db) {
+        await db.runAsync(
+          `INSERT INTO agentes_logs (agente_nombre, agente_tipo, categoria, descripcion,
+             detalles_json, resultado_status, duracion_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          ['AgenteSQL', 'conversational_sql', 'consulta',
+           String(message).slice(0, 500),
+           JSON.stringify({ consultas: r.consultas, pasos: r.pasos, meta: r.meta }).slice(0, 9000),
+           'exitoso', r.meta.ms]
+        );
+      }
+    } catch (e) {
+      console.warn('[chat-agente] no se pudo registrar en agentes_logs:', e.message);
+    }
+
+    return res.json({
+      success: true,
+      response: {
+        content: r.texto,
+        bloques: r.bloques,
+        agent: 'abaco Agente SQL',
+        type: 'agente_sql',
+        // Trazabilidad: el usuario puede ver de donde salio cada numero.
+        consultas: r.consultas,
+        pasos: r.pasos,
+        meta: r.meta
+      }
+    });
+
+  } catch (error) {
+    console.error('[POST /api/agents/chat-agente] Error:', error.message);
+    const faltaConfig = /OPENROUTER_API_KEY|DATABASE_URL_READONLY|schema "analitica"/.test(error.message);
+    return res.status(faltaConfig ? 503 : 500).json({
+      success: false,
+      error: faltaConfig ? error.message : 'Error al procesar la consulta',
+      details: error.message,
+      ms: Date.now() - t0
+    });
+  }
+});
+
+/**
+ * GET /api/agents/chat-agente/salud
+ * Verifica que el agente tenga todo lo que necesita antes de usarlo.
+ */
+router.get('/chat-agente/salud', async (req, res) => {
+  const dbAgente = require('../services/dbAgente');
+  const out = {
+    openrouter_key: !!process.env.OPENROUTER_API_KEY,
+    readonly_url: !!process.env.DATABASE_URL_READONLY,
+    usuario_correcto: (process.env.DATABASE_URL_READONLY || '').includes('agente_ia'),
+    modelo: agenteSQL.MODELO,
+    capa_semantica: false,
+    vistas: []
+  };
+  try {
+    const cat = await dbAgente.getCatalogo();
+    out.capa_semantica = cat.length > 0;
+    out.vistas = cat.map(v => v.vista);
+    out.vistas_documentadas = cat.filter(v => v.descripcion).length;
+  } catch (e) {
+    out.error = e.message;
+  }
+  out.listo = out.openrouter_key && out.readonly_url && out.usuario_correcto && out.capa_semantica;
+  res.status(out.listo ? 200 : 503).json(out);
 });
 
 // ============================================

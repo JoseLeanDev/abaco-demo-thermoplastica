@@ -7,6 +7,7 @@ import {
   ChartBarIcon,
   DocumentCheckIcon,
   CpuChipIcon,
+  ChatBubbleLeftRightIcon,
   Bars3Icon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
@@ -32,6 +33,7 @@ const navigation = [
   { name: 'Análisis', href: '/analisis', icon: ChartBarIcon },
   { name: 'Márgenes', href: '/margenes', icon: TagIcon },
   // { name: 'SAT', href: '/sat', icon: DocumentCheckIcon },
+  { name: 'Asistente IA', href: '/asistente', icon: ChatBubbleLeftRightIcon },
   { name: 'Agentes IA', href: '/log-actividades', icon: CpuChipIcon },
   { name: 'Usuarios', href: '/usuarios', icon: UsersIcon, adminOnly: true },
 ]
@@ -213,8 +215,8 @@ export default function DashboardLayout({ children }) {
         </main>
       </div>
       
-      {/* AI Chat Assistant - Floating bubble */}
-      <AgentChat />
+      {/* Widget flotante: en todas las paginas menos en la pagina completa del asistente */}
+      {location.pathname !== '/asistente' && <AgentChat />}
     </div>
   )
 }
