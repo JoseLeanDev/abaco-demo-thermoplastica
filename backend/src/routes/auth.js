@@ -1,7 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const db = require('../../database/connection');
-const { authenticate, generateToken } = require('../middleware/auth');
+const { authenticate, generateToken, JWT_SECRET } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -77,10 +78,16 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ==================== REGISTER (solo admin o demo) ====================
+// ==================== REGISTER ====================
+// Reglas:
+//   1. Si NO existen usuarios en la BD → cualquiera puede crear el PRIMER admin
+//      (bootstrap una sola vez).
+//   2. Si ya existen usuarios → solo un admin autenticado puede crear otros.
+//   3. Solo un admin puede asignar rol 'admin'; cualquier otro rol es 'usuario'.
 router.post('/register', async (req, res) => {
   try {
-    const { nombre, email, password, rol = 'usuario' } = req.body;
+    const { nombre, email, password } = req.body;
+    let { rol = 'usuario' } = req.body;
 
     if (!nombre || !email || !password) {
       return res.status(400).json({
@@ -89,12 +96,52 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({
         status: 'error',
-        message: 'La contraseña debe tener al menos 6 caracteres'
+        message: 'La contraseña debe tener al menos 8 caracteres'
       });
     }
+
+    // ¿Es el primer usuario del sistema?
+    const total = await db.getAsync('SELECT COUNT(*)::int AS count FROM usuarios');
+    const isBootstrap = parseInt(total?.count || 0) === 0;
+
+    if (!isBootstrap) {
+      // Ya hay usuarios: solo un admin autenticado puede registrar otros.
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({
+          status: 'error',
+          message: 'Registro requiere autenticación de administrador.'
+        });
+      }
+      try {
+        const token = authHeader.substring(7);
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const admin = await db.getAsync(
+          'SELECT rol FROM usuarios WHERE id = ? AND activo = TRUE',
+          [decoded.userId]
+        );
+        if (!admin || admin.rol !== 'admin') {
+          return res.status(403).json({
+            status: 'error',
+            message: 'Solo administradores pueden registrar usuarios.'
+          });
+        }
+      } catch (jwtErr) {
+        return res.status(401).json({
+          status: 'error',
+          message: 'Token inválido.'
+        });
+      }
+    } else {
+      // Bootstrap: el primer usuario siempre queda como admin.
+      rol = 'admin';
+    }
+
+    // Solo un admin autenticado (o bootstrap) puede crear otro admin.
+    if (rol !== 'admin' && rol !== 'usuario') rol = 'usuario';
 
     // Verificar si el email ya existe
     const existing = await db.getAsync(
@@ -110,7 +157,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Hash de password
-    const saltRounds = 10;
+    const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
     // Crear usuario
