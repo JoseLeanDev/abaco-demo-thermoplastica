@@ -310,10 +310,8 @@ INSERT INTO empresas (id, nombre, nit, moneda_principal)
 VALUES (1, 'Empresa Demo', '1234567-8', 'GTQ')
 ON CONFLICT DO NOTHING;
 
--- Insertar usuario demo (password: demo123)
-INSERT INTO usuarios (id, nombre, email, password_hash, rol)
-VALUES (1, 'Usuario Demo', 'demo@cfoai.com', '$2b$10$wZ/MyH.ecgVvcPD3o06n.OYjy1I1c74BQSG0CKvUbVQkEM6Zcm1aC', 'admin')
-ON CONFLICT DO NOTHING;
+-- Usuario admin: crear manualmente con password fuerte via /api/auth/register o script seed.
+-- (Se removió el usuario demo hardcoded por razones de seguridad; nunca commitear password_hash.)
 `;
 
 async function migrate() {

@@ -29,10 +29,10 @@ router.get('/', async (req, res) => {
       empresa_id: empresaId
     });
   } catch (error) {
-    res.json({
+    console.error('[DEBUG ERROR]', error);
+    res.status(500).json({
       status: 'error',
-      message: error.message,
-      stack: error.stack
+      message: 'Error interno'
     });
   }
 });

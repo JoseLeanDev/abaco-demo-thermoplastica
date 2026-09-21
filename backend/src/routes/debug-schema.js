@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
       status: 'success',
       timestamp: new Date().toISOString(),
       database_type: isPostgres ? 'PostgreSQL' : 'SQLite (fallback)',
-      database_url: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 30) + '...' : 'NOT SET',
+      database_url_configured: !!process.env.DATABASE_URL,
       tables: tables.map(t => t.table_name),
       empresas_count: empresas?.count || 0
     });

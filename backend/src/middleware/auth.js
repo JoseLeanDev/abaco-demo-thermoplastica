@@ -1,7 +1,11 @@
 const jwt = require('jsonwebtoken');
 const db = require('../../database/connection');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cfo-ai-secret-key-dev';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET no está configurado. El servidor no puede firmar/verificar tokens.');
+  throw new Error('JWT_SECRET missing');
+}
 
 // Middleware para verificar token JWT
 const authenticate = async (req, res, next) => {
