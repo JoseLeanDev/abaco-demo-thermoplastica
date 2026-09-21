@@ -1,5 +1,13 @@
 # Agente SQL conversacional — Fase 2 y 3
 
+> **Fuente de datos:** el agente consulta el schema `analitica`, cuyas vistas leen
+> el modelo estrella REAL del ERP (`thermoplastica`): ventas con margen/costo por
+> linea, clientes, articulos, vendedores, CxC, CxP, inventario y compras
+> (~20,800 lineas de venta, actualizado a pocos dias). Ver migracion 012.
+> Bancos, flujo de caja, runway y SAT NO estan en el dataset real; el agente lo
+> dice en vez de inventarlos. Las vistas demo sobre `public` (migracion 010) se
+> reemplazaron en la 012.
+
 El chatbot dejó de ser "datos pegados a un prompt". Ahora es un agente que
 escribe su propio SQL, lo ejecuta contra la base, se corrige si falla, y
 responde con texto + tablas + gráficas.

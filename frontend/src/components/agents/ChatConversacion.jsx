@@ -92,8 +92,22 @@ function Trazabilidad({ consultas, meta }) {
  * o pagina completa) decide el tamaño. Con fullPage=true los mensajes se centran
  * en una columna ancha y las burbujas del asistente ocupan mas espacio.
  */
+const STORAGE_KEY = 'abaco_chat_historial'
+const STORAGE_MAX = 40  // guardar solo los ultimos N mensajes
+
+function cargarHistorial() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return [BIENVENIDA]
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) && arr.length ? arr : [BIENVENIDA]
+  } catch {
+    return [BIENVENIDA]
+  }
+}
+
 export default function ChatConversacion({ fullPage = false }) {
-  const [messages, setMessages] = useState([BIENVENIDA])
+  const [messages, setMessages] = useState(cargarHistorial)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [espera, setEspera] = useState(0)
@@ -101,6 +115,14 @@ export default function ChatConversacion({ fullPage = false }) {
   const inputRef = useRef(null)
 
   useEffect(() => { finRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, isLoading])
+
+  // Persistir la conversacion en localStorage (por-navegador, sin backend).
+  useEffect(() => {
+    try {
+      if (messages.length <= 1) { localStorage.removeItem(STORAGE_KEY); return }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-STORAGE_MAX)))
+    } catch { /* modo privado o storage lleno: seguir sin persistir */ }
+  }, [messages])
 
   useEffect(() => {
     if (!isLoading) { setEspera(0); return }
@@ -150,12 +172,30 @@ export default function ChatConversacion({ fullPage = false }) {
     }
   }
 
+  const limpiar = () => {
+    setMessages([BIENVENIDA])
+    try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
+  }
+
   const soloBienvenida = messages.length <= 1
   const anchoMsg = fullPage ? 'max-w-[820px] mx-auto w-full' : ''
   const anchoAsist = fullPage ? 'max-w-[90%]' : 'max-w-[95%]'
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {/* Barra superior: limpiar conversacion (solo si hay historial) */}
+      {!soloBienvenida && (
+        <div className="flex justify-end px-3 py-1.5 bg-gray-50 border-b border-gray-100 shrink-0">
+          <button onClick={limpiar}
+            className="text-[11px] text-gray-500 hover:text-red-600 flex items-center gap-1 transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Nueva conversación
+          </button>
+        </div>
+      )}
+
       {/* Mensajes */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 bg-gray-50">
         {messages.map((msg, idx) => (

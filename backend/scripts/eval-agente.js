@@ -5,8 +5,7 @@
  *   node scripts/eval-agente.js
  *
  * Cada caso tiene una pregunta y una lista de "debe_contener": textos o numeros
- * que la respuesta correcta tiene que incluir. Los valores fueron verificados a
- * mano contra la base el 2026-09-21. Es la red que atrapa regresiones cuando se
+ * que la respuesta correcta tiene que incluir. Los valores fueron verificados contra el ERP real el 2026-09-21. Es la red que atrapa regresiones cuando se
  * toca el prompt, el modelo o las vistas.
  *
  * No mide redaccion, mide correctitud: que los numeros clave esten y que las
@@ -37,27 +36,21 @@ function contiene(texto, esperado) {
 }
 
 const CASOS = [
-  { p: 'cuanto me deben en total mis clientes',
-    debe: [7331000], no_debe: [] },
-  { p: 'cuantas facturas tengo vencidas a mas de 90 dias y por cuanto',
-    debe: [13, 1241480], no_debe: [] },
-  { p: 'quien es el cliente que mas me debe',
-    debe: ['cervecería', 843591], no_debe: [] },  // total de todas sus facturas pendientes
-  { p: 'cuanto efectivo tengo disponible',
-    debe: [1770000, 185000], no_debe: [5310000] },  // no debe triplicar
-  { p: 'para cuantos dias me alcanza el efectivo',
-    debe: [20], no_debe: [60] },
-  { p: 'cuanto debo a proveedores',
-    debe: [13603743], no_debe: [] },
-  { p: 'en que gasto mas dinero',
-    debe: ['nómina'], no_debe: [] },
-  { p: 'como van las ventas mes a mes',
-    debe: ['febrero', 'marzo'], no_debe: [] },  // debe mencionar el hueco/anomalia
+  { p: 'cual es mi cliente con mejor margen',
+    debe: ['margen'], no_debe: ['no permiten', 'no es posible', 'no tengo'] },  // ANTES fallaba: ahora debe responder
+  { p: 'cuanto vendi en total historicamente',
+    debe: [176144522], no_debe: [] },
+  { p: 'cual es mi margen bruto global',
+    debe: [33.1], no_debe: [] },
+  { p: 'cuanto me deben mis clientes en facturas pendientes',
+    debe: [19413292], no_debe: [] },
+  { p: 'cuanto debo a proveedores en facturas pendientes',
+    debe: [32927050], no_debe: [] },
+  { p: 'cuales son mis 5 lineas de producto con mas ventas',
+    debe: ['Inducción', 'Envase PE'], no_debe: [] },
   { p: 'como va la conciliacion bancaria',
-    debe: ['no', 'movimientos'], no_debe: [] },  // no hay datos
-  { p: 'cuantas obligaciones con la SAT tengo',
-    debe: [14], no_debe: [42] },  // no debe triplicar
-];
+    debe: ['no'], no_debe: [] },  // bancos no existen en el dataset real
+]
 
 const c = { v: s => `\x1b[32m${s}\x1b[0m`, r: s => `\x1b[31m${s}\x1b[0m`, g: s => `\x1b[90m${s}\x1b[0m`, b: s => `\x1b[1m${s}\x1b[0m` };
 
