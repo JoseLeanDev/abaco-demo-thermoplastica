@@ -6,7 +6,7 @@ import ChatConversacion from '../components/agents/ChatConversacion'
  */
 export default function AsistenteIA() {
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem-3rem)] min-h-[520px] -m-6">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] min-h-[520px] -m-6">
       {/* Encabezado */}
       <div className="bg-abaco text-white px-6 py-4 flex items-center gap-3 shrink-0">
         <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
