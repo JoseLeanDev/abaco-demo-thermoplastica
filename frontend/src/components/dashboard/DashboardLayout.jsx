@@ -17,6 +17,7 @@ import {
   ShoppingBagIcon,
   TagIcon,
   CubeIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Márgenes', href: '/margenes', icon: TagIcon },
   // { name: 'SAT', href: '/sat', icon: DocumentCheckIcon },
   { name: 'Asistente IA', href: '/asistente', icon: ChatBubbleLeftRightIcon },
+  { name: 'Insights de IA', href: '/insights', icon: SparklesIcon },
   { name: 'Agentes IA', href: '/log-actividades', icon: CpuChipIcon },
   { name: 'Usuarios', href: '/usuarios', icon: UsersIcon, adminOnly: true },
 ]
