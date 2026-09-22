@@ -430,3 +430,10 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* Scrollbar sutil para carruseles sobre fondo oscuro */
+.scroll-elegante { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
+.scroll-elegante::-webkit-scrollbar { height: 6px; }
+.scroll-elegante::-webkit-scrollbar-track { background: transparent; margin: 0 12px; }
+.scroll-elegante::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.15); border-radius: 9999px; }
+.scroll-elegante::-webkit-scrollbar-thumb:hover { background-color: rgba(255,255,255,0.3); }

@@ -100,8 +100,7 @@ export default function InsightsCarousel() {
 
       {/* Fila con scroll */}
       <div ref={scroller}
-        className="flex gap-3 p-4 overflow-x-auto snap-x snap-mandatory scroll-smooth"
-        style={{ scrollbarWidth: 'thin' }}>
+        className="scroll-elegante flex gap-3 p-4 pb-3 overflow-x-auto snap-x snap-mandatory scroll-smooth">
         {isLoading
           ? [1, 2, 3, 4].map(i => <div key={i} className="snap-start shrink-0 w-[320px] h-36 rounded-xl bg-white/5 animate-pulse" />)
           : insights.map((ins, idx) => {
