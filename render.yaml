@@ -104,14 +104,15 @@ services:
         value: America/Guatemala
     autoDeploy: true
 
-  # Cron Job - Analista diario (playbooks por vertical)
-  # Corre a las 12:00 UTC = 06:00 America/Guatemala. El horario del cron en
-  # Render se interpreta en UTC (TZ no lo cambia).
+  # Cron Job - Analista por playbooks (cartera, ventas, margenes, compras)
+  # Corre cada 2 dias a las 12:00 UTC = 06:00 America/Guatemala. El horario del
+  # cron en Render se interpreta en UTC (TZ no lo cambia). */2 en el dia del mes
+  # = dias 1,3,5,... (aprox "cada 2 dias"; se reinicia en cada cambio de mes).
   - type: cron
     name: abaco-analista-diario
     runtime: node
     plan: starter
-    schedule: "0 12 * * *"
+    schedule: "0 12 */2 * *"
     buildCommand: cd backend && npm install
     startCommand: cd backend && node scripts/correr-playbooks.js
     envVars:
