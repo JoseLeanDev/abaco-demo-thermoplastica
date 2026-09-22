@@ -29,6 +29,7 @@ import {
   ShoppingCartIcon,
   TruckIcon,
 } from '@heroicons/react/24/outline'
+import InsightsCarousel from '../components/agents/InsightsCarousel'
 
 // ============================================================
 // Helpers de formato
@@ -80,6 +81,9 @@ export default function Dashboard() {
   const cxcAg = d.cxc_aging || {}
   const cxpAg = d.cxp_aging || {}
   const lineas = d.top_lineas || []
+  const actualizado = data?.timestamp
+    ? new Date(data.timestamp).toLocaleString('es-GT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '—'
 
   if (isLoading) {
     return (
@@ -112,10 +116,10 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-fade-in max-w-[1400px]">
       {/* ============ 1. HERO EJECUTIVO ============ */}
-      <ExecutiveHero empresa={d.empresa} fechaCorte={d.fecha_corte} kpis={k} health={h} />
+      <ExecutiveHero empresa={d.empresa} actualizado={actualizado} kpis={k} health={h} />
 
-      {/* ============ 2. PULSO 12M — 4 KPIs con YoY delta ============ */}
-      <PulsoRow kpis={k} />
+      {/* ============ 2. INSIGHTS DE IA (carrusel, debajo del hero) ============ */}
+      <InsightsCarousel />
 
       {/* ============ 3. FACTURACIÓN & MARGEN — ComposedChart YoY ============ */}
       <VentasTrendCard serie={serie} kpis={k} />
@@ -182,44 +186,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ============ 8. INSIGHTS AUTO ============ */}
-      {d.insights && d.insights.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <SparklesIcon className="w-5 h-5 text-[var(--accent-blue)]" />
-            <h2 className="font-semibold text-base">Insights automáticos del período</h2>
-            <span className="text-xs text-[var(--text-muted)]">— {d.insights.length} hallazgos</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {d.insights.map((ins, i) => {
-              const cfg = insightConfig[ins.tipo] || insightConfig.atencion
-              const Icon = cfg.icon
-              return (
-                <div key={i} className={`card border-l-4 ${cfg.cls} p-4 card-hover`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${cfg.txt} bg-current/10`}>
-                      <Icon className={`w-4 h-4 ${cfg.txt}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.txt}`}>{cfg.badge}</span>
-                      </div>
-                      <p className="text-sm font-semibold text-[var(--text-primary)] leading-snug">{ins.titulo}</p>
-                      <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">{ins.detalle}</p>
-                      {ins.link && (
-                        <Link to={ins.link} className="inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] mt-2 hover:underline">
-                          Ver detalle <ArrowRightIcon className="w-3 h-3" />
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       {/* ============ 9. ACCIÓN ESTA SEMANA ============ */}
       {d.cxc_criticas && d.cxc_criticas.length > 0 && (
         <div className="card">
@@ -278,7 +244,7 @@ export default function Dashboard() {
 // ============================================================
 // 1. HERO EJECUTIVO
 // ============================================================
-function ExecutiveHero({ empresa, fechaCorte, kpis: k, health: h }) {
+function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
   const color = healthColor(h.grade)
   const scoreData = [{ name: 'score', value: h.score || 0, fill: color.fill }]
 
@@ -292,9 +258,9 @@ function ExecutiveHero({ empresa, fechaCorte, kpis: k, health: h }) {
       <div className="relative flex items-start justify-between flex-wrap gap-6">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 font-medium">Briefing ejecutivo</p>
-          <h1 className="text-3xl font-bold mt-1 tracking-tight">{empresa || 'Thermoplástica, S.A.'}</h1>
+          <h1 className="text-3xl font-bold mt-1 tracking-tight text-white">{empresa || 'Thermoplástica, S.A.'}</h1>
           <p className="text-sm text-white/60 mt-1">
-            Datos al {fechaCorte} · ERP en tiempo real via Tailscale + n8n
+            Datos actualizados: {actualizado}
           </p>
 
           {/* Composite Health Score */}
@@ -331,7 +297,7 @@ function ExecutiveHero({ empresa, fechaCorte, kpis: k, health: h }) {
         </div>
 
         {/* Números north-star a la derecha */}
-        <div className="grid grid-cols-3 gap-6 text-right">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 text-right">
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Ventas 12m</p>
             <p className="text-2xl font-bold tabular-nums mt-1">{fmtM(k.ventas_12m)}</p>
@@ -348,6 +314,13 @@ function ExecutiveHero({ empresa, fechaCorte, kpis: k, health: h }) {
               {fmtM(k.ebitda_estimado)}
             </p>
             <p className="text-[10px] text-white/50 mt-1">margen {fmtPct(k.ebitda_pct)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Posición neta WC</p>
+            <p className={`text-2xl font-bold tabular-nums mt-1 ${k.posicion_neta_wc >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              {fmtM(k.posicion_neta_wc)}
+            </p>
+            <p className="text-[10px] text-white/50 mt-1">cobertura {k.cobertura_cxc_cxp != null ? Number(k.cobertura_cxc_cxp).toFixed(2) + 'x' : '—'}</p>
           </div>
         </div>
       </div>
@@ -388,119 +361,6 @@ function DeltaBadge({ value, suffix, size = 'sm', unit = '%' }) {
       {suffix && <span className="text-white/40 ml-1 font-normal">{suffix}</span>}
     </p>
   )
-}
-
-// ============================================================
-// 2. PULSO 12M — 4 KPIs con YoY delta grande
-// ============================================================
-function PulsoRow({ kpis: k }) {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <PulsoCard
-        label="Ventas 12m"
-        value={fmtM(k.ventas_12m)}
-        deltaPct={k.delta_ventas_pct}
-        deltaLabel="vs 12m previo"
-        sublabel={`${(k.facturas_12m || 0).toLocaleString('es-GT')} facturas · ${k.clientes_activos_12m || 0} clientes`}
-        icon={ArrowTrendingUpIcon}
-        to="/ventas"
-        accent="blue"
-      />
-      <PulsoCard
-        label="Margen bruto real"
-        value={fmtPct(k.margen_bruto_pct)}
-        deltaPct={k.delta_margen_pp}
-        deltaLabel="pp YoY"
-        deltaUnit="pp"
-        sublabel={`${fmtM(k.margen_bruto_real_12m)} · costo ${fmtM(k.costo_ventas_12m)}`}
-        icon={ScaleIcon}
-        to="/margenes"
-        accent="emerald"
-      />
-      <PulsoCard
-        label="EBITDA estimado"
-        value={fmtM(k.ebitda_estimado)}
-        deltaPct={k.ebitda_pct}
-        deltaLabel="margen del período"
-        deltaUnit="%"
-        sublabel={`Gastos op. ${fmtM(k.gastos_operativos_12m)} · sin MO ni depreciación`}
-        icon={ArrowsRightLeftIcon}
-        to="/gastos-operativos"
-        accent={k.ebitda_estimado >= 0 ? 'emerald' : 'rose'}
-        deltaIsMetric
-      />
-      <PulsoCard
-        label="Posición neta WC"
-        value={fmtM(k.posicion_neta_wc)}
-        deltaPct={k.cobertura_cxc_cxp}
-        deltaLabel="cobertura CxC/CxP"
-        deltaUnit="x"
-        sublabel={`CxC ${fmtM(k.cxc_total)} vs CxP ${fmtM(k.cxp_total)}`}
-        icon={BanknotesIcon}
-        to="/tesoreria"
-        accent={k.posicion_neta_wc >= 0 ? 'emerald' : 'rose'}
-        deltaIsRatio
-      />
-    </div>
-  )
-}
-
-function PulsoCard({ label, value, deltaPct, deltaLabel, deltaUnit = '%', sublabel, icon: Icon, to, accent = 'blue', deltaIsMetric, deltaIsRatio }) {
-  const accentBg = accent === 'emerald' ? 'from-emerald-500/10 to-emerald-500/0 border-emerald-500/20'
-                 : accent === 'rose'    ? 'from-rose-500/10 to-rose-500/0 border-rose-500/20'
-                 : accent === 'amber'   ? 'from-amber-500/10 to-amber-500/0 border-amber-500/20'
-                 :                         'from-sky-500/10 to-sky-500/0 border-sky-500/20'
-  const iconColor = accent === 'emerald' ? 'text-emerald-500'
-                  : accent === 'rose'    ? 'text-rose-500'
-                  : accent === 'amber'   ? 'text-amber-500'
-                  :                         'text-sky-500'
-
-  let deltaDisplay = null
-  if (deltaPct !== null && deltaPct !== undefined && !isNaN(deltaPct)) {
-    const v = Number(deltaPct)
-    if (deltaIsRatio) {
-      const good = v >= 1
-      deltaDisplay = (
-        <span className={`text-[11px] font-semibold tabular-nums ${good ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
-          {v.toFixed(2)}x
-        </span>
-      )
-    } else if (deltaIsMetric) {
-      deltaDisplay = (
-        <span className={`text-[11px] font-semibold tabular-nums ${v >= 10 ? 'text-[var(--success)]' : v >= 0 ? 'text-[var(--text-primary)]' : 'text-[var(--danger)]'}`}>
-          {v.toFixed(1)}{deltaUnit}
-        </span>
-      )
-    } else {
-      const positive = v >= 0
-      const Icon2 = positive ? ArrowUpRightIcon : ArrowDownRightIcon
-      const cls = positive ? 'text-[var(--success)]' : 'text-[var(--danger)]'
-      deltaDisplay = (
-        <span className={`text-[11px] font-semibold tabular-nums ${cls} flex items-center gap-0.5`}>
-          <Icon2 className="w-3 h-3" />
-          {positive ? '+' : ''}{v.toFixed(1)}{deltaUnit}
-        </span>
-      )
-    }
-  }
-
-  const inner = (
-    <div className={`relative rounded-xl border bg-gradient-to-br ${accentBg} bg-[var(--bg-primary)] p-4 h-full card-hover overflow-hidden`}>
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">{label}</span>
-        {Icon && <Icon className={`w-4 h-4 ${iconColor}`} />}
-      </div>
-      <p className="text-2xl font-bold tabular-nums leading-tight text-[var(--text-primary)]">{value}</p>
-      {deltaDisplay && (
-        <div className="flex items-baseline gap-1.5 mt-1.5">
-          {deltaDisplay}
-          {deltaLabel && <span className="text-[10px] text-[var(--text-muted)]">{deltaLabel}</span>}
-        </div>
-      )}
-      {sublabel && <p className="text-[11px] text-[var(--text-muted)] mt-2 leading-snug">{sublabel}</p>}
-    </div>
-  )
-  return to ? <Link to={to} className="block h-full">{inner}</Link> : inner
 }
 
 // ============================================================
