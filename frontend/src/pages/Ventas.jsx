@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
+import PageInsights from '../components/agents/PageInsights'
 import {
   ArrowLeftIcon,
   ArrowDownTrayIcon,
@@ -180,6 +181,9 @@ export default function Ventas() {
 
       {/* KPIs globales */}
       <KPIs r={r} tendencia={tendencia} />
+
+      {/* Insights del analista diario (vertical ventas) */}
+      <PageInsights vertical="ventas" maxInsights={4} />
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[var(--border-default)] overflow-x-auto">

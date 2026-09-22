@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
+import PageInsights from "../components/agents/PageInsights"
 import {
   ShoppingCartIcon,
   ArrowLeftIcon,
@@ -214,6 +215,9 @@ export default function Compras() {
           </p>
         </div>
       </div>
+
+      {/* Insights del analista diario (vertical compras) */}
+      <PageInsights vertical="compras" maxInsights={4} />
 
       {/* Alerta concentración */}
       {alertaConcentracion && (

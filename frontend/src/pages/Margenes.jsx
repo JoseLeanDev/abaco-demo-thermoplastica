@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import PageInsights from "../components/agents/PageInsights"
 import {
   ChartBarIcon,
   UsersIcon,
@@ -175,6 +176,9 @@ export default function Margenes() {
           <p className="text-xs text-[var(--text-muted)]">Últimos 12 meses</p>
         </div>
       </div>
+
+      {/* Insights del analista diario (vertical margenes) */}
+      <PageInsights vertical="margenes" maxInsights={4} />
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-[var(--border-color)]">

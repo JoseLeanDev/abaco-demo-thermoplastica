@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import PageInsights from "../components/agents/PageInsights"
 import { useTesoreriaPosicion, useTesoreriaCxC, useTesoreriaCxP } from '../hooks/useCfoData'
 import {
   BanknotesIcon,
@@ -110,6 +111,9 @@ export default function Tesoreria() {
           </p>
         </div>
       </div>
+
+      {/* Insights del analista diario (vertical cartera) */}
+      <PageInsights vertical="cartera" maxInsights={4} />
 
       {/* Nota bancos */}
       <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 flex items-start gap-3">

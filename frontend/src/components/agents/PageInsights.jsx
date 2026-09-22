@@ -1,229 +1,160 @@
-import { useInsights, useInsightsHistorico } from '../../hooks/useCfoData'
-import { endpoints } from '../../services/cfoApi'
-import { 
+import { Link } from 'react-router-dom'
+import {
   SparklesIcon,
+  BoltIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   ExclamationTriangleIcon,
-  LightBulbIcon
+  LightBulbIcon,
+  ArrowRightIcon
 } from '@heroicons/react/24/outline'
+import { useInsights, useInsightsHistorico } from '../../hooks/useCfoData'
 
 /**
- * PageInsights - Componente compacto de insights para páginas específicas
- * Muestra insights relevantes al contexto de la página con diseño distintivo
- * Usa histórico como fallback si el endpoint principal no retorna datos
- * 
- * Props:
- * - context: string - contexto de la página ('tesoreria', 'contabilidad', 'analisis', etc.)
- * - maxInsights: number - máximo de insights a mostrar (default: 3)
- * - title: string - título opcional (default según contexto)
+ * PageInsights — Banner distintivo de insights de IA para la cabecera de cada
+ * sección. Diseño oscuro para diferenciarse del resto de la página.
+ *
+ * Dos modos:
+ *  - Con `vertical` (cartera|ventas|margenes|compras): muestra los insights del
+ *    ANALISTA DIARIO (cron por playbooks) de esa vertical, leídos del histórico
+ *    (agent_source = 'playbook:<vertical>'). Es el modo que se usa por sección.
+ *  - Sin `vertical`: comportamiento heredado (generador en tiempo real por
+ *    `context`, histórico como fallback). Se conserva para Análisis/Contabilidad.
+ *
+ * Si en modo vertical no hay insights aún, no renderiza nada (no ensucia la página).
  */
-export default function PageInsights({ 
-  context = 'general', 
-  maxInsights = 3,
-  title: customTitle
-}) {
-  const { data: insightsData, isLoading: isLoadingReal, error: errorReal } = useInsights(context)
-  const { data: historicoData, isLoading: isLoadingHist } = useInsightsHistorico({ limit: maxInsights, days: 30 })
-  
-  // Usar insights en tiempo real si existen, si no, usar histórico
-  const hasRealInsights = insightsData?.insights?.length > 0
-  const insights = hasRealInsights 
-    ? insightsData.insights.slice(0, maxInsights)
-    : (historicoData?.data?.insights || [])
-  
-  const isLoading = isLoadingReal && isLoadingHist
-  
-  // Títulos por contexto
+
+const V_LABEL = { cartera: 'Cartera', ventas: 'Ventas', margenes: 'Márgenes', compras: 'Compras' }
+
+const TYPE_CFG = {
+  gasto:       { icon: ArrowTrendingDownIcon, color: 'text-rose-300',    bg: 'bg-rose-500/15',    label: 'Gasto' },
+  ingreso:     { icon: ArrowTrendingUpIcon,   color: 'text-emerald-300', bg: 'bg-emerald-500/15', label: 'Ingreso' },
+  alerta:      { icon: ExclamationTriangleIcon, color: 'text-amber-300', bg: 'bg-amber-500/15',   label: 'Alerta' },
+  oportunidad: { icon: LightBulbIcon,         color: 'text-violet-300',  bg: 'bg-violet-500/15',  label: 'Oportunidad' },
+}
+
+const SEV_CFG = {
+  critical: { badge: 'bg-rose-500/20 text-rose-300',  label: 'CRÍTICO' },
+  warning:  { badge: 'bg-amber-500/20 text-amber-300', label: 'ADVERTENCIA' },
+  info:     { badge: 'bg-sky-500/20 text-sky-300',    label: 'INFO' },
+}
+
+const SEV_RANK = { critical: 0, warning: 1, info: 2 }
+
+function ordenarPorPrioridad(list) {
+  return [...list].sort((a, b) => {
+    const s = (SEV_RANK[a.severity] ?? 3) - (SEV_RANK[b.severity] ?? 3)
+    if (s !== 0) return s
+    return Math.abs(Number(b.impact) || 0) - Math.abs(Number(a.impact) || 0)
+  })
+}
+
+const fmtQ = (v) =>
+  new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    .format(Math.abs(Number(v) || 0))
+
+export default function PageInsights({ context = 'general', vertical = null, maxInsights = 4, title: customTitle }) {
+  const isVertical = !!vertical
+
+  // En modo vertical solo importa el histórico; el generador en tiempo real se
+  // pide únicamente en modo heredado.
+  const { data: insightsData, isLoading: isLoadingReal } = useInsights(isVertical ? 'none' : context)
+  const { data: historicoData, isLoading: isLoadingHist } = useInsightsHistorico({ limit: 100, days: 30 })
+
+  const historico = historicoData?.data?.insights || []
+  const hasRealInsights = !isVertical && insightsData?.insights?.length > 0
+
+  const base = isVertical
+    ? historico.filter(i => i.agentSource === `playbook:${vertical}`)
+    : (hasRealInsights ? insightsData.insights : historico)
+
+  const insights = ordenarPorPrioridad(base).slice(0, maxInsights)
+  const isLoading = isVertical ? isLoadingHist : (isLoadingReal && isLoadingHist)
+
   const titles = {
     tesoreria: 'Insights de Tesorería',
     contabilidad: 'Insights Contables',
     analisis: 'Insights de Análisis',
-    general: 'Análisis de IA'
+    general: 'Análisis de IA',
   }
-  
-  const title = customTitle || titles[context] || titles.general
-  
-  // Indicador de fuente de datos
-  const sourceLabel = hasRealInsights ? 'En tiempo real' : 'Histórico'
-  
-  // Colores de gradiente por contexto
-  const gradients = {
-    tesoreria: 'from-emerald-500 to-teal-600',
-    contabilidad: 'from-violet-500 to-purple-600',
-    analisis: 'from-cyan-500 to-blue-600',
-    general: 'from-primary-500 to-primary-600'
-  }
-  
-  const gradient = gradients[context] || gradients.general
-  
-  // Configuración de iconos por tipo
-  const typeConfig = {
-    gasto: {
-      icon: ArrowTrendingDownIcon,
-      color: 'text-rose-500',
-      bg: 'bg-rose-50',
-      border: 'border-rose-100'
-    },
-    ingreso: {
-      icon: ArrowTrendingUpIcon,
-      color: 'text-emerald-500',
-      bg: 'bg-emerald-50',
-      border: 'border-emerald-100'
-    },
-    alerta: {
-      icon: ExclamationTriangleIcon,
-      color: 'text-amber-500',
-      bg: 'bg-amber-50',
-      border: 'border-amber-100'
-    },
-    oportunidad: {
-      icon: LightBulbIcon,
-      color: 'text-violet-500',
-      bg: 'bg-violet-50',
-      border: 'border-violet-100'
-    }
-  }
-  
-  // Configuración de severidad
-  const severityConfig = {
-    info: { badge: 'bg-blue-100 text-blue-700' },
-    warning: { badge: 'bg-amber-100 text-amber-700' },
-    critical: { badge: 'bg-rose-100 text-rose-700' }
-  }
+  const title = customTitle || (isVertical ? `Insights de ${V_LABEL[vertical] || vertical}` : (titles[context] || titles.general))
 
-  // Manejar acción de insight y registrar en log
-  const handleInsightAction = async (insight) => {
-    try {
-      await endpoints.agents.createLog({
-        agente_nombre: 'Usuario',
-        agente_tipo: 'user_action',
-        categoria: 'accion_insight',
-        descripcion: `Usuario ejecutó acción sobre insight: "${insight.title}". Acción: ${insight.action || 'Ver detalle'}`,
-        detalles_json: JSON.stringify({
-          insight_id: insight.id,
-          insight_type: insight.type,
-          insight_severity: insight.severity,
-          insight_title: insight.title,
-          action_taken: insight.action || 'Ver detalle',
-          context: context,
-          timestamp: new Date().toISOString()
-        }),
-        resultado_status: 'exitoso'
-      })
-    } catch (error) {
-      // Silenciar error de logging para no interrumpir UX
-      console.warn('Error al registrar acción de insight:', error)
-    }
-  }
-  
+  // Skeleton delgado mientras carga.
   if (isLoading) {
     return (
-      <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 p-6">
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a1a38] via-[#0b1e42] to-[#0a1730] p-5">
         <div className="flex items-center gap-3 mb-4">
-          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center`}>
-            <SparklesIcon className="w-5 h-5 text-white animate-pulse" />
-          </div>
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <div className="w-9 h-9 rounded-xl bg-violet-500/30 animate-pulse" />
+          <div className="h-4 w-40 bg-white/10 rounded animate-pulse" />
         </div>
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />
-          ))}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {[1, 2].map(i => <div key={i} className="h-24 bg-white/5 rounded-xl animate-pulse" />)}
         </div>
       </div>
     )
   }
-  
-  // Siempre mostrar el panel, aunque esté vacío
+
+  // En modo vertical, sin insights => no mostrar nada.
+  if (isVertical && insights.length === 0) return null
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="rounded-2xl overflow-hidden shadow-lg border border-white/10 bg-gradient-to-br from-[#0a1a38] via-[#0b1e42] to-[#0a1730]">
       {/* Header distintivo */}
-      <div className="px-6 py-4 border-b border-slate-100 bg-white/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}>
-              <SparklesIcon className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-              <p className="text-xs text-slate-500">Análisis automatizado por IA</p>
-            </div>
+      <div className="px-5 py-3.5 flex items-center justify-between border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg">
+            <SparklesIcon className="w-5 h-5 text-white" />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
-              {insights.length} insight{insights.length !== 1 ? 's' : ''}
-            </span>
-            <span className="text-xs text-slate-400">
-              {sourceLabel}
-            </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] font-semibold text-white">{title}</h3>
+              <span className="text-[10px] font-bold tracking-wide text-violet-200 bg-violet-500/20 px-1.5 py-0.5 rounded">IA</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Análisis automatizado · {insights.length} detectado{insights.length !== 1 ? 's' : ''}
+            </p>
           </div>
         </div>
+        <span className="hidden sm:flex items-center gap-1 text-xs text-slate-300">
+          <BoltIcon className="w-3.5 h-3.5 text-amber-300" /> abaco AI
+        </span>
       </div>
-      
-      {/* Grid de insights - 2 columnas */}
+
+      {/* Grid de insights */}
       <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
         {insights.length === 0 ? (
-          <div className="col-span-2 p-6 text-center text-slate-400">
-            <p>No hay insights disponibles</p>
-            <p className="text-xs mt-1">Los insights se generan automáticamente al analizar tus datos</p>
+          <div className="col-span-2 p-6 text-center text-slate-400 text-sm">
+            No hay insights disponibles todavía.
           </div>
         ) : (
-          insights.map((insight, index) => {
-            const config = typeConfig[insight.type] || typeConfig.oportunidad
-            const severity = severityConfig[insight.severity] || severityConfig.info
-            const IconComponent = config.icon
-            
+          insights.map((ins, idx) => {
+            const cfg = TYPE_CFG[ins.type] || TYPE_CFG.oportunidad
+            const sev = SEV_CFG[ins.severity] || SEV_CFG.info
+            const Icon = cfg.icon
+            const imp = Number(ins.impact) || 0
             return (
-              <div 
-                key={insight.id || index} 
-                className="p-4 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all group"
-              >
+              <div key={ins.id || idx} className="rounded-xl bg-white/[0.06] border border-white/10 p-4 hover:bg-white/[0.09] transition-colors">
                 <div className="flex items-start gap-3">
-                  {/* Icono */}
-                  <div className={`flex-shrink-0 w-9 h-9 rounded-lg ${config.bg} ${config.border} border flex items-center justify-center`}>
-                    <IconComponent className={`w-4.5 h-4.5 ${config.color}`} />
+                  <div className={`flex-shrink-0 w-9 h-9 rounded-lg ${cfg.bg} flex items-center justify-center`}>
+                    <Icon className={`w-5 h-5 ${cfg.color}`} />
                   </div>
-                  
-                  {/* Contenido */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${severity.badge}`}>
-                        {insight.severity === 'critical' ? 'Crítico' : insight.severity === 'warning' ? 'Advertencia' : 'Info'}
-                      </span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sev.badge}`}>{sev.label}</span>
+                      <span className="text-[11px] text-slate-400">{cfg.label}</span>
                     </div>
-                    <h4 className="text-sm font-semibold text-slate-900 mb-1 leading-tight">
-                      {insight.title}
-                    </h4>
-                    <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                      {insight.description}
-                    </p>
-                    
-                    {/* Impacto si existe */}
-                    {insight.impact !== undefined && insight.impact !== 0 && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-xs text-slate-500">Impacto:</span>
-                        <span className={`text-xs font-bold ${insight.impact > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {insight.impact > 0 ? '+' : '-'}
-                          {new Intl.NumberFormat('es-GT', {
-                            style: 'currency',
-                            currency: insight.currency || 'GTQ',
-                            minimumFractionDigits: 0
-                          }).format(Math.abs(insight.impact))}
+                    <h4 className="text-sm font-semibold text-white leading-snug mb-1">{ins.title}</h4>
+                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{ins.description}</p>
+                    <div className="mt-2.5 flex items-center justify-between gap-2">
+                      {imp !== 0 ? (
+                        <span className={`text-sm font-bold ${imp > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {imp > 0 ? '+' : '-'}{fmtQ(imp)}
                         </span>
-                      </div>
-                    )}
-
-                    {/* Acción sugerida */}
-                    {insight.action && (
-                      <button
-                        onClick={() => handleInsightAction(insight)}
-                        className="mt-2 text-xs font-medium text-primary-600 hover:text-primary-700 px-2 py-1 rounded hover:bg-primary-50 transition-colors"
-                      >
-                        {insight.actionLabel || 'Ver acción'} →
-                      </button>
-                    )}
+                      ) : <span />}
+                      <Link to="/insights" className="flex items-center gap-1 text-xs font-medium text-slate-300 hover:text-white transition-colors shrink-0">
+                        Ver detalle <ArrowRightIcon className="w-3 h-3" />
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
