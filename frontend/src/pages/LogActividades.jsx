@@ -15,145 +15,27 @@ import {
   DocumentTextIcon,
   BookOpenIcon,
   ChartBarIcon,
-  CommandLineIcon
+  CommandLineIcon,
+  BanknotesIcon,
+  ArrowTrendingUpIcon,
+  ScaleIcon,
+  ShoppingCartIcon
 } from '@heroicons/react/24/outline'
 
 // NUEVO: 4 Agentes Especializados v2.0
 const agenteConfig = {
-  'caja': { 
-    nombre: 'Caja', 
-    color: 'text-amber-600',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    icon: WalletIcon,
-    desc: 'Proyección cash flow, runway, posición'
-  },
-  'analisis': { 
-    nombre: 'Análisis', 
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    icon: PresentationChartBarIcon,
-    desc: 'KPIs, rentabilidad, RFM, anomalías'
-  },
-  'cobranza': { 
-    nombre: 'Cobranza', 
-    color: 'text-violet-600',
-    bg: 'bg-violet-50',
-    border: 'border-violet-200',
-    icon: DocumentTextIcon,
-    desc: 'CxC antigüedad, DSO, CCC, cobro'
-  },
-  'contabilidad': { 
-    nombre: 'Contabilidad', 
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    icon: BookOpenIcon,
-    desc: 'Cierre mensual, fiscal, conciliación'
-  },
-  'orchestrator': { 
-    nombre: 'abaco Core', 
-    color: 'text-slate-600',
-    bg: 'bg-slate-50',
-    border: 'border-slate-200',
-    icon: CpuChipIcon,
-    desc: 'Orquestador y briefing diario'
-  },
+  cartera:  { nombre: 'Cartera',   color: 'text-sky-600',     bg: 'bg-sky-50',     border: 'border-sky-200',     icon: BanknotesIcon,       desc: 'Cobranza, aging y concentración de crédito' },
+  ventas:   { nombre: 'Ventas',    color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: ArrowTrendingUpIcon, desc: 'Tendencia, mix de producto y clientes' },
+  margenes: { nombre: 'Márgenes',  color: 'text-violet-600',  bg: 'bg-violet-50',  border: 'border-violet-200',  icon: ScaleIcon,           desc: 'Rentabilidad, repricing y productos que pierden' },
+  compras:  { nombre: 'Compras',   color: 'text-amber-600',   bg: 'bg-amber-50',   border: 'border-amber-200',   icon: ShoppingCartIcon,    desc: 'Gasto con proveedores y cuentas por pagar' },
+  orchestrator: { nombre: 'abaco Core', color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200', icon: CpuChipIcon, desc: 'Asistente SQL y acciones del usuario' },
 }
 
 const categoriaConfig = {
-  posicion_caja: { 
-    label: 'Caja', 
-    color: 'text-amber-600',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    icon: WalletIcon 
-  },
-  proyeccion_cashflow: { 
-    label: 'Cash Flow', 
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    icon: PresentationChartBarIcon 
-  },
-  kpis_diarios: { 
-    label: 'KPIs', 
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    icon: PresentationChartBarIcon 
-  },
-  analisis_semanal: { 
-    label: 'Análisis Sem', 
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    icon: PresentationChartBarIcon 
-  },
-  analisis_mensual: { 
-    label: 'Análisis Mes', 
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    icon: PresentationChartBarIcon 
-  },
-  aging_cartera: { 
-    label: 'Aging', 
-    color: 'text-violet-600',
-    bg: 'bg-violet-50',
-    border: 'border-violet-200',
-    icon: DocumentTextIcon 
-  },
-  metricas_cobranza: { 
-    label: 'Cobranza', 
-    color: 'text-violet-600',
-    bg: 'bg-violet-50',
-    border: 'border-violet-200',
-    icon: DocumentTextIcon 
-  },
-  importacion_transacciones: { 
-    label: 'Importar', 
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    icon: BookOpenIcon 
-  },
-  conciliacion_bancaria: { 
-    label: 'Conciliación', 
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    icon: BookOpenIcon 
-  },
-  cierre_mensual: { 
-    label: 'Cierre', 
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    icon: BookOpenIcon 
-  },
-  calculos_fiscales: { 
-    label: 'Fiscal', 
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    icon: BookOpenIcon 
-  },
-  error_sistema: { 
-    label: 'Error', 
-    color: 'text-rose-600',
-    bg: 'bg-rose-50',
-    border: 'border-rose-200',
-    icon: XCircleIcon 
-  },
-  briefing_diario: { 
-    label: 'Briefing', 
-    color: 'text-slate-600',
-    bg: 'bg-slate-50',
-    border: 'border-slate-200',
-    icon: CpuChipIcon 
-  }
+  analisis_diario: { label: 'Análisis diario', color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200', icon: PresentationChartBarIcon },
+  consulta:        { label: 'Consulta',        color: 'text-sky-600',    bg: 'bg-sky-50',    border: 'border-sky-200',    icon: CommandLineIcon },
+  accion_insight:  { label: 'Acción insight',  color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: CheckCircleIcon },
+  error_sistema:   { label: 'Error',           color: 'text-rose-600',   bg: 'bg-rose-50',   border: 'border-rose-200',   icon: XCircleIcon },
 }
 
 const statusConfig = {
@@ -324,10 +206,10 @@ export default function LogActividades() {
             <label className="block text-xs text-[var(--text-muted)] mb-1.5">Agente</label>
             <select value={filtroAgente} onChange={(e) => setFiltroAgente(e.target.value)} className="input">
               <option value="">Todos</option>
-              <option value="caja">💰 Caja</option>
-              <option value="analisis">📊 Análisis</option>
-              <option value="cobranza">📋 Cobranza</option>
-              <option value="contabilidad">📅 Contabilidad</option>
+              <option value="cartera">💵 Cartera</option>
+              <option value="ventas">📈 Ventas</option>
+              <option value="margenes">⚖️ Márgenes</option>
+              <option value="compras">🛒 Compras</option>
               <option value="orchestrator">🤖 abaco Core</option>
             </select>
           </div>
@@ -336,16 +218,9 @@ export default function LogActividades() {
             <label className="block text-xs text-[var(--text-muted)] mb-1.5">Categoría</label>
             <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} className="input">
               <option value="">Todas</option>
-              <option value="posicion_caja">💰 Posición Caja</option>
-              <option value="proyeccion_cashflow">📊 Proyección Cash Flow</option>
-              <option value="kpis_diarios">📈 KPIs Diarios</option>
-              <option value="analisis_semanal">📉 Análisis Semanal</option>
-              <option value="aging_cartera">📋 Antigüedad Cartera</option>
-              <option value="metricas_cobranza">📊 Métricas Cobranza</option>
-              <option value="conciliacion_bancaria">🏦 Conciliación</option>
-              <option value="cierre_mensual">📅 Cierre Mensual</option>
-              <option value="calculos_fiscales">📋 Cálculos Fiscales</option>
-              <option value="briefing_diario">🌅 Briefing Diario</option>
+              <option value="analisis_diario">✨ Análisis diario</option>
+              <option value="consulta">💬 Consulta</option>
+              <option value="accion_insight">✅ Acción sobre insight</option>
               <option value="error_sistema">❌ Errores</option>
             </select>
           </div>

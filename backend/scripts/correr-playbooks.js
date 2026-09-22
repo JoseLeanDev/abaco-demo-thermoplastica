@@ -123,6 +123,37 @@ async function guardarInsights(playbook, insights, fecha) {
   }
 }
 
+/** Registra la corrida en agentes_logs para dar visibilidad en la página de Agentes IA. */
+async function registrarLog(playbook, insights, meta, status, errorMsg) {
+  const impactoTotal = insights.reduce((s, i) => s + Math.abs(Number(i.impacto_gtq) || 0), 0);
+  const top = insights[0];
+  const descripcion = status === 'error'
+    ? `Falló el análisis de ${playbook.nombre}: ${errorMsg || 'error desconocido'}`
+    : insights.length
+      ? `Análisis diario: ${insights.length} insights detectados${top ? `. Principal: ${top.titulo}` : ''}`
+      : `Análisis diario de ${playbook.nombre}: sin hallazgos nuevos`;
+  const detalles = JSON.stringify({
+    vertical: playbook.slug,
+    num_insights: insights.length,
+    insights: insights.map(i => ({ titulo: i.titulo, severidad: i.severidad, tipo: i.tipo, impacto_gtq: i.impacto_gtq })),
+    meta: meta || null,
+  });
+  try {
+    await admin.query(
+      `INSERT INTO agentes_logs
+         (empresa_id, agente_nombre, agente_tipo, agente_version, categoria, descripcion,
+          detalles_json, impacto_valor, impacto_moneda, resultado_status, duracion_ms)
+       VALUES ($1,$2,$3,$4,'analisis_diario',$5,$6,$7,'GTQ',$8,$9)`,
+      [
+        EMPRESA_ID, playbook.nombre, playbook.slug, AGENT_VERSION, descripcion,
+        detalles, impactoTotal, status, meta?.ms || null
+      ]
+    );
+  } catch (e) {
+    console.error(`  · no se pudo registrar el log de ${playbook.slug}:`, e.message);
+  }
+}
+
 function imprimirInsights(playbook, insights) {
   log(`  → ${insights.length} insights de ${playbook.nombre}:`);
   insights.forEach((ins, i) => {
@@ -163,6 +194,7 @@ async function main() {
       if (!insights.length) {
         fallidos++;
         log(`  ⚠ Sin insights (${meta.incidencia || 'el modelo no entregó ninguno'}). No se toca lo anterior.`);
+        if (!DRY_RUN) await registrarLog(pb, [], meta, 'advertencia');
         continue;
       }
 
@@ -171,12 +203,14 @@ async function main() {
 
       if (!DRY_RUN) {
         await guardarInsights(pb, insights, fecha);
+        await registrarLog(pb, insights, meta, 'exitoso');
         log('  ✔ Guardado en insights_historico.');
       }
       totalInsights += insights.length;
     } catch (e) {
       fallidos++;
       console.error(`  ✖ Error en ${pb.slug}:`, e.message);
+      if (!DRY_RUN) await registrarLog(pb, [], null, 'error', e.message);
     }
   }
 
