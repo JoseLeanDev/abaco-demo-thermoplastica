@@ -104,6 +104,41 @@ services:
         value: America/Guatemala
     autoDeploy: true
 
+  # Cron Job - Analista diario (playbooks por vertical)
+  # Corre a las 12:00 UTC = 06:00 America/Guatemala. El horario del cron en
+  # Render se interpreta en UTC (TZ no lo cambia).
+  - type: cron
+    name: abaco-analista-diario
+    runtime: node
+    plan: starter
+    schedule: "0 12 * * *"
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node scripts/correr-playbooks.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: abaco-demo-thermoplastica-db
+          property: connectionString
+      # Rol de solo lectura agente_ia (schema analitica). Se define manualmente
+      # en el dashboard: es el mismo valor que usa el web service.
+      - key: DATABASE_URL_READONLY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL_AGENTE
+        value: anthropic/claude-sonnet-4.6
+      - key: APP_URL
+        value: https://abaco-demo-thermoplastica.onrender.com
+      - key: DEFAULT_EMPRESA_ID
+        value: 1
+      - key: MONEDA_DEFAULT
+        value: GTQ
+      - key: TZ
+        value: America/Guatemala
+    autoDeploy: true
+
 databases:
   - name: abaco-demo-thermoplastica-db
     plan: basic-1gb
