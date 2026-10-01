@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
-const config = require('../config/financiera');
+const proyecciones = require('../services/proyecciones');
 
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
@@ -467,60 +467,16 @@ router.get('/cxp/detalle', async (req, res) => {
 });
 
 // GET /api/tesoreria/proyeccion
+// Flujo de caja operativo proyectado sobre datos reales (CxC, CxP, ventas y
+// compras). Es el mismo cálculo que /api/analisis/flujo-caja.
 router.get('/proyeccion', async (req, res) => {
   try {
-    const semanas = parseInt(req.query.semanas) || config.proyecciones.semanas_proyeccion;
-    const proyeccion = [];
-    
-    // Datos históricos para proyección
-    const promedioEntrada = config.proyecciones.promedio_entrada_default;
-    const promedioSalida = config.proyecciones.promedio_salida_default;
-    let saldoAcumulado = config.proyecciones.saldo_inicial_default;
-
-    for (let i = 1; i <= semanas; i++) {
-      const fecha = new Date();
-      fecha.setDate(fecha.getDate() + (i * 7));
-      
-      const variacion = (Math.random() - 0.5) * 0.3; // ±15% variación
-      const entradas = Math.round(promedioEntrada * (1 + variacion));
-      const salidas = Math.round(promedioSalida * (1 + variacion * 0.5));
-      const neto = entradas - salidas;
-      saldoAcumulado += neto;
-
-      proyeccion.push({
-        semana: i,
-        fecha_inicio: fecha.toISOString().split('T')[0],
-        entradas,
-        salidas,
-        neto,
-        saldo_acumulado: saldoAcumulado,
-        certeza: i <= 4 ? 'alta' : i <= 8 ? 'media' : 'baja',
-        alerta: saldoAcumulado < config.proyecciones.umbral_saldo_minimo ? 'Saldo crítico proyectado' : null
-      });
-    }
-
-    const saldoMinimo = Math.min(...proyeccion.map(p => p.saldo_acumulado));
-    const saldoMaximo = Math.max(...proyeccion.map(p => p.saldo_acumulado));
-    const semanaCritica = proyeccion.find(p => p.saldo_acumulado === saldoMinimo)?.semana;
-
-    res.json({
-      status: 'success',
-      timestamp: new Date().toISOString(),
-      data: {
-        proyeccion,
-        resumen: {
-          saldo_minimo_proyectado: saldoMinimo,
-          saldo_maximo_proyectado: saldoMaximo,
-          semana_critica: semanaCritica,
-          riesgo_quiebra_tecnica: saldoMinimo < config.proyecciones.umbral_riesgo_quiebra
-        }
-      },
-      ui_components: {
-        chart_type: 'cashflow_waterfall'
-      }
-    });
+    const semanas = Math.min(Math.max(parseInt(req.query.semanas) || 13, 1), 26);
+    const data = await proyecciones.proyectarFlujo({ semanas });
+    res.json({ status: 'success', timestamp: new Date().toISOString(), data });
   } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
+    console.error('[GET /tesoreria/proyeccion] Error:', error);
+    res.status(500).json({ status: 'error', message: 'Error al proyectar el flujo de caja' });
   }
 });
 

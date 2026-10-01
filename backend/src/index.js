@@ -81,7 +81,6 @@ app.use('/api/ventas',                   authenticate, require('./routes/ventas'
 app.use('/api/contabilidad',             authenticate, require('./routes/contabilidad'));
 app.use('/api/sat',                      authenticate, require('./routes/sat'));
 app.use('/api/analisis',                 authenticate, require('./routes/analisis'));
-app.use('/api/analisis/working-capital', authenticate, require('./routes/analisis-working-capital'));
 app.use('/api/alertas',                  authenticate, require('./routes/alertas'));
 app.use('/api/dashboard',                authenticate, require('./routes/dashboard'));
 app.use('/api/agents',                   authenticate, require('./routes/agents'));

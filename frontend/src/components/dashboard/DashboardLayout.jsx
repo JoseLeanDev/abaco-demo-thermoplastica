@@ -31,7 +31,7 @@ const navigation = [
   { name: 'Inventario', href: '/inventario', icon: CubeIcon },
   { name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon },
   // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
-  { name: 'Análisis', href: '/analisis', icon: ChartBarIcon },
+  { name: 'Salud financiera', href: '/analisis', icon: ChartBarIcon },
   { name: 'Márgenes', href: '/margenes', icon: TagIcon },
   // { name: 'SAT', href: '/sat', icon: DocumentCheckIcon },
   { name: 'Asistente IA', href: '/asistente', icon: ChatBubbleLeftRightIcon },

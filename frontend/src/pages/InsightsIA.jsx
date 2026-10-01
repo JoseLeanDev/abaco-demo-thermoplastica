@@ -19,6 +19,7 @@ const VERTICALES = [
   { slug: 'ventas',   titulo: 'Ventas y crecimiento',    desc: 'Tendencia, mix de producto y clientes' },
   { slug: 'margenes', titulo: 'Márgenes y rentabilidad', desc: 'Margen bruto, repricing y productos que pierden' },
   { slug: 'compras',  titulo: 'Compras y pagos',         desc: 'Gasto con proveedores y cuentas por pagar' },
+  { slug: 'salud',    titulo: 'Salud financiera',        desc: 'Ciclo de caja, capital inmovilizado y capital de trabajo' },
 ]
 
 function slugDeSource(agentSource) {

@@ -77,14 +77,12 @@ export const endpoints = {
     estadoCierre: (cierreId) => cfoApi.get('/contabilidad/cierre/estado', { params: { cierre_id: cierreId } })
   },
   analisis: {
-    rentabilidad: (dimension) => cfoApi.get('/analisis/rentabilidad', { params: { dimension } }),
-    presupuesto: (periodo) => cfoApi.get('/analisis/presupuesto', { params: { periodo } }),
-    ratios: () => cfoApi.get('/analisis/ratios'),
-    tendencias: (metrica) => cfoApi.get('/analisis/tendencias', { params: { metrica } }),
     insights: (context = 'all') => cfoApi.get('/analisis/insights', { params: { context } }),
     insightsHistorico: (params) => cfoApi.get('/analisis/insights/historico', { params }),
     dismissInsight: (id) => cfoApi.patch(`/analisis/insights/${id}/dismiss`, {}),
-    workingCapital: (params = {}) => cfoApi.get('/analisis/working-capital', { params })
+    salud: () => cfoApi.get('/analisis/salud'),
+    proyeccionVentas: (meses = 6) => cfoApi.get('/analisis/proyeccion-ventas', { params: { meses } }),
+    flujoCaja: (semanas = 13) => cfoApi.get('/analisis/flujo-caja', { params: { semanas } })
   },
   sat: {
     calendario: () => cfoApi.get('/sat/calendario'),

@@ -60,16 +60,22 @@ export const useAgentesLogs = (options = {}) => {
   )
 }
 
-export const useWorkingCapital = (options = {}) => {
-  const { empresaId = 1, meses = 6 } = options
-  return useQuery(
-    ['working-capital', empresaId, meses],
-    () => endpoints.analisis.workingCapital({ empresa_id: empresaId, meses }),
-    {
-      refetchInterval: 5 * 60 * 1000, // Refetch cada 5 minutos
-      staleTime: 2 * 60 * 1000,
-    }
-  )
+export const useSaludFinanciera = () => {
+  return useQuery('salud-financiera', endpoints.analisis.salud, {
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
+export const useProyeccionVentas = (meses = 6) => {
+  return useQuery(['proyeccion-ventas', meses], () => endpoints.analisis.proyeccionVentas(meses), {
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
+export const useFlujoCaja = (semanas = 13) => {
+  return useQuery(['flujo-caja', semanas], () => endpoints.analisis.flujoCaja(semanas), {
+    staleTime: 10 * 60 * 1000,
+  })
 }
 
 export const useMargenes = () => {

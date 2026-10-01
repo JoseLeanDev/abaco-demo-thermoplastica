@@ -15,7 +15,7 @@ import { useInsightsHistorico } from '../../hooks/useCfoData'
 
 /**
  * InsightsCarousel — Carrusel horizontal con TODOS los insights del analista
- * diario (los 4 playbooks). Mismo lenguaje visual que el banner por sección
+ * diario (un playbook por vertical). Mismo lenguaje visual que el banner por sección
  * (PageInsights), pero en una sola fila con scroll para no ocupar tanto espacio.
  * Cada tarjeta lleva su etiqueta de vertical (qué agente la generó).
  */
@@ -25,8 +25,9 @@ const VERT = {
   ventas:   { label: 'Ventas',   dot: 'bg-emerald-400', text: 'text-emerald-300' },
   margenes: { label: 'Márgenes', dot: 'bg-violet-400',  text: 'text-violet-300' },
   compras:  { label: 'Compras',  dot: 'bg-amber-400',   text: 'text-amber-300' },
+  salud:    { label: 'Salud financiera', dot: 'bg-rose-400', text: 'text-rose-300' },
 }
-const ORDEN = ['cartera', 'ventas', 'margenes', 'compras']
+const ORDEN = ['cartera', 'ventas', 'margenes', 'compras', 'salud']
 
 const TYPE_CFG = {
   gasto:       { icon: ArrowTrendingDownIcon, color: 'text-rose-300',    bg: 'bg-rose-500/15' },

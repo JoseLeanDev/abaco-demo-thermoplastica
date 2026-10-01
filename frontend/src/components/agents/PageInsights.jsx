@@ -15,7 +15,7 @@ import { useInsights, useInsightsHistorico } from '../../hooks/useCfoData'
  * sección. Diseño oscuro para diferenciarse del resto de la página.
  *
  * Dos modos:
- *  - Con `vertical` (cartera|ventas|margenes|compras): muestra los insights del
+ *  - Con `vertical` (cartera|ventas|margenes|compras|salud): muestra los insights del
  *    ANALISTA DIARIO (cron por playbooks) de esa vertical, leídos del histórico
  *    (agent_source = 'playbook:<vertical>'). Es el modo que se usa por sección.
  *  - Sin `vertical`: comportamiento heredado (generador en tiempo real por
@@ -24,7 +24,7 @@ import { useInsights, useInsightsHistorico } from '../../hooks/useCfoData'
  * Si en modo vertical no hay insights aún, no renderiza nada (no ensucia la página).
  */
 
-const V_LABEL = { cartera: 'Cartera', ventas: 'Ventas', margenes: 'Márgenes', compras: 'Compras' }
+const V_LABEL = { cartera: 'Cartera', ventas: 'Ventas', margenes: 'Márgenes', compras: 'Compras', salud: 'Salud financiera' }
 
 const TYPE_CFG = {
   gasto:       { icon: ArrowTrendingDownIcon, color: 'text-rose-300',    bg: 'bg-rose-500/15',    label: 'Gasto' },

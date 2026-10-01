@@ -33,16 +33,6 @@ module.exports = {
     monto_proximo_critico: parseFloat(process.env.CXP_MONTO_CRITICO) || 100000
   },
   
-  // Proyecciones financieras (valores demo/fallback)
-  proyecciones: {
-    promedio_entrada_default: parseFloat(process.env.PROYECCION_ENTRADA_DEFAULT) || 420000,
-    promedio_salida_default: parseFloat(process.env.PROYECCION_SALIDA_DEFAULT) || 380000,
-    saldo_inicial_default: parseFloat(process.env.PROYECCION_SALDO_INICIAL) || 1900000,
-    semanas_proyeccion: parseInt(process.env.PROYECCION_SEMANAS) || 12,
-    umbral_saldo_minimo: parseFloat(process.env.PROYECCION_UMBRAL_MINIMO) || 1000000,
-    umbral_riesgo_quiebra: parseFloat(process.env.PROYECCION_UMBRAL_QUIEBRA) || 500000
-  },
-  
   // Working capital
   workingCapital: {
     efectivo_retenido_factor: parseFloat(process.env.WC_EFECTIVO_RETENIDO_FACTOR) || 100000,
