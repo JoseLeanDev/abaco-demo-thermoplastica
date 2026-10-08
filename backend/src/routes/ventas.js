@@ -9,7 +9,10 @@ const { parsePeriodo: parseWindow } = require('../services/periodo');
 // GET /api/ventas   Resumen: KPIs + serie mensual
 router.get('/', async (req, res) => {
   try {
-    const { desde, hasta } = parseWindow(req);
+    const P = parseWindow(req);
+    const { desde, hasta } = P;
+    const V = ventasFiltradas(req, P);
+    const VP = ventasFiltradas(req, P, true);
 
     const kpis = await db.getAsync(`
       SELECT
@@ -23,10 +26,8 @@ router.get('/', async (req, res) => {
         COUNT(DISTINCT cliente_id)                                                 AS clientes,
         COUNT(DISTINCT vendedor_id) FILTER (WHERE vendedor_id IS NOT NULL)         AS vendedores,
         COUNT(*)                                                                   AS lineas
-      FROM thermoplastica.fact_ventas_linea
-      WHERE fecha_emision BETWEEN ? AND ?
-        AND tipo_doc = 'FACT'
-    `, [desde, hasta]);
+      FROM ${V.from} fv
+    `, V.params);
 
     const mensual = await db.allAsync(`
       SELECT TO_CHAR(fecha_emision, 'YYYY-MM')     AS periodo,
@@ -34,11 +35,18 @@ router.get('/', async (req, res) => {
              ${M.costo()} AS costo,
              ${M.margen()}         AS margen,
              COUNT(DISTINCT fact_num)               AS facturas
-      FROM thermoplastica.fact_ventas_linea
-      WHERE fecha_emision BETWEEN ? AND ?
-        AND tipo_doc = 'FACT'
+      FROM ${V.from} fv
       GROUP BY 1 ORDER BY 1
-    `, [desde, hasta]);
+    `, V.params);
+
+    // Mismo período del año anterior, para comparar
+    const prev = await db.getAsync(`
+      SELECT COALESCE(SUM(total_sin_iva), 0) AS ventas,
+             COUNT(DISTINCT fact_num)        AS facturas,
+             COUNT(DISTINCT cliente_id)      AS clientes,
+             ${M.pct()}                      AS margen_pct
+      FROM ${VP.from} fv
+    `, VP.params);
 
     const ventas = parseFloat(kpis.ventas_sin_iva) || 0;
     const costo  = parseFloat(kpis.costo_total)   || 0;
@@ -50,8 +58,13 @@ router.get('/', async (req, res) => {
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
-        ventana: { desde, hasta },
+        ventana: P.ventana(),
         ventas_sin_iva: ventas,
+        ventas_prev: parseFloat(prev.ventas) || 0,
+        variacion_pct: parseFloat(prev.ventas) > 0 ? Math.round((ventas - parseFloat(prev.ventas)) / parseFloat(prev.ventas) * 1000) / 10 : null,
+        facturas_prev: parseInt(prev.facturas) || 0,
+        clientes_prev: parseInt(prev.clientes) || 0,
+        margen_pct_prev: prev.margen_pct === null ? null : Math.round(parseFloat(prev.margen_pct) * 10) / 10,
         ventas_con_iva: parseFloat(kpis.ventas_con_iva) || 0,
         costo_total: costo,
         margen_bruto: margen,
@@ -84,8 +97,10 @@ router.get('/', async (req, res) => {
 // GET /api/ventas/articulos   Top artículos por venta
 router.get('/articulos', async (req, res) => {
   try {
-    const { desde, hasta } = parseWindow(req);
+    const P = parseWindow(req);
+    const { desde, hasta } = P;
     const limit = Math.min(parseInt(req.query.limit) || 15, 100);
+    const V = ventasFiltradas(req, P);
 
     const rows = await db.allAsync(`
       SELECT
@@ -101,13 +116,12 @@ router.get('/articulos', async (req, res) => {
              THEN ROUND(${M.pct('f')}::numeric, 1)
              ELSE NULL END                     AS margen_pct,
         ROUND(${M.pctSinCosto('f')}::numeric, 1)  AS pct_sin_costo
-      FROM thermoplastica.fact_ventas_linea f
+      FROM ${V.from} f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
-      WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
       GROUP BY a.codigo_articulo, a.descripcion, a.linea, a.sublinea
       ORDER BY ventas DESC
       LIMIT ${limit}
-    `, [desde, hasta]);
+    `, V.params);
 
     res.json({
       status: 'success',
@@ -266,6 +280,7 @@ router.get('/detalle', async (req, res) => {
       where.push(`v.nombre = $${params.length}`);
     }
 
+    where.push(...filtrosProducto(req, params));
     const whereSql = where.join(' AND ');
 
     const rows = await db.allAsync(`
@@ -357,7 +372,8 @@ const DIMS = {
   subcategoria: { expr: limpio('a.linea', 'Sin subcategoría'), label: null },
   sublinea:     { expr: limpio('a.sublinea', 'Sin sublínea'),  label: null },
   articulo:     { expr: 'a.codigo_articulo',                   label: 'MAX(a.descripcion)', extra: 'MAX(a.marca)' },
-  cliente:      { expr: 'c.codigo_cliente',                    label: 'MAX(c.nombre)',      extra: 'MAX(c.forma_pago)' },
+  // El ERP antepone el código al nombre ("322253-COLGATE..."); se quita para mostrar
+  cliente:      { expr: 'c.codigo_cliente',                    label: `MAX(REGEXP_REPLACE(c.nombre, '^[A-Za-z]*[0-9][0-9A-Za-z]*-', ''))`, extra: 'MAX(c.forma_pago)' },
   vendedor:     { expr: limpio('v.nombre', 'Sin vendedor'),    label: null,                 extra: 'MAX(v.codigo_vendedor)' },
   sucursal:     { expr: limpio('s.nombre', 'Sin sucursal'),    label: null },
   tipo_cliente: { expr: limpio(`REGEXP_REPLACE(f.tipo_cliente, '^\\s*\\d+\\s*-\\s*', '')`, 'Sin tipo'), label: null },
@@ -381,6 +397,32 @@ function filtrosDesglose(req, params) {
     where.push(`${d.expr} = $${params.length}`);
   }
   return where;
+}
+
+// Solo los filtros de producto (para endpoints con sus propios filtros de cliente/vendedor)
+const DIMS_PRODUCTO = ['categoria', 'subcategoria', 'sublinea'];
+function filtrosProducto(req, params) {
+  const where = [];
+  for (const k of DIMS_PRODUCTO) {
+    const val = req.query[k];
+    if (val === undefined || val === '') continue;
+    params.push(String(val));
+    where.push(`${DIMS[k].expr} = $${params.length}`);
+  }
+  return where;
+}
+
+// Líneas de venta del período con el filtro de producto aplicado, como subconsulta
+// con las mismas columnas de fact_ventas_linea (para no tocar las consultas viejas).
+function ventasFiltradas(req, P, anterior = false) {
+  const params = [];
+  const w = filtrosProducto(req, params);
+  return {
+    params,
+    from: `(SELECT f.* ${JOINS}
+            WHERE f.tipo_doc = 'FACT' AND f.fecha_emision BETWEEN ${anterior ? P.prevD : P.D} AND ${anterior ? P.prevH : P.H}
+            ${w.length ? 'AND ' + w.join(' AND ') : ''})`,
+  };
 }
 
 const n = (x) => parseFloat(x) || 0;

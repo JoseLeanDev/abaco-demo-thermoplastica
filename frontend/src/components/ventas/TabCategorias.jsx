@@ -2,35 +2,34 @@ import { useMemo, useState } from 'react'
 import { useQuery } from 'react-query'
 import { endpoints } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
+import { NIVELES_PRODUCTO } from './FiltroProducto'
 import {
   ArrowDownTrayIcon,
   ArrowTrendingDownIcon,
   ChartBarIcon,
   ChevronRightIcon,
-  ChevronUpDownIcon,
+  InformationCircleIcon,
+  LightBulbIcon,
   MagnifyingGlassIcon,
   Squares2X2Icon,
   UserGroupIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline'
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell, ReferenceLine,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell, LabelList,
 } from 'recharts'
 
 // -------------------------------------------------------------------
-// Ventas por categoría con drill-down:
-//   Categoría (marca ERP) → Subcategoría (línea) → Sublínea → Artículo
-// Cada nivel muestra el período vs el período de comparación (mismo rango
-// del año anterior) y, para la selección actual, qué clientes y vendedores
-// la explican.
+// Ventas por categoría. Responde, en orden:
+//   1. ¿Cuánto se vendió y cómo va vs el año anterior?  (frase de resumen)
+//   2. ¿Qué se vende?                                    (tabla, clic = bajar de nivel)
+//   3. ¿Por qué cambió?                                  (puente de variación)
+//   4. ¿Quién lo compra y quién lo vende?                (rankings)
+// El nivel que se muestra depende del filtro de producto de la página:
+// sin filtro → categorías; con categoría → sus subcategorías; ... → artículos.
 // -------------------------------------------------------------------
 
-const NIVELES = [
-  { dim: 'categoria',    singular: 'Categoría',    plural: 'Categorías' },
-  { dim: 'subcategoria', singular: 'Subcategoría', plural: 'Subcategorías' },
-  { dim: 'sublinea',     singular: 'Sublínea',     plural: 'Sublíneas' },
-  { dim: 'articulo',     singular: 'Artículo',     plural: 'Artículos' },
-]
+const NIVELES = [...NIVELES_PRODUCTO, { dim: 'articulo', singular: 'Artículo', plural: 'Artículos' }]
 
 const COLORS = ['#001639', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#a855f7', '#64748b', '#0ea5e9']
 const OTROS_COLOR = '#cbd5e1'
@@ -38,10 +37,13 @@ const OTROS_COLOR = '#cbd5e1'
 const fmtQ = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtM = (n) => {
   const v = Number(n) || 0
-  if (Math.abs(v) >= 1e6) return `Q${(v / 1e6).toFixed(1)}M`
-  if (Math.abs(v) >= 1e3) return `Q${Math.round(v / 1e3)}k`
-  return fmtQ(v)
+  const s = v < 0 ? '−' : ''
+  const a = Math.abs(v)
+  if (a >= 1e6) return `${s}Q${(a / 1e6).toFixed(1)}M`
+  if (a >= 1e3) return `${s}Q${Math.round(a / 1e3)}k`
+  return `${s}Q${Math.round(a)}`
 }
+const fmtSigno = (n) => `${n >= 0 ? '+' : ''}${fmtM(n)}`
 const fmtInt = (n) => Number(n || 0).toLocaleString('es-GT', { maximumFractionDigits: 0 })
 const fmtPeriod = (p) => {
   if (!p) return ''
@@ -64,6 +66,31 @@ function Variacion({ pct, nuevo, className = '' }) {
   return <span className={`tabular-nums font-semibold ${tone} ${className}`}>{pct > 0 ? '+' : ''}{pct.toFixed(1)}%</span>
 }
 
+// Encabezado con explicación al pasar el mouse
+function Ayuda({ texto }) {
+  return (
+    <span className="inline-flex align-middle ml-0.5 cursor-help" title={texto}>
+      <InformationCircleIcon className="w-3.5 h-3.5 opacity-60" />
+    </span>
+  )
+}
+
+function Seccion({ icon: Icon, titulo, subtitulo, children, accion }) {
+  return (
+    <div className="card">
+      <div className="section-header flex-wrap gap-2">
+        <Icon className="w-5 h-5 text-[var(--text-muted)]" />
+        <div className="min-w-0">
+          <h2 className="font-semibold">{titulo}</h2>
+          {subtitulo && <p className="text-xs text-[var(--text-muted)] font-normal">{subtitulo}</p>}
+        </div>
+        {accion && <div className="ml-auto">{accion}</div>}
+      </div>
+      <div className="p-5 pt-0">{children}</div>
+    </div>
+  )
+}
+
 function exportarCSV(nombreArchivo, columnas, filas) {
   const esc = (v) => {
     const s = v === null || v === undefined ? '' : String(v)
@@ -78,17 +105,68 @@ function exportarCSV(nombreArchivo, columnas, filas) {
   URL.revokeObjectURL(url)
 }
 
-export default function TabCategorias() {
-  const { desde, hasta, etiquetaCorta } = usePeriodo()
-  // path = selección acumulada [{ dim, clave, nombre }]
-  const [path, setPath] = useState([])
+// Frase que resume la selección: cuánto, vs año anterior, por qué y qué destaca
+function fraseResumen({ titulo, d, nivel }) {
+  if (!d.total && !d.total_prev) return null
+  const p = d.puente || {}
+  const sentencias = [
+    <span key="s1">
+      <strong>{titulo}</strong> vendió <strong>{fmtM(d.total)}</strong> en el período
+      {d.total_prev > 0 && <>, <Variacion pct={d.variacion_pct} /> vs {fmtM(d.total_prev)} del mismo período del año anterior</>}.
+    </span>,
+  ]
+
+  if (d.total_prev > 0) {
+    const efectos = [
+      { txt: 'cambios de precio', v: p.precio },
+      { txt: 'la cantidad vendida', v: p.volumen },
+      { txt: 'productos nuevos', v: p.nuevos },
+      { txt: 'productos que ya no se venden', v: p.perdidos },
+    ].filter(e => Math.abs(e.v || 0) >= 1)
+    const sube = efectos.filter(e => e.v > 0).sort((a, b) => b.v - a.v)
+    const baja = efectos.filter(e => e.v < 0).sort((a, b) => a.v - b.v)
+    const lista = (arr) => arr.slice(0, 2).map(e => `${e.txt} (${fmtSigno(e.v)})`).join(' y ')
+    if (sube.length || baja.length) {
+      sentencias.push(
+        <span key="s2">
+          {' '}{sube.length > 0 && <>Sumaron {lista(sube)}</>}
+          {sube.length > 0 && baja.length > 0 && '; '}
+          {baja.length > 0 && <>{sube.length ? 'restaron' : 'Restaron'} {lista(baja)}</>}.
+        </span>
+      )
+    }
+  }
+
+  const conBase = (d.items || []).filter(i => i.ventas_prev > 0 && i.ventas > 0)
+  const mejor = [...conBase].sort((a, b) => b.variacion - a.variacion)[0]
+  const peor = [...conBase].sort((a, b) => a.variacion - b.variacion)[0]
+  if (mejor && mejor.variacion > 0 && conBase.length > 1) {
+    const art = nivel.dim === 'articulo' ? 'El' : 'La'
+    sentencias.push(
+      <span key="s3">
+        {' '}{art} {nivel.singular.toLowerCase()} que más creció fue <strong>{mejor.nombre}</strong> ({fmtSigno(mejor.variacion)})
+        {peor && peor.variacion < 0 && <> y {art.toLowerCase()} que más cayó, <strong>{peor.nombre}</strong> ({fmtSigno(peor.variacion)})</>}.
+      </span>
+    )
+  }
+  return sentencias
+}
+
+export default function TabCategorias({ filtro, onFiltro }) {
+  const { desde, hasta } = usePeriodo()
   const [orden, setOrden] = useState({ col: 'ventas', dir: 'desc' })
   const [busqueda, setBusqueda] = useState('')
+  const [masColumnas, setMasColumnas] = useState(false)
   const [verPerdidos, setVerPerdidos] = useState(false)
 
-  const nivel = NIVELES[Math.min(path.length, NIVELES.length - 1)]
-  const esHoja = path.length >= NIVELES.length - 1
-  const filtros = useMemo(() => Object.fromEntries(path.map(p => [p.dim, p.clave])), [path])
+  // Nivel a mostrar = primer nivel del filtro que está vacío
+  const idx = NIVELES_PRODUCTO.findIndex(n => !filtro[n.dim])
+  const nivel = NIVELES[idx === -1 ? NIVELES.length - 1 : idx]
+  const siguiente = NIVELES[NIVELES.indexOf(nivel) + 1]
+  const esHoja = nivel.dim === 'articulo'
+  const filtros = useMemo(() => Object.fromEntries(Object.entries(filtro).filter(([, v]) => v)), [filtro])
+  const seleccion = NIVELES_PRODUCTO.filter(n => filtro[n.dim]).map(n => filtro[n.dim])
+  const titulo = seleccion.length ? seleccion[seleccion.length - 1] : 'La empresa'
   const params = { desde, hasta, ...filtros }
   const qKey = [desde, hasta, JSON.stringify(filtros)]
 
@@ -113,15 +191,13 @@ export default function TabCategorias() {
     { staleTime: 60 * 1000 }
   )
 
-  // Solo se usan datos del nivel actual: con datos de otro nivel, un clic metería
-  // como filtro un valor que no corresponde (p. ej. una subcategoría como sublínea).
+  // Solo datos del nivel actual: con datos de otro nivel, un clic metería como
+  // filtro un valor que no corresponde (p. ej. una subcategoría como sublínea).
   const d = (dRes?.data?.dim === nivel.dim && dRes.data) || {}
-  const items = d.items || []
   const serie = sRes?.data
-  const clientes = cRes?.data
-  const vendedores = vRes?.data
 
   const filas = useMemo(() => {
+    const items = d.items || []
     const q = busqueda.trim().toLowerCase()
     const f = q ? items.filter(i => `${i.nombre} ${i.clave}`.toLowerCase().includes(q)) : items
     const { col, dir } = orden
@@ -131,282 +207,258 @@ export default function TabCategorias() {
       const c = typeof va === 'string' ? va.localeCompare(vb) : va - vb
       return dir === 'asc' ? c : -c
     })
-  }, [items, busqueda, orden])
+  }, [d, busqueda, orden])
 
-  // Resumen de la selección actual
-  const margenSel = useMemo(() => {
-    // margen % ponderado por las ventas con costo de cada fila (aprox. a partir de margen Q)
-    const conMargen = items.filter(i => i.margen !== null)
-    const v = conMargen.reduce((s, i) => s + i.ventas, 0)
-    const m = conMargen.reduce((s, i) => s + i.margen, 0)
-    return v > 0 ? (m / v) * 100 : null
-  }, [items])
-
-  const comparativo = useMemo(() => items.slice(0, 12).map(i => ({
-    nombre: i.nombre.length > 28 ? i.nombre.slice(0, 27) + '…' : i.nombre,
-    actual: i.ventas,
-    anterior: i.ventas_prev,
-  })), [items])
+  const maxVentas = Math.max(1, ...(d.items || []).map(i => Math.max(i.ventas, i.ventas_prev)))
 
   const drill = (it) => {
     if (esHoja || isLoading || d.dim !== nivel.dim) return
-    setPath([...path, { dim: nivel.dim, clave: it.clave, nombre: it.nombre }])
+    onFiltro({ ...filtro, [nivel.dim]: it.clave })
     setBusqueda('')
     setVerPerdidos(false)
   }
-  const irA = (n) => { setPath(path.slice(0, n)); setBusqueda(''); setVerPerdidos(false) }
   const sortBy = (col) => setOrden(o => ({ col, dir: o.col === col && o.dir === 'desc' ? 'asc' : 'desc' }))
 
-  const titulo = path.length ? path[path.length - 1].nombre : 'Todas las categorías'
-
-  const Th = ({ col, children, align = 'right' }) => (
-    <th className={`text-${align} font-semibold pb-2 px-1 cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-primary)]`} onClick={() => sortBy(col)}>
-      <span className="inline-flex items-center gap-0.5">
-        {children}
-        {orden.col === col ? (orden.dir === 'desc' ? ' ↓' : ' ↑') : <ChevronUpDownIcon className="w-3 h-3 opacity-40" />}
-      </span>
+  const Th = ({ col, children, align = 'right', ayuda }) => (
+    <th className={`text-${align} font-semibold pb-2 px-2 cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-primary)]`} onClick={() => sortBy(col)}>
+      {children}{ayuda && <Ayuda texto={ayuda} />}{orden.col === col ? (orden.dir === 'desc' ? ' ↓' : ' ↑') : ''}
     </th>
   )
 
+  if (isLoading || !d.dim) {
+    return (
+      <div className="space-y-4">
+        <div className="h-16 rounded-lg animate-pulse bg-[var(--bg-tertiary)]" />
+        <div className="card h-72 animate-pulse bg-[var(--bg-secondary)]" />
+      </div>
+    )
+  }
+
+  const frase = fraseResumen({ titulo, d, nivel })
+
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 flex-wrap text-sm">
-        <button onClick={() => irA(0)} className={`px-2 py-1 rounded hover:bg-[var(--bg-secondary)] ${path.length === 0 ? 'font-semibold' : 'text-[var(--text-muted)]'}`}>
-          Todas las categorías
-        </button>
-        {path.map((p, i) => (
-          <span key={i} className="flex items-center gap-1">
-            <ChevronRightIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-            <button onClick={() => irA(i + 1)} className={`px-2 py-1 rounded hover:bg-[var(--bg-secondary)] ${i === path.length - 1 ? 'font-semibold' : 'text-[var(--text-muted)]'}`}>
-              <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mr-1">{NIVELES[i].singular}</span>
-              {p.nombre}
-            </button>
-          </span>
-        ))}
-      </div>
-
-      {/* KPIs de la selección */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <MiniKpi label={`Ventas · ${titulo}`} value={fmtM(d.total)} sub={<>vs {fmtM(d.total_prev)} año ant.</>} />
-        <MiniKpi label="Variación" value={<Variacion pct={d.variacion_pct} className="text-xl" />} sub={d.total_prev ? `${d.total - d.total_prev >= 0 ? '+' : ''}${fmtM(d.total - d.total_prev)}` : ''} />
-        <MiniKpi label="Margen bruto" value={<span className={margenTone(margenSel)}>{margenSel === null ? '—' : `${margenSel.toFixed(1)}%`}</span>} sub="sobre ventas con costo" />
-        <MiniKpi label={nivel.plural} value={fmtInt(d.n_items)} sub={`${fmtInt(d.n_items_prev)} en período anterior`} />
-        <MiniKpi
-          label="Venta perdida"
-          value={<span className={d.venta_perdida > 0 ? 'text-[var(--danger)]' : ''}>{fmtM(d.venta_perdida)}</span>}
-          sub={`${(d.perdidos || []).length} ${nivel.plural.toLowerCase()} sin venta este período`}
-        />
-      </div>
-
-      {/* Gráficas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <div className="section-header">
-            <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">Evolución mensual por {nivel.singular.toLowerCase()}</h2>
-          </div>
-          <div className="p-5 pt-0">
-            {!serie?.serie?.length ? (
-              <p className="py-10 text-center text-sm text-[var(--text-muted)]">{sLoading ? 'Cargando…' : 'Sin datos.'}</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={serie.serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-                  <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
-                  <YAxis tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={60} />
-                  <Tooltip formatter={(v) => fmtQ(v)} labelFormatter={fmtPeriod} contentStyle={tooltipStyle} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => (v.length > 30 ? v.slice(0, 29) + '…' : v)} />
-                  {serie.series.map((s, i) => (
-                    <Bar key={s} dataKey={s} stackId="a" fill={s === 'Otros' ? OTROS_COLOR : COLORS[i % COLORS.length]} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="section-header">
-            <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">{etiquetaCorta || 'Período'} vs año anterior (top 12)</h2>
-          </div>
-          <div className="p-5 pt-0">
-            {comparativo.length === 0 ? (
-              <p className="py-10 text-center text-sm text-[var(--text-muted)]">{isLoading ? 'Cargando…' : 'Sin datos.'}</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={comparativo} layout="vertical" margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" horizontal={false} />
-                  <XAxis type="number" tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
-                  <YAxis type="category" dataKey="nombre" width={150} tick={{ fontSize: 10 }} stroke="var(--text-muted)" interval={0} />
-                  <Tooltip formatter={(v) => fmtQ(v)} contentStyle={tooltipStyle} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="actual" name="Período actual" fill="#001639" radius={[0, 3, 3, 0]} />
-                  <Bar dataKey="anterior" name="Período anterior" fill={OTROS_COLOR} radius={[0, 3, 3, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Puente de variación */}
-      {d.puente && d.total_prev > 0 && (
-        <div className="card">
-          <div className="section-header">
-            <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">¿De dónde viene la variación? · {titulo}</h2>
-          </div>
-          <div className="p-5 pt-0">
-            <Puente puente={d.puente} />
-            <p className="text-[11px] text-[var(--text-muted)] mt-2">
-              <strong>Precio</strong> y <strong>volumen</strong> comparan el mismo artículo en ambos períodos (precio = cambio de precio promedio × unidades de hoy).
-              <strong> Art. nuevos</strong> son artículos que no se vendieron en el período anterior y <strong>art. perdidos</strong> los que dejaron de venderse
-              (en producto a la medida, un código nuevo suele reemplazar a uno viejo).
-            </p>
-          </div>
+      {/* 1. Resumen en una frase */}
+      {frase && (
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 flex gap-3">
+          <LightBulbIcon className="w-5 h-5 text-[var(--warning)] shrink-0 mt-0.5" />
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{frase}</p>
         </div>
       )}
 
-      {/* Tabla principal */}
-      <div className="card">
-        <div className="section-header flex-wrap gap-2">
-          <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
-          <h2 className="font-semibold">
-            {nivel.plural} {path.length ? `de ${titulo}` : ''} ({fmtInt(filas.length)})
-          </h2>
-          <div className="ml-auto flex items-center gap-2">
-            <div className="relative">
-              <MagnifyingGlassIcon className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar…" className="input py-1 pl-7 text-xs w-40" />
-            </div>
+      {/* 2. ¿Qué se vende? */}
+      <Seccion
+        icon={Squares2X2Icon}
+        titulo={`¿Qué se vende? · ${nivel.plural}${seleccion.length ? ` de ${titulo}` : ''}`}
+        subtitulo={esHoja
+          ? `${fmtInt(filas.length)} artículos con venta en el período`
+          : `Haz clic en una fila para ver sus ${siguiente.plural.toLowerCase()}`}
+        accion={
+          <div className="flex items-center gap-2 flex-wrap">
+            {(d.items || []).length > 8 && (
+              <div className="relative">
+                <MagnifyingGlassIcon className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar…" className="input py-1 pl-7 text-xs w-36" />
+              </div>
+            )}
+            <button className="btn-secondary text-xs py-1 hidden sm:inline-flex" onClick={() => setMasColumnas(v => !v)}>
+              {masColumnas ? 'Menos columnas' : 'Más columnas'}
+            </button>
             <button
               className="btn-secondary flex items-center gap-1 text-xs py-1"
+              title="Descargar la tabla en CSV (abre en Excel)"
               onClick={() => exportarCSV(`ventas_${nivel.dim}_${desde}_${hasta}.csv`, [
                 { label: nivel.singular, get: f => f.nombre },
-                ...(nivel.dim === 'articulo' ? [{ label: 'Código', get: f => f.clave }] : []),
+                ...(esHoja ? [{ label: 'Código', get: f => f.clave }] : []),
                 { label: 'Ventas', get: f => f.ventas.toFixed(2) },
-                { label: 'Ventas período anterior', get: f => f.ventas_prev.toFixed(2) },
+                { label: 'Ventas año anterior', get: f => f.ventas_prev.toFixed(2) },
                 { label: 'Variación %', get: f => f.variacion_pct },
-                { label: 'Participación %', get: f => f.participacion },
-                { label: 'Efecto precio', get: f => f.efecto_precio.toFixed(2) },
-                { label: 'Efecto volumen', get: f => f.efecto_volumen.toFixed(2) },
-                { label: 'Efecto artículos nuevos', get: f => f.efecto_nuevos.toFixed(2) },
-                { label: 'Efecto artículos perdidos', get: f => f.efecto_perdidos.toFixed(2) },
+                { label: '% del total', get: f => f.participacion },
+                { label: 'Margen %', get: f => f.margen_pct },
+                { label: 'Margen % año anterior', get: f => f.margen_pct_prev },
+                { label: 'Clientes', get: f => f.clientes },
                 { label: 'Unidades', get: f => f.unidades },
                 { label: 'Precio promedio', get: f => f.precio_promedio?.toFixed(2) },
-                { label: 'Clientes', get: f => f.clientes },
-                { label: 'SKUs', get: f => f.skus },
-                { label: 'Margen %', get: f => f.margen_pct },
-                { label: 'Margen % año ant.', get: f => f.margen_pct_prev },
+                { label: 'Variación por precio', get: f => f.efecto_precio.toFixed(2) },
+                { label: 'Variación por cantidad', get: f => f.efecto_volumen.toFixed(2) },
+                { label: 'Productos nuevos', get: f => f.efecto_nuevos.toFixed(2) },
+                { label: 'Productos que ya no se venden', get: f => f.efecto_perdidos.toFixed(2) },
                 { label: '% ventas sin costo', get: f => f.pct_sin_costo },
               ], filas)}
             >
-              <ArrowDownTrayIcon className="w-3.5 h-3.5" /> CSV
+              <ArrowDownTrayIcon className="w-3.5 h-3.5" /> Excel
             </button>
           </div>
-        </div>
-        <div className="p-5 pt-0 overflow-x-auto">
-          {isLoading ? (
-            <p className="py-10 text-center text-sm text-[var(--text-muted)]">Cargando…</p>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] uppercase">
-                  <Th col="nombre" align="left">{nivel.singular}</Th>
-                  <Th col="ventas">Ventas</Th>
-                  <Th col="ventas_prev">Año ant.</Th>
-                  <Th col="variacion_pct">Var.</Th>
-                  <Th col="participacion">Share</Th>
-                  <Th col="efecto_precio">Ef. precio</Th>
-                  <Th col="efecto_volumen">Ef. volumen</Th>
+        }
+      >
+        {/* Celular: lista compacta */}
+        <ul className="sm:hidden divide-y divide-[var(--border-default)] -mx-5">
+          {filas.map(it => (
+            <li key={it.clave}>
+              <button
+                onClick={() => drill(it)}
+                disabled={esHoja}
+                className="w-full text-left px-5 py-3 flex items-center gap-3 active:bg-[var(--bg-secondary)]"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm truncate">{it.nombre}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    {it.participacion}% del total · margen <span className={margenTone(it.margen_pct)}>{it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}</span>
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold tabular-nums">{fmtM(it.ventas)}</p>
+                  <Variacion pct={it.variacion_pct} nuevo={it.nuevo} className="text-xs" />
+                </div>
+                {!esHoja && <ChevronRightIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden sm:block overflow-x-auto -mx-5 px-5">
+          <table className="w-full">
+            <thead>
+              <tr className="text-xs text-[var(--text-muted)]">
+                <Th col="nombre" align="left">{nivel.singular}</Th>
+                <Th col="ventas" align="left" ayuda="Barra oscura: este período. Barra gris: mismo período del año anterior.">Ventas vs año anterior</Th>
+                <Th col="variacion_pct">Cambio</Th>
+                <Th col="participacion" ayuda="Porcentaje de las ventas de la selección">% del total</Th>
+                <Th col="margen_pct" ayuda="Margen bruto %, solo con ventas que traen costo en el ERP">Margen</Th>
+                <Th col="clientes">Clientes</Th>
+                {masColumnas && <>
                   <Th col="unidades">Unidades</Th>
-                  {nivel.dim === 'articulo' && <Th col="precio_promedio">Precio prom.</Th>}
-                  <Th col="clientes">Clientes</Th>
-                  {nivel.dim !== 'articulo' && <Th col="skus">SKUs</Th>}
-                  <Th col="margen_pct">Margen%</Th>
+                  {esHoja && <Th col="precio_promedio">Precio prom.</Th>}
+                  <Th col="efecto_precio" ayuda="Cuánto cambiaron las ventas por subir o bajar el precio de los mismos productos">Por precio</Th>
+                  <Th col="efecto_volumen" ayuda="Cuánto cambiaron las ventas por vender más o menos unidades de los mismos productos">Por cantidad</Th>
+                  {!esHoja && <Th col="skus" ayuda="Productos distintos vendidos">Productos</Th>}
+                </>}
+                {!esHoja && <th />}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-default)]">
+              {filas.map((it) => (
+                <tr
+                  key={it.clave}
+                  onClick={() => drill(it)}
+                  className={`text-sm group ${esHoja ? '' : 'cursor-pointer hover:bg-[var(--bg-secondary)]'}`}
+                >
+                  <td className="py-2.5 pr-2 max-w-[18rem]">
+                    <span className="font-medium truncate block" title={it.nombre}>{it.nombre}</span>
+                    {esHoja && <span className="text-[10px] text-[var(--text-muted)]">{it.clave}</span>}
+                  </td>
+                  <td className="py-2.5 px-2 min-w-[12rem]">
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums font-semibold w-16 shrink-0">{fmtM(it.ventas)}</span>
+                      <div className="flex-1 space-y-0.5" title={`Este período ${fmtQ(it.ventas)} · Año anterior ${fmtQ(it.ventas_prev)}`}>
+                        <div className="h-2 rounded-sm bg-[#001639]" style={{ width: `${(it.ventas / maxVentas) * 100}%` }} />
+                        <div className="h-1.5 rounded-sm bg-[var(--border-default)]" style={{ width: `${(it.ventas_prev / maxVentas) * 100}%` }} />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-2 text-right whitespace-nowrap">
+                    <Variacion pct={it.variacion_pct} nuevo={it.nuevo} />
+                    {!it.nuevo && it.ventas_prev > 0 && (
+                      <p className="text-[10px] text-[var(--text-muted)] tabular-nums">{fmtSigno(it.variacion)}</p>
+                    )}
+                  </td>
+                  <td className="py-2.5 px-2 text-right tabular-nums text-[var(--text-secondary)]">{it.participacion}%</td>
+                  <td className={`py-2.5 px-2 text-right tabular-nums font-semibold whitespace-nowrap ${margenTone(it.margen_pct)}`}>
+                    {it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}
+                    {it.margen_pct !== null && it.margen_pct_prev !== null && Math.abs(it.margen_pct - it.margen_pct_prev) >= 0.1 && (
+                      <p className="text-[10px] font-normal text-[var(--text-muted)]">
+                        {it.margen_pct - it.margen_pct_prev >= 0 ? '+' : ''}{(it.margen_pct - it.margen_pct_prev).toFixed(1)} pts
+                      </p>
+                    )}
+                  </td>
+                  <td className="py-2.5 px-2 text-right tabular-nums">{fmtInt(it.clientes)}</td>
+                  {masColumnas && <>
+                    <td className="py-2.5 px-2 text-right tabular-nums">{fmtInt(it.unidades)}</td>
+                    {esHoja && <td className="py-2.5 px-2 text-right tabular-nums">{it.precio_promedio ? fmtQ(it.precio_promedio) : '—'}</td>}
+                    <td className={`py-2.5 px-2 text-right tabular-nums text-xs ${it.efecto_precio < 0 ? 'text-[var(--danger)]' : ''}`}>{Math.abs(it.efecto_precio) >= 1 ? fmtSigno(it.efecto_precio) : '—'}</td>
+                    <td className={`py-2.5 px-2 text-right tabular-nums text-xs ${it.efecto_volumen < 0 ? 'text-[var(--danger)]' : ''}`}>{Math.abs(it.efecto_volumen) >= 1 ? fmtSigno(it.efecto_volumen) : '—'}</td>
+                    {!esHoja && <td className="py-2.5 px-2 text-right tabular-nums">{fmtInt(it.skus)}</td>}
+                  </>}
+                  {!esHoja && (
+                    <td className="py-2.5 pl-2 text-right whitespace-nowrap">
+                      <span className="inline-flex items-center gap-0.5 text-xs font-medium text-[var(--text-muted)] group-hover:text-[var(--text-primary)] group-hover:underline">
+                        Ver {siguiente.plural.toLowerCase()} <ChevronRightIcon className="w-3.5 h-3.5" />
+                      </span>
+                    </td>
+                  )}
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-default)]">
-                {filas.map((it) => (
-                  <tr
-                    key={it.clave}
-                    onClick={() => drill(it)}
-                    className={`text-sm hover:bg-[var(--bg-secondary)] ${esHoja ? '' : 'cursor-pointer'}`}
-                  >
-                    <td className="py-2 pr-2 max-w-[22rem]">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-medium truncate" title={it.nombre}>{it.nombre}</span>
-                        {!esHoja && <ChevronRightIcon className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />}
-                      </div>
-                      {nivel.dim === 'articulo' && <p className="text-[10px] text-[var(--text-muted)]">{it.clave}</p>}
-                    </td>
-                    <td className="py-2 px-1 text-right tabular-nums font-semibold">{fmtM(it.ventas)}</td>
-                    <td className="py-2 px-1 text-right tabular-nums text-[var(--text-muted)]">{it.ventas_prev ? fmtM(it.ventas_prev) : '—'}</td>
-                    <td className="py-2 px-1 text-right"><Variacion pct={it.variacion_pct} nuevo={it.nuevo} /></td>
-                    <td className="py-2 px-1 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <div className="w-12 h-1.5 rounded bg-[var(--bg-tertiary)] overflow-hidden hidden sm:block">
-                          <div className="h-full bg-[#001639]" style={{ width: `${Math.min(it.participacion, 100)}%` }} />
-                        </div>
-                        <span className="tabular-nums text-xs w-10">{it.participacion}%</span>
-                      </div>
-                    </td>
-                    <td className={`py-2 px-1 text-right tabular-nums text-xs ${it.efecto_precio < 0 ? 'text-[var(--danger)]' : ''}`}>{Math.abs(it.efecto_precio) >= 1 ? fmtM(it.efecto_precio) : '—'}</td>
-                    <td className={`py-2 px-1 text-right tabular-nums text-xs ${it.efecto_volumen < 0 ? 'text-[var(--danger)]' : ''}`}>{Math.abs(it.efecto_volumen) >= 1 ? fmtM(it.efecto_volumen) : '—'}</td>
-                    <td className="py-2 px-1 text-right tabular-nums">{fmtInt(it.unidades)}</td>
-                    {nivel.dim === 'articulo' && <td className="py-2 px-1 text-right tabular-nums">{it.precio_promedio ? fmtQ(it.precio_promedio) : '—'}</td>}
-                    <td className="py-2 px-1 text-right tabular-nums">
-                      {fmtInt(it.clientes)}
-                      {it.clientes_prev > 0 && it.clientes !== it.clientes_prev && (
-                        <span className="text-[10px] text-[var(--text-muted)] ml-1">({it.clientes > it.clientes_prev ? '+' : ''}{it.clientes - it.clientes_prev})</span>
-                      )}
-                    </td>
-                    {nivel.dim !== 'articulo' && <td className="py-2 px-1 text-right tabular-nums">{fmtInt(it.skus)}</td>}
-                    <td className={`py-2 px-1 text-right tabular-nums font-semibold ${margenTone(it.margen_pct)}`}>
-                      {it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}
-                      {it.margen_pct !== null && it.margen_pct_prev !== null && (
-                        <p className="text-[10px] font-normal text-[var(--text-muted)]">
-                          {(it.margen_pct - it.margen_pct_prev) >= 0 ? '+' : ''}{(it.margen_pct - it.margen_pct_prev).toFixed(1)} pts vs ant.
-                        </p>
-                      )}
-                      {it.pct_sin_costo >= 1 && (
-                        <p className="text-[10px] font-normal text-[var(--text-muted)] whitespace-nowrap" title="El margen % se calcula solo con las líneas que traen costo en el ERP">
-                          {it.pct_sin_costo.toFixed(1)}% sin costo
-                        </p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {!esHoja && filas.length > 0 && (
-            <p className="text-xs text-[var(--text-muted)] mt-3">Haz clic en una fila para ver sus {NIVELES[path.length + 1].plural.toLowerCase()}.</p>
-          )}
+              ))}
+            </tbody>
+          </table>
+          {filas.length === 0 && <p className="py-8 text-center text-sm text-[var(--text-muted)]">Sin ventas en el período.</p>}
         </div>
+      </Seccion>
+
+      {/* 3. ¿Por qué cambió? */}
+      {d.puente && d.total_prev > 0 && (
+        <Seccion
+          icon={ChartBarIcon}
+          titulo="¿Por qué cambiaron las ventas vs el año anterior?"
+          subtitulo="De las ventas del año anterior (izquierda) a las de este período (derecha): qué sumó y qué restó"
+        >
+          <Puente puente={d.puente} />
+          <ul className="text-xs text-[var(--text-muted)] mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-1">
+            <li><strong className="text-[var(--text-secondary)]">Precio:</strong> los mismos productos se vendieron más caros o más baratos.</li>
+            <li><strong className="text-[var(--text-secondary)]">Cantidad:</strong> de los mismos productos se vendieron más o menos unidades.</li>
+            <li><strong className="text-[var(--text-secondary)]">Productos nuevos:</strong> códigos que no se vendieron el año anterior.</li>
+            <li><strong className="text-[var(--text-secondary)]">Ya no se venden:</strong> códigos del año anterior sin venta este período. En producto a la medida, muchas veces un código nuevo reemplaza a uno viejo.</li>
+          </ul>
+        </Seccion>
+      )}
+
+      {/* 4. ¿Quién? */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <RankingCruzado icon={UserGroupIcon} titulo="¿Quién lo compra?" subtitulo={`Principales clientes · ${titulo}`} data={cRes?.data} loading={cLoading} />
+        <RankingCruzado icon={UsersIcon} titulo="¿Quién lo vende?" subtitulo={`Vendedores · ${titulo}`} data={vRes?.data} loading={vLoading} />
       </div>
 
-      {/* Perdidos */}
+      {/* 5. Evolución mensual */}
+      <Seccion icon={ChartBarIcon} titulo="Evolución mensual" subtitulo={`Ventas por mes de las principales ${nivel.plural.toLowerCase()}`}>
+        {!serie?.serie?.length ? (
+          <p className="py-10 text-center text-sm text-[var(--text-muted)]">{sLoading ? 'Cargando…' : 'Sin datos.'}</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={serie.serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+              <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
+              <YAxis tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={60} />
+              <Tooltip formatter={(v) => fmtQ(v)} labelFormatter={fmtPeriod} contentStyle={tooltipStyle} />
+              <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => (v.length > 30 ? v.slice(0, 29) + '…' : v)} />
+              {serie.series.map((s, i) => (
+                <Bar key={s} dataKey={s} stackId="a" fill={s === 'Otros' ? OTROS_COLOR : COLORS[i % COLORS.length]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </Seccion>
+
+      {/* 6. Lo que se dejó de vender */}
       {(d.perdidos || []).length > 0 && (
         <div className="card">
           <button className="section-header w-full text-left" onClick={() => setVerPerdidos(v => !v)}>
             <ArrowTrendingDownIcon className="w-5 h-5 text-[var(--danger)]" />
-            <h2 className="font-semibold">
-              {nivel.plural} que dejaron de venderse ({d.perdidos.length}{d.perdidos.length === 25 ? '+' : ''}) · {fmtM(d.venta_perdida)} en el período anterior
-            </h2>
-            <ChevronRightIcon className={`w-4 h-4 ml-auto transition-transform ${verPerdidos ? 'rotate-90' : ''}`} />
+            <div>
+              <h2 className="font-semibold">{nivel.plural} que ya no se venden</h2>
+              <p className="text-xs text-[var(--text-muted)] font-normal">
+                {d.perdidos.length}{d.perdidos.length === 25 ? '+' : ''} con venta el año anterior y ninguna este período · {fmtM(d.venta_perdida)} el año anterior
+              </p>
+            </div>
+            <span className="ml-auto text-xs text-[var(--text-muted)]">{verPerdidos ? 'Ocultar' : 'Ver lista'}</span>
           </button>
           {verPerdidos && (
             <div className="p-5 pt-0 overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="text-xs text-[var(--text-muted)] uppercase">
+                  <tr className="text-xs text-[var(--text-muted)]">
                     <th className="text-left font-semibold pb-2">{nivel.singular}</th>
-                    <th className="text-right font-semibold pb-2">Ventas año ant.</th>
-                    <th className="text-right font-semibold pb-2">Unidades año ant.</th>
-                    <th className="text-right font-semibold pb-2">Clientes año ant.</th>
+                    <th className="text-right font-semibold pb-2">Ventas año anterior</th>
+                    <th className="text-right font-semibold pb-2">Unidades año anterior</th>
+                    <th className="text-right font-semibold pb-2">Clientes año anterior</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-default)]">
@@ -414,7 +466,7 @@ export default function TabCategorias() {
                     <tr key={p.clave} className="text-sm">
                       <td className="py-2 pr-2">
                         <span className="font-medium">{p.nombre}</span>
-                        {nivel.dim === 'articulo' && <span className="text-[10px] text-[var(--text-muted)] ml-1">{p.clave}</span>}
+                        {esHoja && <span className="text-[10px] text-[var(--text-muted)] ml-1">{p.clave}</span>}
                       </td>
                       <td className="py-2 text-right tabular-nums text-[var(--danger)] font-semibold">{fmtM(p.ventas_prev)}</td>
                       <td className="py-2 text-right tabular-nums">{fmtInt(p.unidades_prev)}</td>
@@ -427,56 +479,94 @@ export default function TabCategorias() {
           )}
         </div>
       )}
-
-      {/* Quién explica la selección */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RankingCruzado
-          icon={UserGroupIcon}
-          titulo={`Top clientes · ${titulo}`}
-          data={clientes}
-          loading={cLoading}
-        />
-        <RankingCruzado
-          icon={UsersIcon}
-          titulo={`Vendedores · ${titulo}`}
-          data={vendedores}
-          loading={vLoading}
-        />
-      </div>
     </div>
   )
 }
 
-function MiniKpi({ label, value, sub }) {
+// Puente de la variación: año anterior → efectos → período actual.
+// El eje no arranca en 0 para que los cambios se vean (son chicos vs el total).
+function Puente({ puente }) {
+  const datos = useMemo(() => {
+    const pasos = [
+      { nombre: 'Año anterior', valor: puente.anterior, total: true },
+      { nombre: 'Precio', valor: puente.precio },
+      { nombre: 'Cantidad', valor: puente.volumen },
+      { nombre: 'Productos nuevos', valor: puente.nuevos },
+      { nombre: 'Ya no se venden', valor: puente.perdidos },
+      ...(Math.abs(puente.otros) >= 1 ? [{ nombre: 'Otros', valor: puente.otros }] : []),
+      { nombre: 'Este período', valor: puente.actual, total: true },
+    ]
+    let acum = 0
+    const out = pasos.map(p => {
+      if (p.total) { acum = p.valor; return { ...p, desde: 0, hasta: p.valor } }
+      const ini = acum
+      acum += p.valor
+      return { ...p, desde: Math.min(ini, acum), hasta: Math.max(ini, acum) }
+    })
+    // Piso del eje: un poco debajo del punto más bajo del recorrido
+    const lo = Math.min(...out.map(o => (o.total ? o.valor : o.desde)))
+    const hi = Math.max(...out.map(o => o.hasta))
+    const piso = Math.max(0, lo - (hi - lo) * 0.3)
+    return out.map(o => {
+      const base = o.total ? piso : o.desde
+      return {
+        ...o,
+        piso,
+        base,
+        barra: o.hasta - base,
+        color: o.total ? '#001639' : o.valor >= 0 ? '#10b981' : '#ef4444',
+        etiqueta: o.total ? fmtM(o.valor) : fmtSigno(o.valor),
+      }
+    })
+  }, [puente])
+
+  const piso = datos[0]?.piso || 0
+
   return (
-    <div className="card p-4">
-      <p className="text-xs text-[var(--text-muted)] truncate" title={typeof label === 'string' ? label : undefined}>{label}</p>
-      <p className="text-xl font-semibold mt-1 tabular-nums">{value}</p>
-      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
-    </div>
+    <ResponsiveContainer width="100%" height={280}>
+      <BarChart data={datos} margin={{ top: 24, right: 10, bottom: 0, left: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+        <XAxis dataKey="nombre" tick={{ fontSize: 11 }} stroke="var(--text-muted)" interval={0} />
+        <YAxis domain={[piso, 'auto']} tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={64} allowDataOverflow />
+        <Tooltip
+          cursor={{ fill: 'var(--bg-secondary)' }}
+          content={({ active, payload }) => {
+            if (!active || !payload?.length) return null
+            const p = payload[0].payload
+            return (
+              <div style={tooltipStyle} className="px-3 py-2">
+                <p className="font-semibold">{p.nombre}</p>
+                <p className="tabular-nums">{p.total ? fmtQ(p.valor) : `${p.valor >= 0 ? '+' : '−'}${fmtQ(Math.abs(p.valor))}`}</p>
+              </div>
+            )
+          }}
+        />
+        <Bar dataKey="base" stackId="p" fill="transparent" isAnimationActive={false} />
+        <Bar dataKey="barra" stackId="p" radius={[3, 3, 0, 0]}>
+          {datos.map((d, i) => <Cell key={i} fill={d.color} />)}
+          <LabelList dataKey="etiqueta" position="top" style={{ fontSize: 11, fontWeight: 600, fill: 'var(--text-secondary)' }} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   )
 }
 
-function RankingCruzado({ icon: Icon, titulo, data, loading }) {
+function RankingCruzado({ icon: Icon, titulo, subtitulo, data, loading }) {
   const items = data?.items || []
   return (
-    <div className="card">
-      <div className="section-header">
-        <Icon className="w-5 h-5 text-[var(--text-muted)]" />
-        <h2 className="font-semibold truncate">{titulo}</h2>
-      </div>
-      <div className="p-5 pt-0 overflow-x-auto">
-        {items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--text-muted)]">{loading ? 'Cargando…' : 'Sin datos.'}</p>
-        ) : (
+    <Seccion icon={Icon} titulo={titulo} subtitulo={subtitulo}>
+      {items.length === 0 ? (
+        <p className="py-6 text-center text-sm text-[var(--text-muted)]">{loading ? 'Cargando…' : 'Sin datos.'}</p>
+      ) : (
+        <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="text-xs text-[var(--text-muted)] uppercase">
+              <tr className="text-xs text-[var(--text-muted)]">
                 <th className="text-left font-semibold pb-2">Nombre</th>
                 <th className="text-right font-semibold pb-2">Ventas</th>
-                <th className="text-right font-semibold pb-2">Var.</th>
-                <th className="text-right font-semibold pb-2">Share</th>
-                <th className="text-right font-semibold pb-2">Margen%</th>
+                <th className="text-right font-semibold pb-2">Cambio</th>
+                <th className="text-right font-semibold pb-2">% del total</th>
+                <th className="text-right font-semibold pb-2">Margen</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
@@ -491,58 +581,11 @@ function RankingCruzado({ icon: Icon, titulo, data, loading }) {
               ))}
             </tbody>
           </table>
-        )}
-        {data?.n_items > items.length && (
-          <p className="text-[11px] text-[var(--text-muted)] mt-2">Top {items.length} de {fmtInt(data.n_items)}</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// Puente de la variación: período anterior → efectos → período actual.
-// Precio y volumen comparan el MISMO artículo en ambos períodos; "nuevos" son
-// artículos que no se vendían antes y "perdidos" los que dejaron de venderse.
-function Puente({ puente }) {
-  const data = useMemo(() => {
-    if (!puente) return []
-    const pasos = [
-      { nombre: 'Período anterior', valor: puente.anterior, total: true },
-      { nombre: 'Precio', valor: puente.precio },
-      { nombre: 'Volumen', valor: puente.volumen },
-      { nombre: 'Art. nuevos', valor: puente.nuevos },
-      { nombre: 'Art. perdidos', valor: puente.perdidos },
-      ...(Math.abs(puente.otros) >= 1 ? [{ nombre: 'Otros', valor: puente.otros }] : []),
-      { nombre: 'Período actual', valor: puente.actual, total: true },
-    ]
-    let acum = 0
-    return pasos.map(p => {
-      if (p.total) { acum = p.valor; return { ...p, base: 0, barra: p.valor, color: '#001639' } }
-      const ini = acum
-      acum += p.valor
-      return { ...p, base: Math.min(ini, acum), barra: Math.abs(p.valor), color: p.valor >= 0 ? '#10b981' : '#ef4444' }
-    })
-  }, [puente])
-
-  if (!data.length) return null
-  return (
-    <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={data} margin={{ top: 20, right: 10, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-        <XAxis dataKey="nombre" tick={{ fontSize: 11 }} stroke="var(--text-muted)" interval={0} />
-        <YAxis tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={60} />
-        <ReferenceLine y={0} stroke="var(--border-default)" />
-        <Tooltip
-          cursor={{ fill: 'var(--bg-secondary)' }}
-          contentStyle={tooltipStyle}
-          formatter={(v, k, item) => (k === 'barra' ? [`${item.payload.total ? '' : item.payload.valor >= 0 ? '+' : '−'}${fmtQ(Math.abs(item.payload.valor))}`, item.payload.nombre] : [null, null])}
-          labelFormatter={() => ''}
-        />
-        <Bar dataKey="base" stackId="p" fill="transparent" isAnimationActive={false} />
-        <Bar dataKey="barra" stackId="p" radius={[3, 3, 0, 0]} label={{ position: 'top', fontSize: 10, formatter: (v) => fmtM(v) }}>
-          {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+          {data?.n_items > items.length && (
+            <p className="text-[11px] text-[var(--text-muted)] mt-2">Top {items.length} de {fmtInt(data.n_items)}</p>
+          )}
+        </div>
+      )}
+    </Seccion>
   )
 }

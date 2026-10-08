@@ -28,7 +28,7 @@ import {
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import TabCategorias from '../components/ventas/TabCategorias'
 import TabMatriz from '../components/ventas/TabMatriz'
-import FiltroProducto from '../components/ventas/FiltroProducto'
+import FiltroProducto, { FILTRO_VACIO } from '../components/ventas/FiltroProducto'
 
 // -------------------------------------------------------------------
 // Helpers
@@ -84,31 +84,31 @@ export default function Ventas() {
   const [busqueda, setBusqueda]   = useState('')
   const [clienteSel, setCliente]  = useState('')
   const [vendedorSel, setVendedor] = useState('')
-  // Filtro de producto para Vendedores, Clientes y Matriz
-  const [producto, setProducto]   = useState({ categoria: '', subcategoria: '' })
+  // Filtro de producto (Categoría › Subcategoría › Sublínea), común a todas las pestañas
+  const [producto, setProducto]   = useState(FILTRO_VACIO)
   const prodParams = Object.fromEntries(Object.entries(producto).filter(([, v]) => v))
   const prodKey = JSON.stringify(prodParams)
 
   const commonParams = { desde, hasta }
 
-  const { data: rRes, isLoading: loadingR } = useQuery(
-    ['ventas-resumen', desde, hasta],
-    () => endpoints.ventas.resumen(commonParams),
+  const { data: rRes, isLoading: loadingR, isPreviousData: rViejo } = useQuery(
+    ['ventas-resumen', desde, hasta, prodKey],
+    () => endpoints.ventas.resumen({ ...commonParams, ...prodParams }),
     { keepPreviousData: true }
   )
-  const { data: cRes } = useQuery(
+  const { data: cRes, isLoading: cCarga, isPreviousData: cViejo } = useQuery(
     ['ventas-clientes', desde, hasta, prodKey],
     () => endpoints.ventas.clientes({ ...commonParams, ...prodParams, limit: 30 }),
     { keepPreviousData: true }
   )
-  const { data: vRes } = useQuery(
+  const { data: vRes, isLoading: vCarga, isPreviousData: vViejo } = useQuery(
     ['ventas-vendedores', desde, hasta, prodKey],
     () => endpoints.ventas.vendedores({ ...commonParams, ...prodParams }),
     { keepPreviousData: true }
   )
   const { data: aRes } = useQuery(
-    ['ventas-articulos', desde, hasta],
-    () => endpoints.ventas.articulos({ ...commonParams, limit: 15 }),
+    ['ventas-articulos', desde, hasta, prodKey],
+    () => endpoints.ventas.articulos({ ...commonParams, ...prodParams, limit: 15 }),
     { keepPreviousData: true }
   )
   const { data: svRes } = useQuery(
@@ -117,9 +117,9 @@ export default function Ventas() {
     { keepPreviousData: true, enabled: tab === 'vendedores' }
   )
   const { data: dRes, isFetching: fetchingDetalle } = useQuery(
-    ['ventas-detalle', desde, hasta, busqueda, clienteSel, vendedorSel],
+    ['ventas-detalle', desde, hasta, busqueda, clienteSel, vendedorSel, prodKey],
     () => endpoints.ventas.detalle({
-      ...commonParams, busqueda, codigo_cliente: clienteSel, vendedor: vendedorSel,
+      ...commonParams, ...prodParams, busqueda, codigo_cliente: clienteSel, vendedor: vendedorSel,
       limit: 300, offset: 0,
     }),
     { keepPreviousData: true, enabled: tab === 'resumen' }
@@ -135,13 +135,6 @@ export default function Ventas() {
   const totalFilas   = dRes?.data?.total_filas || 0
   const sumaFiltrada = dRes?.data?.suma_ventas || 0
 
-  const tendencia = useMemo(() => {
-    if (serie.length < 2) return null
-    const ult = serie[serie.length - 1].ventas
-    const prev = serie.slice(0, -1)
-    const avg = prev.reduce((s, x) => s + (x.ventas || 0), 0) / prev.length
-    return avg > 0 ? ((ult - avg) / avg) * 100 : null
-  }, [serie])
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl">
@@ -158,7 +151,7 @@ export default function Ventas() {
             <div>
               <h1 className="text-2xl font-semibold">Ventas</h1>
               <p className="text-sm text-[var(--text-muted)]">
-                {loadingR ? 'Cargando…' :
+                {loadingR || rViejo ? 'Cargando…' :
                   `${fmtInt(r.facturas)} facturas · ${fmtInt(r.clientes)} clientes · ${fmtInt(r.vendedores)} vendedores activos`}
               </p>
               <PeriodoActivo className="mt-1" />
@@ -173,13 +166,8 @@ export default function Ventas() {
         </div>
       </div>
 
-      {/* KPIs globales */}
-      <KPIs r={r} tendencia={tendencia} />
-
-      {/* Insights del analista diario (vertical ventas) */}
-      <PageInsights vertical="ventas" maxInsights={4} />
-
-      {/* Tabs */}
+      {/* Navegación: pestañas + filtro de producto (aplica a todo lo de abajo) */}
+      <div className="space-y-3">
       <div className="flex gap-1 border-b border-[var(--border-default)] overflow-x-auto">
         {[
           { id: 'resumen',   label: 'Resumen',     icon: ChartBarIcon },
@@ -205,8 +193,16 @@ export default function Ventas() {
           )
         })}
       </div>
+      <FiltroProducto value={producto} onChange={setProducto} />
+      </div>
+
+      {/* KPIs (respetan período y filtro de producto) */}
+      <KPIs r={r} loading={loadingR || rViejo} />
 
       {/* Content por tab */}
+      {tab === 'resumen'    && (
+        <PageInsights vertical="ventas" maxInsights={4} />
+      )}
       {tab === 'resumen'    && (
         <TabResumen
           serie={serie} articulos={articulos} filas={filas} totalFilas={totalFilas}
@@ -216,15 +212,18 @@ export default function Ventas() {
           setCliente={setCliente} setVendedor={setVendedor}
         />
       )}
-      {['vendedores', 'clientes', 'matriz'].includes(tab) && (
-        <FiltroProducto value={producto} onChange={setProducto} />
+      {['vendedores', 'clientes'].includes(tab) && (tab === 'vendedores' ? vCarga || vViejo : cCarga || cViejo) && (
+        <div className="space-y-4">
+          <div className="h-16 rounded-lg animate-pulse bg-[var(--bg-tertiary)]" />
+          <div className="card h-72 animate-pulse bg-[var(--bg-secondary)]" />
+        </div>
       )}
-      {tab === 'vendedores' && (
+      {tab === 'vendedores' && !(vCarga || vViejo) && (
         <TabVendedores vendedores={vendedores} serieVend={serieVend} resumen={vRes?.data} />
       )}
-      {tab === 'categorias' && <TabCategorias />}
+      {tab === 'categorias' && <TabCategorias filtro={producto} onFiltro={setProducto} />}
       {tab === 'matriz'     && <TabMatriz filtroProducto={prodParams} />}
-      {tab === 'clientes'   && (
+      {tab === 'clientes'   && !(cCarga || cViejo) && (
         <TabClientes clientes={clientes} resumen={cRes?.data} />
       )}
 
@@ -238,44 +237,55 @@ export default function Ventas() {
 // -------------------------------------------------------------------
 // KPIs globales
 // -------------------------------------------------------------------
-function KPIs({ r, tendencia }) {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div className="kpi-card card-hover">
-        <span className="kpi-label">Ventas (sin IVA)</span>
-        <p className="kpi-value">{fmtM(r.ventas_sin_iva)}</p>
-        <p className="text-xs text-[var(--text-muted)] mt-1">Con IVA: {fmtM(r.ventas_con_iva)}</p>
+function KPIs({ r, loading }) {
+  // Mientras carga no se muestran ceros ni números del filtro anterior
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {['Ventas (sin IVA)', 'Margen bruto', 'Clientes que compraron', 'Ticket promedio'].map(l => (
+          <div key={l} className="kpi-card">
+            <span className="kpi-label">{l}</span>
+            <span className="block h-7 w-24 mt-1 rounded bg-[var(--bg-tertiary)] animate-pulse" />
+            <span className="block h-3 w-32 mt-2 rounded bg-[var(--bg-tertiary)] animate-pulse" />
+          </div>
+        ))}
       </div>
-      <div className="kpi-card card-hover">
-        <span className="kpi-label">Margen bruto</span>
-        <p className={`kpi-value ${margenTone(r.margen_bruto_pct)}`}>{fmtM(r.margen_bruto)}</p>
-        <p className={`text-xs mt-1 ${margenTone(r.margen_bruto_pct)}`}>
-          {fmtPct(r.margen_bruto_pct)} · costo {fmtM(r.costo_total)}
+    )
+  }
+  const v = (x) => x
+  const deltaMargen = r.margen_bruto_pct != null && r.margen_pct_prev != null ? r.margen_bruto_pct - r.margen_pct_prev : null
+  const deltaClientes = r.clientes_prev ? r.clientes - r.clientes_prev : null
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="kpi-card">
+        <span className="kpi-label">Ventas (sin IVA)</span>
+        <p className="kpi-value">{v(fmtM(r.ventas_sin_iva))}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">
+          <Var pct={r.variacion_pct} /> vs {fmtM(r.ventas_prev)} año anterior
+        </p>
+      </div>
+      <div className="kpi-card">
+        <span className="kpi-label" title="Margen % calculado solo con las ventas que traen costo en el ERP">Margen bruto</span>
+        <p className={`kpi-value ${margenTone(r.margen_bruto_pct)}`}>{v(fmtPct(r.margen_bruto_pct))}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">
+          {fmtM(r.margen_bruto)}
+          {deltaMargen !== null && (
+            <> · <span className={deltaMargen >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>{deltaMargen >= 0 ? '+' : ''}{deltaMargen.toFixed(1)} pts</span> vs año ant.</>
+          )}
         </p>
         <SinCosto pct={r.pct_ventas_sin_costo} />
       </div>
-      <div className="kpi-card card-hover">
-        <span className="kpi-label">Ticket promedio</span>
-        <p className="kpi-value">{fmtM(r.ticket_promedio)}</p>
-        <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(r.lineas)} líneas facturadas</p>
-      </div>
-      <div className="kpi-card card-hover">
-        <span className="kpi-label">Tendencia mes</span>
-        {tendencia === null ? (
-          <p className="kpi-value text-[var(--text-muted)]">—</p>
-        ) : (
-          <p className={`kpi-value ${tendencia >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
-            {tendencia >= 0 ? '+' : ''}{tendencia.toFixed(1)}%
-          </p>
-        )}
-        <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1">
-          {tendencia === null ? 'sin base' : (
-            <>
-              {tendencia >= 0 ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" /> : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
-              vs promedio previos
-            </>
-          )}
+      <div className="kpi-card">
+        <span className="kpi-label">Clientes que compraron</span>
+        <p className="kpi-value">{v(fmtInt(r.clientes))}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">
+          {deltaClientes === null ? '—' : <>{deltaClientes >= 0 ? '+' : ''}{deltaClientes} vs año anterior ({fmtInt(r.clientes_prev)})</>}
         </p>
+      </div>
+      <div className="kpi-card">
+        <span className="kpi-label">Ticket promedio</span>
+        <p className="kpi-value">{v(fmtM(r.ticket_promedio))}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(r.facturas)} facturas</p>
       </div>
     </div>
   )
