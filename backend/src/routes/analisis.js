@@ -903,7 +903,11 @@ const TRAMOS_INV = [
   { id: '366_730', hasta: 730 }, { id: 'mas_730', hasta: Infinity },
 ];
 
-// GET /api/analisis/inventario-quieto?dim=categoria&categoria=&subcategoria=&sublinea=&estado=
+// Texto comparable: minúsculas y sin tildes
+const normalizar = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// GET /api/analisis/inventario-quieto?dim=categoria&categoria=&subcategoria=&sublinea=&estado=&q=
+//   q: búsqueda por código o nombre de artículo; todas las palabras deben aparecer
 router.get('/inventario-quieto', async (req, res) => {
   try {
     const db = req.app.get('db');
@@ -913,6 +917,13 @@ router.get('/inventario-quieto', async (req, res) => {
     let filas = todas;
     for (const k of ['categoria', 'subcategoria', 'sublinea']) {
       if (req.query[k]) filas = filas.filter(r => r[k] === req.query[k]);
+    }
+    const palabras = normalizar(req.query.q).split(/\s+/).filter(Boolean);
+    if (palabras.length) {
+      filas = filas.filter(r => {
+        const texto = normalizar(`${r.codigo_articulo} ${r.articulo}`);
+        return palabras.every(p => texto.includes(p));
+      });
     }
     const totales = resumirInv(filas);
 
@@ -958,10 +969,11 @@ router.get('/inventario-quieto', async (req, res) => {
       }
     }
 
-    // Artículos de la selección (los quietos por defecto), de mayor valor
+    // Artículos de la selección, de mayor valor. Sin estado: los quietos, salvo que
+    // se esté buscando un artículo (entonces todos los que coinciden).
     const estado = ['inmovilizado', 'lento', 'activo'].includes(req.query.estado) ? req.query.estado : null;
     const articulos = filas
-      .filter(r => (estado ? r.estado === estado : r.estado !== 'activo'))
+      .filter(r => (estado ? r.estado === estado : palabras.length > 0 || r.estado !== 'activo'))
       .sort((x, y) => y.valor - x.valor)
       .slice(0, 100)
       .map(r => ({
@@ -973,7 +985,7 @@ router.get('/inventario-quieto', async (req, res) => {
 
     res.json({
       status: 'success',
-      data: { dim, fecha_corte: corte, totales, items: items.slice(0, 500), antiguedad, por_clase_estado: porClase, articulos },
+      data: { dim, q: palabras.join(' '), fecha_corte: corte, totales, items: items.slice(0, 500), antiguedad, por_clase_estado: porClase, articulos },
     });
   } catch (error) {
     console.error('[GET /analisis/inventario-quieto] Error:', error);

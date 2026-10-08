@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
 import {
@@ -8,6 +8,8 @@ import {
   ClockIcon,
   CubeIcon,
   LightBulbIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
   Squares2X2Icon,
 } from '@heroicons/react/24/outline'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, LabelList } from 'recharts'
@@ -117,6 +119,13 @@ export default function InventarioQuieto() {
   const path = NIVELES_PRODUCTO.filter(n => filtro[n.dim]).map(n => ({ dim: n.dim, clave: filtro[n.dim] }))
   const [estadoLista, setEstadoLista] = useState('')
   const [orden, setOrden] = useState({ col: 'quieto', dir: 'desc' })
+  // Búsqueda por código o nombre de artículo (se aplica a toda la página)
+  const [busqueda, setBusqueda] = useState('')
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setQ(busqueda.trim()), 300)
+    return () => clearTimeout(t)
+  }, [busqueda])
 
   // Nivel a mostrar = primer nivel vacío del filtro
   const idx = NIVELES_PRODUCTO.findIndex(n => !filtro[n.dim])
@@ -126,14 +135,15 @@ export default function InventarioQuieto() {
   const filtros = Object.fromEntries(path.map(p => [p.dim, p.clave]))
   const titulo = path.length ? path[path.length - 1].clave : 'Todo el inventario'
 
-  const { data, isLoading } = useQuery(
-    ['inventario-quieto', nivel.dim, JSON.stringify(filtros), estadoLista],
-    () => endpoints.analisis.inventarioQuieto({ ...filtros, dim: nivel.dim, estado: estadoLista || undefined }),
+  const { data, isLoading, isPreviousData } = useQuery(
+    ['inventario-quieto', nivel.dim, JSON.stringify(filtros), estadoLista, q],
+    () => endpoints.analisis.inventarioQuieto({ ...filtros, dim: nivel.dim, estado: estadoLista || undefined, q: q || undefined }),
     { keepPreviousData: true, staleTime: 5 * 60 * 1000 }
   )
   // Solo datos del nivel actual (evita clics sobre filas de otro nivel). Cada
   // profundidad tiene su propia dimensión, así que basta comparar dim.
   const d = (data?.data?.dim === nivel.dim && data.data) || null
+  const buscando = isPreviousData // datos de la búsqueda anterior mientras llega la nueva
   const cargando = isLoading || !d
 
   const filas = useMemo(() => {
@@ -183,6 +193,36 @@ export default function InventarioQuieto() {
 
       {/* Filtro de producto (opciones = lo que tiene stock hoy) */}
       <FiltroProducto value={filtro} onChange={setFiltro} fuente="inventario" />
+
+      {/* Búsqueda de artículo */}
+      <div>
+        <div className="relative">
+          <MagnifyingGlassIcon className="w-5 h-5 text-[var(--text-muted)] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={busqueda}
+            onKeyDown={(e) => { if (e.key === 'Escape') setBusqueda('') }}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar artículo por nombre o código…"
+            className="input w-full pl-12 pr-10"
+            aria-label="Buscar artículo por nombre o código"
+          />
+          {busqueda && (
+            <button onClick={() => setBusqueda('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--bg-tertiary)]" aria-label="Limpiar búsqueda">
+              <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
+            </button>
+          )}
+        </div>
+        {q && (
+          <p className="text-xs text-[var(--text-muted)] mt-1.5">
+            {buscando || !t ? 'Buscando…' : <>
+              <span className="font-medium text-[var(--text-secondary)]">{fmtInt(t.articulos)}</span> {t.articulos === 1 ? 'artículo con stock coincide' : 'artículos con stock coinciden'} con “{q}”
+              {t.articulos > 0 && <> · {fmtM(t.total)} a costo, {fmtM(t.quieto)} quieto</>}.
+              {t.articulos > 0 && ' Toda la página muestra solo esos artículos.'}
+            </>}
+          </p>
+        )}
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -342,12 +382,12 @@ export default function InventarioQuieto() {
       {!cargando && !esHoja && (
         <Seccion
           icon={CubeIcon}
-          titulo={`Artículos ${estadoLista ? ESTADOS[estadoLista].nombre.toLowerCase() + 's' : 'quietos'} de mayor valor${path.length ? ` · ${titulo}` : ''}`}
+          titulo={`Artículos ${estadoLista ? ESTADOS[estadoLista].nombre.toLowerCase() + 's' : q ? 'que coinciden' : 'quietos'} de mayor valor${path.length ? ` · ${titulo}` : ''}`}
           subtitulo={`${fmtInt(d.articulos.length)}${d.articulos.length === 100 ? ' (máximo)' : ''} artículos, ordenados por valor`}
           accion={
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex rounded-md border border-[var(--border-default)] overflow-hidden text-xs">
-                {[['', 'Quietos'], ['inmovilizado', 'Inmovilizados'], ['lento', 'Lentos'], ['activo', 'Activos']].map(([id, label]) => (
+                {[['', q ? 'Todos' : 'Quietos'], ['inmovilizado', 'Inmovilizados'], ['lento', 'Lentos'], ['activo', 'Activos']].map(([id, label]) => (
                   <button key={id} onClick={() => setEstadoLista(id)} className={`px-2 py-1 ${estadoLista === id ? 'bg-[#001639] text-white' : 'hover:bg-[var(--bg-secondary)]'}`}>{label}</button>
                 ))}
               </div>
@@ -404,7 +444,7 @@ export default function InventarioQuieto() {
                 ))}
               </tbody>
             </table>
-            {d.articulos.length === 0 && <p className="py-8 text-center text-sm text-[var(--text-muted)]">No hay artículos en este estado.</p>}
+            {d.articulos.length === 0 && <p className="py-8 text-center text-sm text-[var(--text-muted)]">{q ? `Ningún artículo coincide con “${q}” en este estado.` : 'No hay artículos en este estado.'}</p>}
           </div>
         </Seccion>
       )}
