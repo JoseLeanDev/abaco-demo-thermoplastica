@@ -3,9 +3,11 @@ import { ChevronRightIcon, CubeIcon, XMarkIcon } from '@heroicons/react/24/outli
 import { endpoints } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
 
-// Filtro de producto de la página de Ventas: Categoría › Subcategoría › Sublínea.
-// Aplica a todas las pestañas; el drill-down de Categorías solo lo va rellenando.
+// Filtro de producto: Categoría › Subcategoría › Sublínea.
 // value = { categoria, subcategoria, sublinea } ('' = todas).
+// fuente = de dónde salen las opciones de cada nivel:
+//   'ventas'     → lo que tuvo ventas en el período (página de Ventas)
+//   'inventario' → lo que tiene stock hoy (Capital inmovilizado)
 export const NIVELES_PRODUCTO = [
   { dim: 'categoria',    singular: 'Categoría',    plural: 'Categorías',    todas: 'Todas las categorías' },
   { dim: 'subcategoria', singular: 'Subcategoría', plural: 'Subcategorías', todas: 'Todas las subcategorías' },
@@ -25,14 +27,18 @@ export function cambiarNivel(value, dim, clave) {
   return out
 }
 
-function SelectorNivel({ nivel, value, filtrosArriba, onChange }) {
+function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente }) {
   const { desde, hasta } = usePeriodo()
   const { data } = useQuery(
-    ['filtro-prod', nivel.dim, desde, hasta, JSON.stringify(filtrosArriba)],
-    () => endpoints.ventas.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 }),
+    fuente === 'inventario'
+      ? ['filtro-prod-inv', nivel.dim, JSON.stringify(filtrosArriba)]
+      : ['filtro-prod', nivel.dim, desde, hasta, JSON.stringify(filtrosArriba)],
+    () => (fuente === 'inventario'
+      ? endpoints.analisis.inventarioQuieto({ ...filtrosArriba, dim: nivel.dim })
+      : endpoints.ventas.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 })),
     { staleTime: 5 * 60 * 1000 }
   )
-  const opciones = data?.data?.items || []
+  const opciones = [...(data?.data?.items || [])].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   const activo = !!value
 
   return (
@@ -61,7 +67,7 @@ function SelectorNivel({ nivel, value, filtrosArriba, onChange }) {
   )
 }
 
-export default function FiltroProducto({ value, onChange }) {
+export default function FiltroProducto({ value, onChange, fuente = 'ventas' }) {
   // Solo se muestra el siguiente nivel cuando el anterior está elegido
   const visibles = []
   for (const n of NIVELES_PRODUCTO) {
@@ -84,6 +90,7 @@ export default function FiltroProducto({ value, onChange }) {
               nivel={n}
               value={value[n.dim]}
               filtrosArriba={arriba}
+              fuente={fuente}
               onChange={(v) => onChange(cambiarNivel(value, n.dim, v))}
             />
           </span>

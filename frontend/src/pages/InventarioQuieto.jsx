@@ -10,10 +10,10 @@ import {
   InformationCircleIcon,
   LightBulbIcon,
   Squares2X2Icon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, LabelList } from 'recharts'
 import { endpoints } from '../services/cfoApi'
+import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ventas/FiltroProducto'
 import { fmtM, fmtQ, tooltipStyle } from '../components/analisis/formato'
 
 /**
@@ -112,12 +112,16 @@ function exportarCSV(nombre, columnas, filas) {
 }
 
 export default function InventarioQuieto() {
-  const [path, setPath] = useState([]) // [{ dim, clave }]
+  // Filtro Categoría › Subcategoría › Sublínea; hacer clic en una fila lo va rellenando
+  const [filtro, setFiltro] = useState(FILTRO_VACIO)
+  const path = NIVELES_PRODUCTO.filter(n => filtro[n.dim]).map(n => ({ dim: n.dim, clave: filtro[n.dim] }))
   const [estadoLista, setEstadoLista] = useState('')
   const [orden, setOrden] = useState({ col: 'quieto', dir: 'desc' })
 
-  const nivel = NIVELES[Math.min(path.length, NIVELES.length - 1)]
-  const siguiente = NIVELES[path.length + 1]
+  // Nivel a mostrar = primer nivel vacío del filtro
+  const idx = NIVELES_PRODUCTO.findIndex(n => !filtro[n.dim])
+  const nivel = NIVELES[idx === -1 ? NIVELES.length - 1 : idx]
+  const siguiente = NIVELES[NIVELES.indexOf(nivel) + 1]
   const esHoja = nivel.dim === 'articulo'
   const filtros = Object.fromEntries(path.map(p => [p.dim, p.clave]))
   const titulo = path.length ? path[path.length - 1].clave : 'Todo el inventario'
@@ -145,9 +149,8 @@ export default function InventarioQuieto() {
 
   const drill = (it) => {
     if (esHoja || cargando) return
-    setPath([...path, { dim: nivel.dim, clave: it.clave }])
+    setFiltro({ ...filtro, [nivel.dim]: it.clave })
   }
-  const irA = (n) => setPath(path.slice(0, n))
   const sortBy = (col) => setOrden(o => ({ col, dir: o.col === col && o.dir === 'desc' ? 'asc' : 'desc' }))
   const Th = ({ col, children, align = 'right', ayuda }) => (
     <th className={`text-${align} font-semibold pb-2 px-2 cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-primary)]`} onClick={() => sortBy(col)}>
@@ -178,33 +181,8 @@ export default function InventarioQuieto() {
         </div>
       </div>
 
-      {/* Ruta de la selección */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] mr-1"><CubeIcon className="w-4 h-4" /> Producto</span>
-        <button
-          onClick={() => irA(0)}
-          className={`rounded-lg border px-2.5 py-1.5 text-sm ${path.length === 0 ? 'border-[#001639] bg-[#001639] text-white' : 'border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'}`}
-        >
-          Todas las categorías
-        </button>
-        {path.map((p, i) => (
-          <span key={i} className="flex items-center gap-1.5">
-            <ChevronRightIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-            <button
-              onClick={() => irA(i + 1)}
-              className={`rounded-lg border px-2.5 py-1.5 text-sm ${i === path.length - 1 ? 'border-[#001639] bg-[#001639] text-white' : 'border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'}`}
-            >
-              <span className={`text-[10px] uppercase tracking-wide mr-1 ${i === path.length - 1 ? 'text-white/70' : 'text-[var(--text-muted)]'}`}>{NIVELES[i].singular}</span>
-              {p.clave}
-            </button>
-          </span>
-        ))}
-        {path.length > 0 && (
-          <button onClick={() => irA(0)} className="ml-1 flex items-center gap-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-            <XMarkIcon className="w-3.5 h-3.5" /> Quitar filtro
-          </button>
-        )}
-      </div>
+      {/* Filtro de producto (opciones = lo que tiene stock hoy) */}
+      <FiltroProducto value={filtro} onChange={setFiltro} fuente="inventario" />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
