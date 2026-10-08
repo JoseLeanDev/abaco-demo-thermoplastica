@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const [email, setEmail] = useState('demo@cfoai.com')
-  const [password, setPassword] = useState('demo123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
@@ -63,6 +63,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-white text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[#001639] focus:border-transparent"
                 placeholder="tu@correo.com"
+                autoComplete="username"
                 required
               />
             </div>
@@ -77,6 +78,7 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-white text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[#001639] focus:border-transparent"
                 placeholder="••••••••"
+                autoComplete="current-password"
                 required
               />
             </div>
@@ -90,15 +92,10 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-4 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
-            <p className="text-xs text-[var(--text-muted)] mb-1 font-medium">Demo:</p>
-            <p className="text-xs text-[var(--text-secondary)]">Correo: <span className="font-mono">demo@cfoai.com</span></p>
-            <p className="text-xs text-[var(--text-secondary)]">Contraseña: <span className="font-mono">demo123</span></p>
-          </div>
         </div>
 
         <p className="text-center text-xs text-[var(--text-muted)] mt-6">
-          © 2025 abaco — Versión Demo
+          © {new Date().getFullYear()} abaco
         </p>
       </div>
     </div>
