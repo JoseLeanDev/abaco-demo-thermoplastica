@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { Leyenda } from '../components/common/leyendas'
 import {
   ArrowTrendingDownIcon,
   ArrowLeftIcon,
@@ -100,25 +101,25 @@ export default function CuentasPorPagar() {
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Total por Pagar</span>
+          <span className="kpi-label flex items-center gap-1">Total por Pagar <Leyenda k="cxp_total" /></span>
           <p className="kpi-value">{fmtQ(resumen.total_cxp)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{totalFacturas.toLocaleString()} facturas · {resumen.proveedores || 0} proveedores</p>
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Por Vencer</span>
+          <span className="kpi-label flex items-center gap-1">Por Vencer <Leyenda k="por_vencer" /></span>
           <p className="kpi-value text-[var(--success)]">{fmtQ(distribucion.por_vencer?.monto)}</p>
           <p className="text-xs text-[var(--success)] mt-1">{distribucion.por_vencer?.porcentaje || 0}%</p>
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">1-30 días vencido</span>
+          <span className="kpi-label flex items-center gap-1">1-30 días vencido <Leyenda k="dias_vencido" /></span>
           <p className="kpi-value text-[var(--warning)]">{fmtQ(distribucion.v_1_30?.monto)}</p>
           <p className="text-xs text-[var(--warning)] mt-1">{distribucion.v_1_30?.porcentaje || 0}%</p>
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">+60 días (riesgo)</span>
+          <span className="kpi-label flex items-center gap-1">+60 días (riesgo) <Leyenda k="cxc_riesgo" /></span>
           <p className="kpi-value text-[var(--danger)]">{fmtQ((distribucion.v_61_90?.monto || 0) + (distribucion.v_90_mas?.monto || 0))}</p>
           <p className="text-xs text-[var(--danger)] mt-1">Atención requerida</p>
         </div>
@@ -129,6 +130,7 @@ export default function CuentasPorPagar() {
         <div className="section-header">
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Distribución por Antigüedad (vs fecha de vencimiento real)</h2>
+          <Leyenda k="aging_cxp" />
         </div>
         <div className="p-5 pt-0 space-y-4">
           {[
@@ -165,6 +167,7 @@ export default function CuentasPorPagar() {
           <div className="section-header">
             <BuildingOfficeIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Top proveedores con saldo</h2>
+          <Leyenda k="top_proveedores_cxp" />
           </div>
           <div className="p-5 pt-0 overflow-x-auto">
             <table className="w-full">
@@ -172,7 +175,7 @@ export default function CuentasPorPagar() {
                 <tr className="text-xs text-[var(--text-muted)] uppercase">
                   <th className="text-left  font-semibold pb-2">Proveedor</th>
                   <th className="text-right font-semibold pb-2">Facturas</th>
-                  <th className="text-right font-semibold pb-2">Crédito</th>
+                  <th className="text-right font-semibold pb-2">Crédito <Leyenda k="dias_credito" /></th>
                   <th className="text-right font-semibold pb-2">Saldo</th>
                 </tr>
               </thead>
@@ -219,6 +222,7 @@ export default function CuentasPorPagar() {
           <div className="section-header">
             <ClockIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Próximos pagos (30 días)</h2>
+          <Leyenda k="proximos_pagos" />
           </div>
           <div className="p-5 pt-0 overflow-x-auto">
             {proximos.length === 0 ? (
@@ -229,7 +233,7 @@ export default function CuentasPorPagar() {
                   <tr className="text-xs text-[var(--text-muted)] uppercase">
                     <th className="text-left  font-semibold pb-2">Vence</th>
                     <th className="text-left  font-semibold pb-2">Proveedor</th>
-                    <th className="text-right font-semibold pb-2">Días</th>
+                    <th className="text-right font-semibold pb-2">Días <Leyenda k="dias_restantes" /></th>
                     <th className="text-right font-semibold pb-2">Monto</th>
                   </tr>
                 </thead>
@@ -301,7 +305,7 @@ export default function CuentasPorPagar() {
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Factura</th>
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Emisión</th>
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Vencimiento</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Crédito<br /><span className="normal-case font-normal">ficha · factura</span></th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Crédito <Leyenda k="credito_ficha_factura" /><br /><span className="normal-case font-normal">ficha · factura</span></th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Saldo</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Estado</th>
               </tr>

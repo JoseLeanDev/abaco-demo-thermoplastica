@@ -3,6 +3,7 @@ import { useQuery } from 'react-query'
 import { TableCellsIcon } from '@heroicons/react/24/outline'
 import { endpoints } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
+import { Leyenda } from '../common/leyendas'
 
 // Tabla cruzada de ventas entre dos dimensiones (p. ej. categoría × vendedor) como
 // mapa de calor. Respeta el filtro de producto de la página.
@@ -77,6 +78,7 @@ export default function TabMatriz({ filtroProducto }) {
       <div className="section-header flex-wrap gap-2">
         <TableCellsIcon className="w-5 h-5 text-[var(--text-muted)]" />
         <h2 className="font-semibold">Matriz de ventas</h2>
+        <Leyenda k="matriz" />
         <div className="ml-auto flex items-center gap-2 flex-wrap text-xs">
           <label className="flex items-center gap-1 text-[var(--text-muted)]">Filas
             <select className="input py-1 text-xs w-auto" value={filas} onChange={(e) => setFilas(e.target.value)}>

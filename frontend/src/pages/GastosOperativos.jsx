@@ -20,6 +20,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { Leyenda } from '../components/common/leyendas'
 
 const fmtQ = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtQfull = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
@@ -122,7 +123,7 @@ export default function GastosOperativos() {
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Gasto operativo (sin IVA)</span>
+          <span className="kpi-label flex items-center gap-1">Gasto operativo (sin IVA) <Leyenda k="gasto_operativo" /></span>
           <p className="kpi-value">{fmtQ(resumen.gasto_sin_iva)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             Con IVA: {fmtQ(resumen.gasto_con_iva)}
@@ -130,7 +131,7 @@ export default function GastosOperativos() {
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">IVA acreditable</span>
+          <span className="kpi-label flex items-center gap-1">IVA acreditable <Leyenda k="iva_acreditable" /></span>
           <p className="kpi-value">{fmtQ(resumen.iva_acreditable)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             {resumen.gasto_sin_iva > 0
@@ -140,7 +141,7 @@ export default function GastosOperativos() {
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Centros de costo activos</span>
+          <span className="kpi-label flex items-center gap-1">Centros de costo activos <Leyenda k="centros_costo" /></span>
           <p className="kpi-value">{fmtNum(resumen.centros_costo)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             {fmtNum(resumen.lineas)} líneas registradas
@@ -148,7 +149,7 @@ export default function GastosOperativos() {
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Tendencia mes actual</span>
+          <span className="kpi-label flex items-center gap-1">Tendencia mes actual <Leyenda k="tendencia_mes" /></span>
           {tendenciaMensual === null ? (
             <p className="kpi-value text-[var(--text-muted)]">—</p>
           ) : (
@@ -188,6 +189,7 @@ export default function GastosOperativos() {
         <div className="section-header">
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Gasto operativo mensual</h2>
+          <Leyenda k="gasto_operativo" />
         </div>
         <div className="p-5 pt-0">
           {serie.length === 0 ? (
@@ -217,6 +219,7 @@ export default function GastosOperativos() {
           <div className="section-header">
             <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Gasto por centro de costo</h2>
+          <Leyenda k="centros_costo" />
           </div>
           <div className="p-5 pt-0 space-y-3">
             {centros.length === 0 && <p className="text-sm text-[var(--text-muted)]">Sin datos.</p>}
@@ -254,6 +257,7 @@ export default function GastosOperativos() {
           <div className="section-header">
             <BuildingOfficeIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Top proveedores de gastos</h2>
+          <Leyenda k="top_proveedores" />
           </div>
           <div className="p-5 pt-0">
             <table className="w-full">

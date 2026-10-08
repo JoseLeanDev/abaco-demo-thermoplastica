@@ -31,6 +31,7 @@ import {
   TruckIcon,
 } from '@heroicons/react/24/outline'
 import InsightsCarousel from '../components/agents/InsightsCarousel'
+import { Leyenda } from '../components/common/leyendas'
 
 // ============================================================
 // Helpers de formato
@@ -135,6 +136,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <AgingCard
           titulo="Antigüedad · Cuentas por Cobrar"
+          leyenda="aging_cxc"
           tono="cobrar"
           total={cxcAg.total}
           docCount={k.cxc_documentos}
@@ -144,6 +146,7 @@ export default function Dashboard() {
         />
         <AgingCard
           titulo="Antigüedad · Cuentas por Pagar"
+          leyenda="aging_cxp"
           tono="pagar"
           total={cxpAg.total}
           docCount={k.cxp_facturas}
@@ -168,6 +171,7 @@ export default function Dashboard() {
         <div className="lg:col-span-2 space-y-4">
           <ConcentracionCard
             titulo="Top clientes deudores (CxC)"
+            leyenda="top_deudores"
             icono={UsersIcon}
             data={d.top_clientes || []}
             nameKey="cliente"
@@ -177,6 +181,7 @@ export default function Dashboard() {
           />
           <ConcentracionCard
             titulo="Top proveedores por pagar"
+            leyenda="top_proveedores_cxp"
             icono={TruckIcon}
             data={d.top_proveedores_cxp || []}
             nameKey="proveedor"
@@ -194,6 +199,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <BoltIcon className="w-5 h-5 text-[var(--danger)]" />
               <h2 className="font-semibold">Acción esta semana · CxC con +60 días de atraso</h2>
+              <Leyenda k="cxc_criticas" />
             </div>
             <Link to="/tesoreria/cuentas-por-cobrar" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
               Ver todo <ArrowRightIcon className="w-3 h-3" />
@@ -285,9 +291,9 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
               </div>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Health Score</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center gap-1">Health Score <Leyenda k="health_score" claro /></p>
               <p className={`text-lg font-semibold capitalize ${color.text}`}>{h.grade || '—'}</p>
-              <p className="text-xs text-white/50 mt-1">Compuesto de 7 dimensiones</p>
+              <p className="text-xs text-white/50 mt-1 whitespace-nowrap">Compuesto de 7 dimensiones <Leyenda k="score_componentes" claro /></p>
             </div>
 
             {/* Mini componentes del score */}
@@ -306,24 +312,24 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
         {/* Números north-star a la derecha */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-5 text-right">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Ventas del período</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center justify-end gap-1">Ventas del período <Leyenda k="ventas" claro /></p>
             <p className="text-2xl font-bold tabular-nums mt-1">{fmtM(k.ventas_12m)}</p>
-            <DeltaBadge value={k.delta_ventas_pct} suffix="vs año ant." size="xs" />
+            <DeltaBadge value={k.delta_ventas_pct} suffix="vs año ant." size="xs" leyenda="vs_anio_anterior" />
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Margen bruto</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center justify-end gap-1">Margen bruto <Leyenda k="margen_bruto" claro /></p>
             <p className="text-2xl font-bold tabular-nums mt-1 text-emerald-300">{fmtPct(k.margen_bruto_pct)}</p>
-            <DeltaBadge value={k.delta_margen_pp} suffix="pp YoY" size="xs" unit="pp" />
+            <DeltaBadge value={k.delta_margen_pp} suffix="pp YoY" size="xs" unit="pp" leyenda="margen_pts" />
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">EBITDA est.</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center justify-end gap-1">EBITDA est. <Leyenda k="ebitda" claro /></p>
             <p className={`text-2xl font-bold tabular-nums mt-1 ${k.ebitda_estimado >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
               {fmtM(k.ebitda_estimado)}
             </p>
             <p className="text-[10px] text-white/50 mt-1">margen {fmtPct(k.ebitda_pct)}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Posición neta WC</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center justify-end gap-1">Posición neta WC <Leyenda k="posicion_neta_wc" claro /></p>
             <p className={`text-2xl font-bold tabular-nums mt-1 ${k.posicion_neta_wc >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
               {fmtM(k.posicion_neta_wc)}
             </p>
@@ -351,7 +357,7 @@ function ScorePip({ label, value }) {
   )
 }
 
-function DeltaBadge({ value, suffix, size = 'sm', unit = '%' }) {
+function DeltaBadge({ value, suffix, size = 'sm', unit = '%', leyenda }) {
   if (value === null || value === undefined || isNaN(value)) {
     return <p className="text-[10px] text-white/40 mt-1">—</p>
   }
@@ -366,6 +372,7 @@ function DeltaBadge({ value, suffix, size = 'sm', unit = '%' }) {
       <Icon className="w-3 h-3" />
       {sign}{v.toFixed(1)}{unit === 'pp' ? 'pp' : '%'}
       {suffix && <span className="text-white/40 ml-1 font-normal">{suffix}</span>}
+      {leyenda && <Leyenda k={leyenda} claro className="ml-1" />}
     </p>
   )
 }
@@ -387,6 +394,7 @@ function VentasTrendCard({ serie, kpis: k }) {
         <div className="flex items-center gap-2">
           <ChartBarIcon className="w-5 h-5 text-[var(--accent-blue)]" />
           <h2 className="font-semibold">Facturación mensual · comparativo YoY</h2>
+          <Leyenda k="facturacion_yoy" />
         </div>
         <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-3">
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#001639] rounded-sm" /> Este período</span>
@@ -456,13 +464,14 @@ function CashConversionCycle({ kpis: k }) {
         <div className="flex items-center gap-2">
           <ArrowsRightLeftIcon className="w-5 h-5 text-[var(--accent-blue)]" />
           <h2 className="font-semibold">Ciclo de conversión de efectivo</h2>
+          <Leyenda k="ccc_panel" />
         </div>
         <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">CCC = DSO + DIO − DPO</span>
       </div>
       <div className="p-5 pt-2 space-y-4">
-        <CccBar label="DSO · Días cobrando (CxC)" value={dso} max={max} color="bg-emerald-500" hint="Cuánto tardan los clientes en pagarte" />
-        <CccBar label="DIO · Días de inventario" value={dio} max={max} color="bg-sky-500" hint="Cuánto está inmovilizado el stock" />
-        <CccBar label="DPO · Días pagando (CxP)" value={dpo} max={max} color="bg-rose-500" hint="Cuánto tardás en pagar proveedores" invert />
+        <CccBar leyenda="dso_panel" label="DSO · Días cobrando (CxC)" value={dso} max={max} color="bg-emerald-500" hint="Cuánto tardan los clientes en pagarte" />
+        <CccBar leyenda="dio_panel" label="DIO · Días de inventario" value={dio} max={max} color="bg-sky-500" hint="Cuánto está inmovilizado el stock" />
+        <CccBar leyenda="dpo_panel" label="DPO · Días pagando (CxP)" value={dpo} max={max} color="bg-rose-500" hint="Cuánto tardás en pagar proveedores" invert />
 
         <div className="pt-4 border-t border-[var(--border-default)] flex items-center justify-between">
           <div>
@@ -480,13 +489,13 @@ function CashConversionCycle({ kpis: k }) {
   )
 }
 
-function CccBar({ label, value, max, color, hint, invert }) {
+function CccBar({ label, value, max, color, hint, invert, leyenda }) {
   const pct = max > 0 ? (value / max) * 100 : 0
   return (
     <div>
       <div className="flex items-baseline justify-between mb-1">
         <div>
-          <p className="text-sm font-medium">{label}</p>
+          <p className="text-sm font-medium flex items-center gap-1">{label} {leyenda && <Leyenda k={leyenda} />}</p>
           <p className="text-[10px] text-[var(--text-muted)]">{hint}</p>
         </div>
         <p className="text-lg font-bold tabular-nums">
@@ -525,6 +534,7 @@ function PnlWaterfall({ kpis: k }) {
         <div className="flex items-center gap-2">
           <ChartPieIcon className="w-5 h-5 text-[var(--accent-blue)]" />
           <h2 className="font-semibold">Cascada P&amp;L · período</h2>
+          <Leyenda k="cascada_pl" />
         </div>
         <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">de ventas a EBITDA</span>
       </div>
@@ -562,7 +572,7 @@ function PnlWaterfall({ kpis: k }) {
 // ============================================================
 // 5. AGING CARD (CxC y CxP)
 // ============================================================
-function AgingCard({ titulo, tono, total, docCount, buckets, link, linkLabel }) {
+function AgingCard({ titulo, tono, total, docCount, buckets, link, linkLabel, leyenda }) {
   const isCobrar = tono === 'cobrar'
   const bucketDefs = [
     { key: 'por_vencer', label: 'Por vencer',    color: isCobrar ? 'bg-emerald-500' : 'bg-sky-500' },
@@ -581,6 +591,7 @@ function AgingCard({ titulo, tono, total, docCount, buckets, link, linkLabel }) 
         <div className="flex items-center gap-2">
           {isCobrar ? <UsersIcon className="w-5 h-5 text-emerald-500" /> : <TruckIcon className="w-5 h-5 text-sky-500" />}
           <h2 className="font-semibold">{titulo}</h2>
+          {leyenda && <Leyenda k={leyenda} />}
         </div>
         {link && (
           <Link to={link} className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
@@ -650,6 +661,7 @@ function ComprasKpiCard({ kpis: k }) {
   return (
     <MiniKpiCard
       titulo="Compras materia prima"
+      leyenda="compras_mp"
       icon={ShoppingCartIcon}
       color="sky"
       valor={fmtM(k.compras_12m)}
@@ -666,6 +678,7 @@ function GastosKpiCard({ kpis: k }) {
   return (
     <MiniKpiCard
       titulo="Gastos operativos"
+      leyenda="gastos_operativos"
       icon={BuildingOfficeIcon}
       color="amber"
       valor={fmtM(k.gastos_operativos_12m)}
@@ -683,6 +696,8 @@ function InventarioKpiCard({ kpis: k }) {
   return (
     <MiniKpiCard
       titulo="Inventario en almacén"
+      leyenda="valor_stock"
+      deltaLeyenda="rotacion_inventario"
       icon={CubeIcon}
       color="indigo"
       valor={fmtM(k.inventario_valor)}
@@ -698,7 +713,7 @@ function InventarioKpiCard({ kpis: k }) {
   )
 }
 
-function MiniKpiCard({ titulo, icon: Icon, color, valor, delta, deltaLabel, deltaUnit = '%', deltaIsMetric, pctVentas, pctVentasLabel, pctVentasIsCount, to }) {
+function MiniKpiCard({ titulo, leyenda, deltaLeyenda, icon: Icon, color, valor, delta, deltaLabel, deltaUnit = '%', deltaIsMetric, pctVentas, pctVentasLabel, pctVentasIsCount, to }) {
   const accentBg = color === 'emerald' ? 'from-emerald-500/10' : color === 'sky' ? 'from-sky-500/10' : color === 'amber' ? 'from-amber-500/10' : color === 'indigo' ? 'from-indigo-500/10' : 'from-slate-500/10'
   const iconColor = color === 'emerald' ? 'text-emerald-500' : color === 'sky' ? 'text-sky-500' : color === 'amber' ? 'text-amber-500' : color === 'indigo' ? 'text-indigo-500' : 'text-slate-500'
   const borderClr = color === 'emerald' ? 'border-emerald-500/20' : color === 'sky' ? 'border-sky-500/20' : color === 'amber' ? 'border-amber-500/20' : color === 'indigo' ? 'border-indigo-500/20' : 'border-slate-500/20'
@@ -729,14 +744,14 @@ function MiniKpiCard({ titulo, icon: Icon, color, valor, delta, deltaLabel, delt
     <div className={`relative rounded-xl border ${borderClr} bg-gradient-to-br ${accentBg} to-transparent bg-[var(--bg-primary)] p-4 h-full card-hover`}>
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">{titulo}</p>
+          <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1">{titulo} {leyenda && <Leyenda k={leyenda} />}</p>
           <p className="text-2xl font-bold tabular-nums mt-1">{valor}</p>
         </div>
         <Icon className={`w-8 h-8 ${iconColor} opacity-40`} />
       </div>
       <div className="flex items-baseline gap-2 pt-2 border-t border-[var(--border-default)]">
         {deltaEl}
-        <span className="text-[11px] text-[var(--text-muted)]">{deltaLabel}</span>
+        <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1">{deltaLabel} {deltaLeyenda ? <Leyenda k={deltaLeyenda} /> : !deltaIsMetric && <Leyenda k="vs_anio_anterior" />}</span>
       </div>
       {pctVentas !== null && pctVentas !== undefined && (
         <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
@@ -761,6 +776,7 @@ function MixLineasCard({ lineas }) {
         <div className="flex items-center gap-2">
           <CubeIcon className="w-5 h-5 text-indigo-500" />
           <h2 className="font-semibold">Mix de líneas · ventas y margen del período</h2>
+          <Leyenda k="mix_lineas" />
         </div>
         <Link to="/ventas" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
           Ver ventas <ArrowRightIcon className="w-3 h-3" />
@@ -803,7 +819,7 @@ function MixLineasCard({ lineas }) {
 // ============================================================
 // 7b. CONCENTRACIÓN CARD (mejora de la existente)
 // ============================================================
-function ConcentracionCard({ titulo, icono: Icon, data, nameKey, alertaPct, linkTo, variant }) {
+function ConcentracionCard({ titulo, leyenda, icono: Icon, data, nameKey, alertaPct, linkTo, variant }) {
   const hayConcentracion = data[0]?.porcentaje >= alertaPct
   const barCls = variant === 'rose' ? 'bg-rose-500' : variant === 'indigo' ? 'bg-indigo-500' : 'bg-[#001639]'
   const alertCls = 'bg-amber-500'
@@ -813,6 +829,7 @@ function ConcentracionCard({ titulo, icono: Icon, data, nameKey, alertaPct, link
         <div className="flex items-center gap-2">
           <Icon className={`w-4 h-4 ${variant === 'rose' ? 'text-rose-500' : 'text-indigo-500'}`} />
           <h2 className="font-semibold text-sm">{titulo}</h2>
+          {leyenda && <Leyenda k={leyenda} />}
         </div>
         {linkTo && (
           <Link to={linkTo} className="text-[11px] text-[var(--accent-blue)] flex items-center gap-1 hover:underline">

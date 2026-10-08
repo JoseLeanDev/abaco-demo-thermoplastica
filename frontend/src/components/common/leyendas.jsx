@@ -1,0 +1,599 @@
+import ComoSeCalcula from './ComoSeCalcula'
+
+// ---------------------------------------------------------------------------
+// Glosario de métricas: cómo se calcula cada número de la plataforma.
+// Uso: <Leyenda k="margen_bruto" />  → ⓘ discreto con la explicación.
+//
+// Los textos describen la lógica REAL del backend (rutas en backend/src/routes y
+// vistas analitica.*). Si cambia un cálculo, actualizar aquí.
+// ---------------------------------------------------------------------------
+
+const L = ({ children }) => <ul className="list-disc pl-4 mt-1 space-y-0.5">{children}</ul>
+const Nota = ({ children }) => <span className="block mt-1.5 text-[var(--text-muted)]">{children}</span>
+
+export const LEYENDAS = {
+  // ======================= Generales / Ventas =======================
+  ventas: {
+    titulo: 'Ventas (sin IVA)',
+    texto: <>Suma sin IVA de las líneas de factura (tipo FACT) emitidas en el período. Las notas de crédito casi no se registran en el ERP, así que no se restan.</>,
+  },
+  vs_anio_anterior: {
+    titulo: 'Comparación con el año anterior',
+    texto: <>Se compara con el mismo rango de fechas un año antes. Si el período elegido dura más de un año, se compara con el período inmediatamente anterior de igual largo.</>,
+  },
+  cambio: {
+    titulo: 'Cambio',
+    texto: <>(Ventas del período − ventas del año anterior) ÷ ventas del año anterior. “Nuevo” = no tuvo ventas en el período anterior. Debajo, la diferencia en Q.</>,
+  },
+  margen_bruto: {
+    titulo: 'Margen bruto',
+    texto: <>
+      Margen % = (ventas − costo) ÷ ventas, usando solo las líneas que traen costo en el ERP
+      (costo = unidades × costo promedio facturado).
+      <Nota>El margen en Q aplica ese % a todas las ventas. Las ventas que vienen sin costo se informan aparte y no entran al %.</Nota>
+    </>,
+  },
+  margen_pts: {
+    titulo: 'Puntos de margen',
+    texto: <>Diferencia en puntos porcentuales entre el margen % del período y el del mismo período del año anterior (p. ej. 35% → 38% = +3 pts).</>,
+  },
+  pct_sin_costo: {
+    titulo: 'Ventas sin costo',
+    texto: <>% de las ventas cuyas líneas llegan del ERP con costo 0. No se cuentan como 100% de margen: se excluyen del margen %.</>,
+  },
+  clientes_compraron: {
+    titulo: 'Clientes que compraron',
+    texto: <>Clientes distintos con al menos una factura en el período.</>,
+  },
+  ticket_promedio: {
+    titulo: 'Ticket promedio',
+    texto: <>Ventas sin IVA ÷ número de facturas del período.</>,
+  },
+  participacion: {
+    titulo: '% del total',
+    texto: <>Ventas de la fila ÷ ventas totales de la selección actual (respeta los filtros de período y producto).</>,
+  },
+  unidades: {
+    titulo: 'Unidades',
+    texto: <>Unidades facturadas en la unidad de medida de cada artículo (pueden ser piezas, kilos, yardas…), por eso sumar artículos distintos solo sirve como referencia.</>,
+  },
+  precio_promedio: {
+    titulo: 'Precio promedio',
+    texto: <>Ventas sin IVA ÷ unidades facturadas del artículo en el período.</>,
+  },
+  productos_skus: {
+    titulo: 'Productos',
+    texto: <>Códigos de artículo distintos con ventas en el período.</>,
+  },
+  efecto_precio: {
+    titulo: 'Por precio',
+    texto: <>Cambio de ventas por vender los <strong>mismos</strong> artículos más caros o más baratos: (precio promedio actual − precio promedio del año anterior) × unidades actuales. Se calcula artículo por artículo y se suma.</>,
+  },
+  efecto_cantidad: {
+    titulo: 'Por cantidad',
+    texto: <>Cambio de ventas por vender más o menos unidades de los <strong>mismos</strong> artículos: (unidades actuales − unidades del año anterior) × precio promedio del año anterior.</>,
+  },
+  productos_nuevos: {
+    titulo: 'Productos nuevos',
+    texto: <>Ventas de códigos que no se vendieron en el período anterior.</>,
+  },
+  productos_perdidos: {
+    titulo: 'Ya no se venden',
+    texto: <>Ventas del año anterior de códigos que no tuvieron venta este período. En producto a la medida, muchas veces un código nuevo reemplaza a uno viejo, así que este efecto y el de productos nuevos tienden a compensarse.</>,
+  },
+  puente: {
+    titulo: 'Puente de variación',
+    texto: <>
+      Parte de las ventas del año anterior y suma o resta cada efecto hasta llegar a las de este período.
+      Precio + cantidad + nuevos + ya no se venden (+ otros) = cambio total exacto.
+      <Nota>“Otros” son líneas sin unidades, como servicios o ajustes.</Nota>
+    </>,
+  },
+  venta_perdida: {
+    titulo: 'Venta perdida',
+    texto: <>Lo que vendieron el año anterior los elementos que este período no tuvieron ninguna venta.</>,
+  },
+  clientes_nuevos: {
+    titulo: 'Clientes nuevos',
+    texto: <>Clientes con ventas en el período que no compraron nada en el mismo período del año anterior.</>,
+  },
+  clientes_perdidos: {
+    titulo: 'Clientes perdidos',
+    texto: <>Clientes que compraron en el período del año anterior y en este no tienen ninguna factura. El monto es lo que compraron el año anterior.</>,
+  },
+  clientes_activos: {
+    titulo: 'Clientes activos',
+    texto: <>Clientes distintos con ventas en el período (respeta el filtro de producto).</>,
+  },
+  concentracion_top: {
+    titulo: 'Concentración',
+    texto: <>Ventas acumuladas de los N clientes más grandes ÷ ventas totales del período. Arriba de 50% en el top 10 se marca como concentración alta.</>,
+  },
+  pareto: {
+    titulo: 'Curva de Pareto',
+    texto: <>Barras: ventas de cada cliente ordenadas de mayor a menor. Línea: % acumulado de las ventas totales.</>,
+  },
+  vendedor_top: {
+    titulo: 'Concentración por vendedor',
+    texto: <>% de las ventas de la selección que factura el vendedor principal. Desde 40% se marca como concentración alta.</>,
+  },
+  matriz: {
+    titulo: 'Matriz de ventas',
+    texto: <>
+      Ventas sin IVA del período cruzadas entre dos dimensiones. Modos:
+      <L>
+        <li><strong>% de la fila:</strong> celda ÷ total de su fila.</li>
+        <li><strong>% de la columna:</strong> celda ÷ total de su columna.</li>
+        <li><strong>Margen %:</strong> con el criterio de margen de la plataforma (s/c = sin costo).</li>
+      </L>
+      <Nota>Hasta 40 filas y 10 columnas; el resto se agrupa en “Otros”.</Nota>
+    </>,
+  },
+  jerarquia_producto: {
+    titulo: 'Categoría › Subcategoría › Sublínea',
+    texto: <>Agrupación del catálogo del ERP: categoría = campo “marca” (Laminados, Liners…), subcategoría = “línea” y sublínea = “sublínea”.</>,
+  },
+  serie_mensual: {
+    titulo: 'Serie mensual',
+    texto: <>Ventas sin IVA por mes calendario dentro del período. El último mes puede estar incompleto si el período termina hoy.</>,
+  },
+
+  // ======================= Márgenes =======================
+  dejaste_de_ganar: {
+    titulo: 'Q que dejaste de ganar',
+    texto: <>
+      Ventas del período × puntos de margen perdidos ÷ 100, solo donde el margen bajó vs el año anterior.
+      Es lo que se habría ganado vendiendo lo mismo con el margen del año anterior.
+      <Nota>En el resumen se suma sobre los 50 productos de mayor venta (≥ Q1,000 en el período).</Nota>
+    </>,
+  },
+  semaforo_margen: {
+    titulo: 'Semáforo de margen',
+    texto: <>
+      Margen % del período vs el mismo período del año anterior:
+      <L>
+        <li><strong>Verde:</strong> subió o bajó menos de 1 punto.</li>
+        <li><strong>Ámbar:</strong> bajó entre 1 y 5 puntos.</li>
+        <li><strong>Rojo:</strong> bajó más de 5 puntos.</li>
+      </L>
+      <Nota>Se excluyen productos cuyo margen del año anterior es mayor a 90% o menor a −10%: suele ser un costo mal cargado en el ERP.</Nota>
+    </>,
+  },
+  semaforo_categoria: {
+    titulo: 'Semáforo por categoría',
+    texto: <>
+      <L>
+        <li><strong>Rojo:</strong> margen menor a 20% o cayó 5 puntos o más vs el año anterior.</li>
+        <li><strong>Ámbar:</strong> margen menor a 30% o cayó 2 puntos o más.</li>
+        <li><strong>Verde:</strong> el resto.</li>
+      </L>
+    </>,
+  },
+  necesitan_ajuste: {
+    titulo: 'Necesitan ajuste de precio',
+    texto: <>Productos en rojo (perdieron más de 5 puntos de margen) y en ámbar (entre 1 y 5), entre los 50 de mayor venta del período.</>,
+  },
+  precio_sugerido: {
+    titulo: 'Precio sugerido',
+    texto: <>Costo unitario actual ÷ (1 − margen del año anterior), es decir, el precio que recupera el margen anterior. Tope: +30% sobre el precio actual.</>,
+  },
+  costo_unitario: {
+    titulo: 'Costo unitario',
+    texto: <>Costo de ventas del período ÷ unidades vendidas. El costo de ventas sigue el criterio de margen: ventas − margen bruto.</>,
+  },
+  aporte_margen: {
+    titulo: 'Aporte al margen',
+    texto: <>Margen en Q de la fila ÷ margen en Q total de la selección.</>,
+  },
+
+  // ======================= Panel =======================
+  health_score: {
+    titulo: 'Health Score (0–100)',
+    texto: <>
+      Promedio ponderado de 7 puntajes, cada uno de 0 a 100:
+      <L>
+        <li>Crecimiento de ventas 20% · margen bruto 20% · EBITDA % 15%</li>
+        <li>Cobertura CxC/CxP 15% · cartera vencida 10%</li>
+        <li>Concentración del cliente #1 10% · disciplina de crédito 10%</li>
+      </L>
+      <Nota>80+ excelente · 65–79 saludable · 50–64 atención · menos de 50 crítico.</Nota>
+    </>,
+  },
+  score_componentes: {
+    titulo: 'Puntajes del Health Score',
+    texto: <>
+      <L>
+        <li><strong>Crec.:</strong> 50 + 3 × variación % de ventas.</li>
+        <li><strong>Margen:</strong> (margen % − 15) × 4.</li>
+        <li><strong>EBITDA:</strong> (EBITDA % − 5) × 6.</li>
+        <li><strong>WC:</strong> (cobertura CxC/CxP − 0.5) × 100.</li>
+        <li><strong>Cobros:</strong> 100 − 2 × % de la cartera vencida.</li>
+        <li><strong>Concent.:</strong> 100 − 2 × % de ventas del cliente #1.</li>
+        <li><strong>Disc.:</strong> 100 − 3 × % de facturas con más días que el crédito pactado.</li>
+      </L>
+      <Nota>Cada puntaje se limita entre 0 y 100.</Nota>
+    </>,
+  },
+  ebitda: {
+    titulo: 'EBITDA estimado',
+    texto: <>
+      Margen bruto − gastos operativos del período. Margen % EBITDA = EBITDA ÷ ventas.
+      <Nota>Es una aproximación: solo incluye los gastos que se registran como compras de “Gastos de Operación” en el ERP. Nómina y otros gastos fuera del ERP no están.</Nota>
+    </>,
+  },
+  posicion_neta_wc: {
+    titulo: 'Posición neta de capital de trabajo',
+    texto: <>Saldo por cobrar − saldo por pagar, de documentos emitidos en el período. Cobertura = CxC ÷ CxP: arriba de 1× se cobra más de lo que se debe.</>,
+  },
+  dso_panel: {
+    titulo: 'DSO · días cobrando',
+    texto: <>Saldo por cobrar de documentos del período ÷ ventas diarias del período (ventas sin IVA ÷ días del período).</>,
+  },
+  dio_panel: {
+    titulo: 'DIO · días de inventario',
+    texto: <>Inventario a costo hoy ÷ costo de ventas diario del período.</>,
+  },
+  dpo_panel: {
+    titulo: 'DPO · días pagando',
+    texto: <>Saldo por pagar de facturas del período ÷ compras diarias de materia prima del período.</>,
+  },
+  ccc_panel: {
+    titulo: 'Ciclo de conversión de efectivo',
+    texto: <>
+      DSO + DIO − DPO: días que el efectivo queda atrapado entre pagar a proveedores y cobrar a clientes.
+      <Nota>En Salud financiera se calcula con cartera operativa y montos con IVA, por eso puede diferir un poco de este.</Nota>
+    </>,
+  },
+  cascada_pl: {
+    titulo: 'Cascada P&L',
+    texto: <>
+      Ventas sin IVA − costo de ventas (COGS) = margen bruto − gastos operativos = EBITDA estimado.
+      <Nota>COGS se calcula con el mismo criterio que el margen: ventas − margen bruto.</Nota>
+    </>,
+  },
+  aging_cxc: {
+    titulo: 'Antigüedad de CxC',
+    texto: <>Saldo por cobrar del último corte del reporte de cartera del ERP, separado por días desde el vencimiento de cada documento. Solo documentos emitidos en el período.</>,
+  },
+  aging_cxp: {
+    titulo: 'Antigüedad de CxP',
+    texto: <>Saldo por pagar separado por días desde la fecha de vencimiento real de cada factura de proveedor. Solo facturas emitidas en el período.</>,
+  },
+  facturacion_yoy: {
+    titulo: 'Facturación mensual',
+    texto: <>Barras: ventas sin IVA de cada mes y del mismo mes del año anterior. Línea: margen % del mes. La línea punteada es el promedio mensual del período.</>,
+  },
+  compras_mp: {
+    titulo: 'Compras de materia prima',
+    texto: <>Compras sin IVA del período de artículos que no son gasto operativo. % = compras ÷ ventas del período.</>,
+  },
+  gastos_operativos: {
+    titulo: 'Gastos operativos',
+    texto: <>Compras sin IVA del período de artículos con categoría “Gastos de Operación” en el ERP. % = gastos ÷ ventas del período.</>,
+  },
+  rotacion_inventario: {
+    titulo: 'Rotaciones al año',
+    texto: <>365 ÷ días de inventario (DIO): cuántas veces al año se renueva el stock al ritmo de venta del período.</>,
+  },
+  mix_lineas: {
+    titulo: 'Mix de líneas',
+    texto: <>Las 6 subcategorías (líneas) con más ventas del período, con su margen %. No incluye artículos genéricos del ERP (GENARTICULO, GENSERV…).</>,
+  },
+  top_deudores: {
+    titulo: 'Top clientes deudores',
+    texto: <>Clientes con mayor saldo por cobrar de documentos emitidos en el período.</>,
+  },
+  top_proveedores_cxp: {
+    titulo: 'Top proveedores por pagar',
+    texto: <>Proveedores con mayor saldo pendiente en facturas emitidas en el período.</>,
+  },
+  cxc_criticas: {
+    titulo: 'CxC con +60 días de atraso',
+    texto: <>Documentos con saldo pendiente cuyo vencimiento fue hace más de 60 días, ordenados por saldo.</>,
+  },
+
+  // ======================= Compras / Gastos =======================
+  gasto_compras: {
+    titulo: 'Gasto en compras',
+    texto: <>Suma sin IVA de las facturas de proveedor del período. No incluye gastos operativos, salvo que actives “Incluir gastos operativos”.</>,
+  },
+  iva_acreditable: {
+    titulo: 'IVA acreditable',
+    texto: <>IVA de las facturas de compra del período. El % es IVA ÷ base sin IVA.</>,
+  },
+  devoluciones_compras: {
+    titulo: 'Devoluciones',
+    texto: <>Devoluciones a proveedores registradas en las líneas de compra, sin IVA. Gasto neto = compras − devoluciones.</>,
+  },
+  tendencia_mes: {
+    titulo: 'Tendencia del mes',
+    texto: <>
+      (Último mes del período − promedio de los meses anteriores) ÷ ese promedio.
+      <Nota>Si el período termina hoy, el último mes está incompleto y la tendencia sale más baja de lo real.</Nota>
+    </>,
+  },
+  top_categorias_compras: {
+    titulo: 'Categorías de compra',
+    texto: <>Gasto sin IVA agrupado por el campo “categoría” del artículo en el ERP (en la práctica coincide con la subcategoría).</>,
+  },
+  top_proveedores: {
+    titulo: 'Top proveedores',
+    texto: <>Proveedores ordenados por gasto sin IVA del período. % = gasto del proveedor ÷ gasto total.</>,
+  },
+  gasto_operativo: {
+    titulo: 'Gasto operativo',
+    texto: <>Compras sin IVA del período de artículos con categoría “Gastos de Operación” en el ERP.</>,
+  },
+  centros_costo: {
+    titulo: 'Centros de costo',
+    texto: <>El ERP registra el centro de costo en la sublínea del artículo de gasto. Se cuentan las sublíneas distintas con gasto en el período.</>,
+  },
+  reposicion: {
+    titulo: 'Recomendación de reposición',
+    texto: <>
+      <L>
+        <li><strong>Consumo</strong> = unidades compradas en los últimos N meses ÷ N.</li>
+        <li><strong>Cobertura</strong> = (stock + en tránsito) ÷ consumo diario.</li>
+        <li><strong>Cantidad sugerida</strong> = consumo del horizonte + stock de seguridad (30% del consumo durante el lead time) − stock − en tránsito.</li>
+        <li><strong>Valor</strong> = cantidad × último costo. Proveedor sugerido = al que más se le compró en 12 meses.</li>
+      </L>
+    </>,
+  },
+  prioridad_reposicion: {
+    titulo: 'Prioridad',
+    texto: <>
+      Según cobertura vs lead time (tiempo de entrega del proveedor):
+      <L>
+        <li><strong>Urgente:</strong> alcanza para menos que el lead time.</li>
+        <li><strong>Alta:</strong> menos de 1.5× el lead time.</li>
+        <li><strong>Media:</strong> menos de 2.5×.</li>
+        <li><strong>OK:</strong> 2.5× o más.</li>
+      </L>
+    </>,
+  },
+
+  // ======================= Inventario =======================
+  valor_stock: {
+    titulo: 'Valor en stock',
+    texto: <>Existencia × costo promedio del ERP, en la foto más reciente del inventario.</>,
+  },
+  articulos_con_stock: {
+    titulo: 'Artículos con stock',
+    texto: <>Códigos con existencia mayor a cero en la última foto del inventario.</>,
+  },
+  margen_teorico: {
+    titulo: 'Margen bruto teórico',
+    texto: <>
+      Promedio simple del margen de lista de cada artículo: (precio de venta 1 − costo promedio) ÷ precio de venta 1, solo de los que tienen margen positivo.
+      <Nota>No pondera por volumen ni usa precios reales de venta; para el margen real ver Ventas o Márgenes.</Nota>
+    </>,
+  },
+  transito: {
+    titulo: 'Stock en tránsito',
+    texto: <>Unidades pedidas que aún no llegan × costo promedio.</>,
+  },
+  costo_vendido: {
+    titulo: 'Costo vendido',
+    texto: <>Costo de las facturas de venta del período, con el mismo criterio que el margen (ventas − margen bruto).</>,
+  },
+  compras_periodo: {
+    titulo: 'Compras del período',
+    texto: <>Compras sin IVA de materia prima y mercadería en el período, sin gastos operativos.</>,
+  },
+  rotacion_anual: {
+    titulo: 'Rotación anual',
+    texto: <>Costo vendido del período anualizado ÷ valor del inventario hoy. Días de inventario = inventario ÷ costo vendido diario.</>,
+  },
+  sin_venta_periodo: {
+    titulo: 'Con stock y sin venta',
+    texto: <>
+      Valor de los artículos con existencia que no tuvieron ninguna factura de venta en el período.
+      <Nota>Incluye materia prima, que no se vende directamente; para distinguirla ver Salud financiera › Capital inmovilizado.</Nota>
+    </>,
+  },
+  dias_inventario_grupo: {
+    titulo: 'Días de inventario',
+    texto: <>Valor del stock del grupo ÷ su costo vendido diario en el período. “Sin venta en el período” = sin costo vendido.</>,
+  },
+  top_proveedores_stock: {
+    titulo: 'Proveedores por valor en stock',
+    texto: <>Valor del stock con existencia, agrupado por el proveedor asignado al artículo en el ERP.</>,
+  },
+
+  // ======================= Tesorería =======================
+  efectivo_bancos: {
+    titulo: 'Efectivo en bancos',
+    texto: <>El ERP actual no expone saldos bancarios, por eso no se muestra.</>,
+  },
+  cxc_total: {
+    titulo: 'Por cobrar (CxC)',
+    texto: <>Saldo pendiente de documentos de clientes emitidos en el período, según el último corte del reporte de cartera del ERP.</>,
+  },
+  cxp_total: {
+    titulo: 'Por pagar (CxP)',
+    texto: <>Saldo pendiente de facturas de proveedor emitidas en el período.</>,
+  },
+  cxc_riesgo: {
+    titulo: '+60 días',
+    texto: <>Saldo de documentos vencidos hace más de 60 días.</>,
+  },
+  por_vencer: {
+    titulo: 'Por vencer',
+    texto: <>Saldo de documentos cuya fecha de vencimiento todavía no llega.</>,
+  },
+  proximos_pagos: {
+    titulo: 'Próximos pagos',
+    texto: <>Facturas de proveedor con saldo cuyo vencimiento cae en los próximos 30 días.</>,
+  },
+  credito_ficha_factura: {
+    titulo: 'Crédito: ficha · factura',
+    texto: <>
+      <strong>Ficha:</strong> días de crédito pactados en el ERP. <strong>Factura:</strong> días entre la emisión y el vencimiento de esa factura.
+      <Nota>Si la factura da más días que la ficha, el crédito se extendió.</Nota>
+    </>,
+  },
+  dias_vencido: {
+    titulo: 'Días',
+    texto: <>Días desde la fecha de vencimiento hasta hoy. Si aún no vence, aparece al corriente.</>,
+  },
+  dias_restantes: {
+    titulo: 'Días para el vencimiento',
+    texto: <>Días que faltan desde hoy hasta la fecha de vencimiento de la factura. En rojo, 7 días o menos.</>,
+  },
+  atraso_promedio: {
+    titulo: 'Atraso promedio',
+    texto: <>Promedio simple, por documento, de los días transcurridos desde su vencimiento (0 si aún no vence). No pondera por monto.</>,
+  },
+  pct_cxp: {
+    titulo: '% del CxP',
+    texto: <>Saldo pendiente del proveedor ÷ saldo total por pagar.</>,
+  },
+  dias_credito: {
+    titulo: 'Días de crédito',
+    texto: <>Días de crédito pactados en la ficha del proveedor o cliente en el ERP.</>,
+  },
+
+  // ======================= Salud financiera =======================
+  ciclo_caja: {
+    titulo: 'Ciclo de caja',
+    texto: <>
+      Días de cobro + días de inventario − días de pago.
+      <L>
+        <li><strong>Cobro:</strong> cartera operativa ÷ ventas diarias con IVA del período.</li>
+        <li><strong>Inventario:</strong> inventario a costo hoy ÷ costo de venta diario.</li>
+        <li><strong>Pago:</strong> proveedores operativos ÷ compras diarias con IVA.</li>
+      </L>
+      <Nota>“Operativo” excluye saldos vencidos hace más de 90 días (cobro dudoso o facturas sin depurar).</Nota>
+    </>,
+  },
+  capital_trabajo: {
+    titulo: 'Capital de trabajo',
+    texto: <>Cartera operativa + inventario − proveedores operativos, a hoy. El % es capital ÷ ventas del período anualizadas (× 365 ÷ días).</>,
+  },
+  caja_crecimiento: {
+    titulo: 'Caja que pide el crecimiento',
+    texto: <>Capital de trabajo como % de las ventas × el aumento anual de ventas si se repite el crecimiento del período vs el año anterior. Es la caja extra que el negocio inmoviliza para crecer.</>,
+  },
+  liberar_caja: {
+    titulo: 'Caja que se libera',
+    texto: <>Valor de un día del componente × 10 días. Cobro: ventas con IVA ÷ días; inventario: costo de venta ÷ días; pago: compras con IVA ÷ días.</>,
+  },
+  dias_reales: {
+    titulo: 'Días reales de cobro y pago',
+    texto: <>Para las facturas cobradas (o pagadas) cada mes: días entre la emisión y el último cobro (o pago), promediados y ponderados por monto.</>,
+  },
+  proyeccion_ventas: {
+    titulo: 'Modelo de proyección',
+    texto: <>
+      Promedio de los últimos 12 meses × crecimiento interanual × estacionalidad del mes (atenuada al 50%, porque hay pocos años de historia).
+      <Nota>Usa los meses completos; el mes en curso se compara con lo facturado a la fecha.</Nota>
+    </>,
+  },
+  crecimiento_interanual: {
+    titulo: 'Crecimiento interanual',
+    texto: <>Ventas de los últimos 12 meses completos ÷ ventas de los 12 anteriores − 1.</>,
+  },
+  error_modelo: {
+    titulo: 'Error típico del modelo',
+    texto: <>
+      Se pronosticaron los últimos 6 meses como si fuera un mes antes y se comparó con lo real. Error típico = raíz del error cuadrático medio (mínimo ±8%).
+      <Nota>El rango probable (~80%) es ±1.28 × error × √meses de distancia.</Nota>
+    </>,
+  },
+  flujo_entradas: {
+    titulo: 'Entradas',
+    texto: <>Cobro de la cartera pendiente en su vencimiento + el atraso histórico de cada cliente, más el cobro de las ventas proyectadas que aún no se facturan.</>,
+  },
+  flujo_salidas: {
+    titulo: 'Salidas',
+    texto: <>Pago a proveedores en su fecha de vencimiento, más las compras proyectadas al ritmo de los últimos 12 meses. No incluye nómina, impuestos ni deuda (no vienen del ERP).</>,
+  },
+  flujo_neto: {
+    titulo: 'Flujo neto acumulado',
+    texto: <>
+      Entradas − salidas, acumuladas semana a semana desde hoy. No es saldo en caja porque no hay saldo bancario de partida.
+      <Nota>Lo ya vencido se reparte en las primeras 4 semanas. CxC y CxP vencidas hace más de 90 días quedan fuera.</Nota>
+    </>,
+  },
+
+  // ======================= Inventario quieto (Capital inmovilizado) =======================
+  inventario: {
+    titulo: 'Inventario a costo',
+    texto: <>Existencia actual × costo promedio del ERP, en la foto más reciente del inventario. Solo cuenta artículos con existencia mayor a cero.</>,
+  },
+  inmovilizado: {
+    titulo: 'Inmovilizado',
+    texto: <>
+      Stock que no se ha movido en mucho tiempo:
+      <L>
+        <li><strong>Producto</strong> sin ventas en los últimos 180 días.</li>
+        <li><strong>Materia prima</strong> sin compras en los últimos 365 días.</li>
+        <li>Artículos <strong>sin ningún movimiento</strong> registrado.</li>
+      </L>
+    </>,
+  },
+  lento: {
+    titulo: 'Lento',
+    texto: <>Se sigue moviendo, pero hay de más: el stock alcanza para <strong>más de 180 días</strong> al ritmo actual, o no tuvo consumo en la ventana reciente. Ver “Cobertura” para cómo se mide el ritmo.</>,
+  },
+  activo: {
+    titulo: 'Activo',
+    texto: <>Se mueve y su stock alcanza para 180 días o menos al ritmo actual.</>,
+  },
+  quieto: {
+    titulo: 'Capital quieto',
+    texto: <>Capital quieto = inmovilizado + lento. <br />% quieto = capital quieto ÷ inventario a costo.</>,
+  },
+  cobertura: {
+    titulo: 'Cobertura (días)',
+    texto: <>
+      Cuántos días alcanza el stock al ritmo de consumo actual: valor del stock ÷ consumo diario.
+      <L>
+        <li><strong>Producto:</strong> costo vendido en los últimos 180 días ÷ 180.</li>
+        <li><strong>Materia prima:</strong> compras de los últimos 365 días ÷ 365 (no hay datos de consumo en producción; lo comprado se usa como aproximación).</li>
+      </L>
+      <Nota>En un grupo se suman el valor y el consumo de sus artículos; los que no tienen consumo suben la cobertura.</Nota>
+    </>,
+  },
+  articulos: {
+    titulo: 'Artículos quietos',
+    texto: <>Artículos en estado lento o inmovilizado, sobre el total de artículos con existencia.</>,
+  },
+  tipo: {
+    titulo: 'Tipo de inventario',
+    texto: <>
+      Se clasifica por la historia de cada artículo:
+      <L>
+        <li><strong>Producto:</strong> se ha vendido alguna vez.</li>
+        <li><strong>Materia prima:</strong> nunca se ha vendido, pero se compra.</li>
+        <li><strong>Sin movimiento:</strong> no tiene ventas ni compras registradas.</li>
+      </L>
+    </>,
+  },
+  antiguedad: {
+    titulo: 'Antigüedad',
+    texto: <>Días desde el último movimiento: la última <strong>venta</strong> para producto y la última <strong>compra</strong> para materia prima. “Sin registro” son artículos sin ventas ni compras.</>,
+  },
+  corte: {
+    titulo: 'Foto al corte',
+    texto: <>Es el stock de la última carga del ERP. No depende del filtro de período: las ventas y compras se miden en ventanas fijas (180 y 365 días) contadas desde hoy.</>,
+  },
+  categoria: {
+    titulo: 'Categoría › Subcategoría › Sublínea',
+    texto: <>Agrupación del catálogo del ERP: categoría = campo “marca” (Laminados, Liners…), subcategoría = “línea” y sublínea = “sublínea”. Es la misma que se usa en Ventas.</>,
+  },
+}
+
+// <Leyenda k="margen_bruto" />  ·  claro: true para fondos oscuros
+export function Leyenda({ k, className = '', claro = false }) {
+  const l = LEYENDAS[k]
+  if (!l) {
+    if (import.meta.env.DEV) console.warn(`[Leyenda] clave desconocida: ${k}`)
+    return null
+  }
+  return (
+    <ComoSeCalcula titulo={l.titulo} className={className} claro={claro}>
+      {l.texto}
+    </ComoSeCalcula>
+  )
+}

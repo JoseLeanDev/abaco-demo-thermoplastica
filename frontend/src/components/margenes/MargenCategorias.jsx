@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from 'react-query'
 import { endpoints } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
+import { Leyenda } from '../common/leyendas'
 import { ChartBarIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts'
 
@@ -76,9 +77,9 @@ export default function MargenCategorias() {
   }))
 
   const sortBy = (col) => setOrden(o => ({ col, dir: o.col === col && o.dir === 'desc' ? 'asc' : 'desc' }))
-  const Th = ({ col, children, align = 'right' }) => (
+  const Th = ({ col, children, align = 'right', ayuda }) => (
     <th className={`text-${align} font-semibold pb-2 px-1 cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-primary)]`} onClick={() => sortBy(col)}>
-      {children}{orden.col === col ? (orden.dir === 'desc' ? ' ↓' : ' ↑') : ''}
+      {children}{ayuda && <Leyenda k={ayuda} className="ml-1" />}{orden.col === col ? (orden.dir === 'desc' ? ' ↓' : ' ↑') : ''}
     </th>
   )
 
@@ -104,6 +105,7 @@ export default function MargenCategorias() {
             <h2 className="font-semibold flex items-center gap-2">
               <ChartBarIcon className="w-5 h-5 text-[var(--accent-primary)]" />
               Margen por {nivel.singular.toLowerCase()}
+              <Leyenda k="jerarquia_producto" />
             </h2>
             <p className="text-sm text-[var(--text-muted)] mt-1">
               {rojos} {rojos === 1 ? nivel.singular.toLowerCase() : nivel.plural.toLowerCase()} en rojo
@@ -120,12 +122,12 @@ export default function MargenCategorias() {
                     <Th col="nombre" align="left">{nivel.singular}</Th>
                     <Th col="ventas">Ventas</Th>
                     <Th col="margen">Margen Q</Th>
-                    <Th col="aporte">Aporte</Th>
-                    <Th col="margen_pct">Margen %</Th>
-                    <Th col="margen_pct_prev">Año ant.</Th>
-                    <Th col="delta">Δ pts</Th>
-                    <Th col="dejado_de_ganar">Dejado de ganar</Th>
-                    <th />
+                    <Th col="aporte" ayuda="aporte_margen">Aporte</Th>
+                    <Th col="margen_pct" ayuda="margen_bruto">Margen %</Th>
+                    <Th col="margen_pct_prev" ayuda="vs_anio_anterior">Año ant.</Th>
+                    <Th col="delta" ayuda="margen_pts">Δ pts</Th>
+                    <Th col="dejado_de_ganar" ayuda="dejaste_de_ganar">Dejado de ganar</Th>
+                    <th className="pb-2"><Leyenda k="semaforo_categoria" /></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-color)]">

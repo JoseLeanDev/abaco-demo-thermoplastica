@@ -27,6 +27,7 @@ import {
 } from 'recharts'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import TabCategorias from '../components/ventas/TabCategorias'
+import { Leyenda } from '../components/common/leyendas'
 import TabMatriz from '../components/ventas/TabMatriz'
 import FiltroProducto, { FILTRO_VACIO } from '../components/ventas/FiltroProducto'
 
@@ -61,7 +62,7 @@ const margenTone = (pct) => {
 // Aviso de ventas sin costo en el ERP: no entran al margen %. Solo se muestra si pesa.
 const SinCosto = ({ pct }) => (pct >= 1 ? (
   <p className="text-[10px] font-normal text-[var(--text-muted)] whitespace-nowrap" title="El margen % se calcula solo con las líneas que traen costo en el ERP">
-    {Number(pct).toFixed(1)}% de ventas sin costo
+    {Number(pct).toFixed(1)}% de ventas sin costo <Leyenda k="pct_sin_costo" />
   </p>
 ) : null)
 
@@ -258,32 +259,32 @@ function KPIs({ r, loading }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="kpi-card">
-        <span className="kpi-label">Ventas (sin IVA)</span>
+        <span className="kpi-label flex items-center gap-1">Ventas (sin IVA) <Leyenda k="ventas" /></span>
         <p className="kpi-value">{v(fmtM(r.ventas_sin_iva))}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
-          <Var pct={r.variacion_pct} /> vs {fmtM(r.ventas_prev)} año anterior
+          <Var pct={r.variacion_pct} /> vs {fmtM(r.ventas_prev)} año anterior <Leyenda k="vs_anio_anterior" />
         </p>
       </div>
       <div className="kpi-card">
-        <span className="kpi-label" title="Margen % calculado solo con las ventas que traen costo en el ERP">Margen bruto</span>
+        <span className="kpi-label flex items-center gap-1">Margen bruto <Leyenda k="margen_bruto" /></span>
         <p className={`kpi-value ${margenTone(r.margen_bruto_pct)}`}>{v(fmtPct(r.margen_bruto_pct))}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
           {fmtM(r.margen_bruto)}
           {deltaMargen !== null && (
-            <> · <span className={deltaMargen >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>{deltaMargen >= 0 ? '+' : ''}{deltaMargen.toFixed(1)} pts</span> vs año ant.</>
+            <> · <span className={deltaMargen >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>{deltaMargen >= 0 ? '+' : ''}{deltaMargen.toFixed(1)} pts</span> vs año ant. <Leyenda k="margen_pts" /></>
           )}
         </p>
         <SinCosto pct={r.pct_ventas_sin_costo} />
       </div>
       <div className="kpi-card">
-        <span className="kpi-label">Clientes que compraron</span>
+        <span className="kpi-label flex items-center gap-1">Clientes que compraron <Leyenda k="clientes_compraron" /></span>
         <p className="kpi-value">{v(fmtInt(r.clientes))}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
           {deltaClientes === null ? '—' : <>{deltaClientes >= 0 ? '+' : ''}{deltaClientes} vs año anterior ({fmtInt(r.clientes_prev)})</>}
         </p>
       </div>
       <div className="kpi-card">
-        <span className="kpi-label">Ticket promedio</span>
+        <span className="kpi-label flex items-center gap-1">Ticket promedio <Leyenda k="ticket_promedio" /></span>
         <p className="kpi-value">{v(fmtM(r.ticket_promedio))}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(r.facturas)} facturas</p>
       </div>
@@ -306,6 +307,7 @@ function TabResumen({
           <div className="flex items-center gap-2">
             <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Ventas y margen mensual</h2>
+            <Leyenda k="serie_mensual" />
           </div>
           <div className="text-xs text-[var(--text-muted)] flex items-center gap-3">
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#001639] rounded-sm" /> Ventas</span>
@@ -342,6 +344,7 @@ function TabResumen({
         <div className="section-header">
           <CubeIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Top 15 artículos por facturación</h2>
+          <Leyenda k="margen_bruto" />
         </div>
         <div className="p-5 pt-0 overflow-x-auto">
           <table className="w-full">
@@ -424,7 +427,7 @@ function TabResumen({
                 <th className="px-3 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Artículo</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Unid.</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Sin IVA</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Margen%</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Margen% <Leyenda k="margen_bruto" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
@@ -493,7 +496,7 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
             : <ArrowTrendingUpIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0 mt-0.5" />}
           <div className="text-sm">
             <p className="font-semibold">
-              {topPct >= 40 ? '⚠ Concentración alta en un vendedor' : `Vendedor top: ${topVendedor.vendedor}`}
+              {topPct >= 40 ? '⚠ Concentración alta en un vendedor' : `Vendedor top: ${topVendedor.vendedor}`} <Leyenda k="vendedor_top" />
             </p>
             <p className="text-[var(--text-secondary)]">
               <strong>{topVendedor.vendedor}</strong> concentra el <strong>{topPct}%</strong> de las ventas ({fmtM(topVendedor.ventas)})
@@ -509,6 +512,7 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
         <div className="section-header">
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Evolución mensual de los top 5 vendedores</h2>
+          <Leyenda k="serie_mensual" />
         </div>
         <div className="p-5 pt-0">
           {!serieVend || serieVend.serie?.length === 0 ? (
@@ -541,6 +545,7 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
           <div className="section-header">
             <ChartPieIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Participación (top 5)</h2>
+            <Leyenda k="participacion" />
           </div>
           <div className="p-5 pt-0">
             {top5.length === 0 ? (
@@ -595,10 +600,10 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                   <th className="text-right font-semibold pb-2">Clientes</th>
                   <th className="text-right font-semibold pb-2">Facturas</th>
                   <th className="text-right font-semibold pb-2">Ventas</th>
-                  <th className="text-right font-semibold pb-2">Año ant.</th>
-                  <th className="text-right font-semibold pb-2">Var.</th>
-                  <th className="text-right font-semibold pb-2">Margen%</th>
-                  <th className="text-right font-semibold pb-2">Share</th>
+                  <th className="text-right font-semibold pb-2">Año ant. <Leyenda k="vs_anio_anterior" /></th>
+                  <th className="text-right font-semibold pb-2">Var. <Leyenda k="cambio" /></th>
+                  <th className="text-right font-semibold pb-2">Margen% <Leyenda k="margen_bruto" /></th>
+                  <th className="text-right font-semibold pb-2">Share <Leyenda k="participacion" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-default)]">
@@ -676,27 +681,27 @@ function TabClientes({ clientes, resumen }) {
       {/* Concentración y movimiento de cartera */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="kpi-card">
-          <span className="kpi-label">Top 10 clientes</span>
+          <span className="kpi-label flex items-center gap-1">Top 10 clientes <Leyenda k="concentracion_top" /></span>
           <p className={`kpi-value ${top10Pct >= 50 ? 'text-[var(--warning)]' : 'text-[var(--text-primary)]'}`}>{top10Pct}%</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">del total facturado</p>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Top 20 clientes</span>
+          <span className="kpi-label flex items-center gap-1">Top 20 clientes <Leyenda k="concentracion_top" /></span>
           <p className="kpi-value">{top20Pct}%</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">del total facturado</p>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Clientes activos</span>
+          <span className="kpi-label flex items-center gap-1">Clientes activos <Leyenda k="clientes_activos" /></span>
           <p className="kpi-value">{fmtInt(resumen?.n_clientes)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(resumen?.n_clientes_prev)} en el período anterior</p>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Clientes nuevos</span>
+          <span className="kpi-label flex items-center gap-1">Clientes nuevos <Leyenda k="clientes_nuevos" /></span>
           <p className="kpi-value text-[var(--success)]">{fmtInt(resumen?.n_nuevos)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{fmtM(resumen?.venta_nuevos)} vendidos</p>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Clientes perdidos</span>
+          <span className="kpi-label flex items-center gap-1">Clientes perdidos <Leyenda k="clientes_perdidos" /></span>
           <p className="kpi-value text-[var(--danger)]">{fmtInt(resumen?.n_perdidos)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{fmtM(resumen?.venta_perdida)} el período anterior</p>
         </div>
@@ -708,6 +713,7 @@ function TabClientes({ clientes, resumen }) {
           <div className="flex items-center gap-2">
             <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Concentración Pareto (top 30 clientes)</h2>
+            <Leyenda k="pareto" />
           </div>
           <div className="text-xs text-[var(--text-muted)] flex items-center gap-3">
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#001639] rounded-sm" /> Ventas</span>
@@ -750,11 +756,11 @@ function TabClientes({ clientes, resumen }) {
                 <th className="text-left  font-semibold pb-2">Cliente</th>
                 <th className="text-right font-semibold pb-2">Facturas</th>
                 <th className="text-right font-semibold pb-2">Ventas</th>
-                <th className="text-right font-semibold pb-2">Año ant.</th>
-                <th className="text-right font-semibold pb-2">Var.</th>
+                <th className="text-right font-semibold pb-2">Año ant. <Leyenda k="vs_anio_anterior" /></th>
+                <th className="text-right font-semibold pb-2">Var. <Leyenda k="cambio" /></th>
                 <th className="text-right font-semibold pb-2">Margen</th>
-                <th className="text-right font-semibold pb-2">Margen%</th>
-                <th className="text-right font-semibold pb-2">Share</th>
+                <th className="text-right font-semibold pb-2">Margen% <Leyenda k="margen_bruto" /></th>
+                <th className="text-right font-semibold pb-2">Share <Leyenda k="participacion" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">

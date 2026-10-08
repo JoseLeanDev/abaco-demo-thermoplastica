@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { fmtM, fmtQ, fmtFechaCorta, tooltipStyle } from './formato'
 import { Dato, CardCargando } from './ProyeccionVentas'
+import { Leyenda } from '../common/leyendas'
 
 const CERTEZA = {
   alta:  'badge-success',
@@ -38,17 +39,18 @@ export default function FlujoCajaProyectado({ data, isLoading, acciones }) {
       <div className="section-header">
         <BanknotesIcon className="w-5 h-5 text-[var(--text-muted)]" />
         <h2 className="font-semibold">Flujo de caja proyectado</h2>
+        <Leyenda k="flujo_neto" />
         <span className="hidden sm:inline text-xs text-[var(--text-muted)] ml-auto">{data.semanas} semanas · flujo neto, sin saldo inicial</span>
         {acciones}
       </div>
 
       <div className="px-5 pb-5 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Dato titulo="Entradas" valor={fmtM(resumen.entradas_totales)} tono="text-[var(--success)]"
+          <Dato titulo="Entradas" leyenda="flujo_entradas" valor={fmtM(resumen.entradas_totales)} tono="text-[var(--success)]"
             nota="Cobro de cartera + ventas proyectadas" />
-          <Dato titulo="Salidas" valor={fmtM(resumen.salidas_totales)} tono="text-[var(--danger)]"
+          <Dato titulo="Salidas" leyenda="flujo_salidas" valor={fmtM(resumen.salidas_totales)} tono="text-[var(--danger)]"
             nota="Proveedores + compras proyectadas" />
-          <Dato titulo="Flujo neto acumulado" valor={fmtM(resumen.flujo_neto_total)}
+          <Dato titulo="Flujo neto acumulado" leyenda="flujo_neto" valor={fmtM(resumen.flujo_neto_total)}
             tono={resumen.flujo_neto_total >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}
             nota={`Punto más bajo: ${fmtM(resumen.flujo_acumulado_minimo)} (semana ${resumen.semana_minimo})`} />
           <Dato titulo="Semanas con salida neta" valor={`${negativas.length} de ${data.semanas}`}

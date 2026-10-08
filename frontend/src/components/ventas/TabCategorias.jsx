@@ -3,12 +3,12 @@ import { useQuery } from 'react-query'
 import { endpoints } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
 import { NIVELES_PRODUCTO } from './FiltroProducto'
+import { Leyenda } from '../common/leyendas'
 import {
   ArrowDownTrayIcon,
   ArrowTrendingDownIcon,
   ChartBarIcon,
   ChevronRightIcon,
-  InformationCircleIcon,
   LightBulbIcon,
   MagnifyingGlassIcon,
   Squares2X2Icon,
@@ -66,22 +66,13 @@ function Variacion({ pct, nuevo, className = '' }) {
   return <span className={`tabular-nums font-semibold ${tone} ${className}`}>{pct > 0 ? '+' : ''}{pct.toFixed(1)}%</span>
 }
 
-// Encabezado con explicación al pasar el mouse
-function Ayuda({ texto }) {
-  return (
-    <span className="inline-flex align-middle ml-0.5 cursor-help" title={texto}>
-      <InformationCircleIcon className="w-3.5 h-3.5 opacity-60" />
-    </span>
-  )
-}
-
-function Seccion({ icon: Icon, titulo, subtitulo, children, accion }) {
+function Seccion({ icon: Icon, titulo, subtitulo, children, accion, leyenda }) {
   return (
     <div className="card">
       <div className="section-header flex-wrap gap-2">
         <Icon className="w-5 h-5 text-[var(--text-muted)]" />
         <div className="min-w-0">
-          <h2 className="font-semibold">{titulo}</h2>
+          <h2 className="font-semibold">{titulo}{leyenda && <Leyenda k={leyenda} className="ml-1.5" />}</h2>
           {subtitulo && <p className="text-xs text-[var(--text-muted)] font-normal">{subtitulo}</p>}
         </div>
         {accion && <div className="ml-auto">{accion}</div>}
@@ -221,7 +212,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
 
   const Th = ({ col, children, align = 'right', ayuda }) => (
     <th className={`text-${align} font-semibold pb-2 px-2 cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-primary)]`} onClick={() => sortBy(col)}>
-      {children}{ayuda && <Ayuda texto={ayuda} />}{orden.col === col ? (orden.dir === 'desc' ? ' ↓' : ' ↑') : ''}
+      {children}{ayuda && <Leyenda k={ayuda} className="ml-1" />}{orden.col === col ? (orden.dir === 'desc' ? ' ↓' : ' ↑') : ''}
     </th>
   )
 
@@ -250,6 +241,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
       <Seccion
         icon={Squares2X2Icon}
         titulo={`¿Qué se vende? · ${nivel.plural}${seleccion.length ? ` de ${titulo}` : ''}`}
+        leyenda="jerarquia_producto"
         subtitulo={esHoja
           ? `${fmtInt(filas.length)} artículos con venta en el período`
           : `Haz clic en una fila para ver sus ${siguiente.plural.toLowerCase()}`}
@@ -321,17 +313,17 @@ export default function TabCategorias({ filtro, onFiltro }) {
             <thead>
               <tr className="text-xs text-[var(--text-muted)]">
                 <Th col="nombre" align="left">{nivel.singular}</Th>
-                <Th col="ventas" align="left" ayuda="Barra oscura: este período. Barra gris: mismo período del año anterior.">Ventas vs año anterior</Th>
-                <Th col="variacion_pct">Cambio</Th>
-                <Th col="participacion" ayuda="Porcentaje de las ventas de la selección">% del total</Th>
-                <Th col="margen_pct" ayuda="Margen bruto %, solo con ventas que traen costo en el ERP">Margen</Th>
+                <Th col="ventas" align="left" ayuda="vs_anio_anterior">Ventas vs año anterior</Th>
+                <Th col="variacion_pct" ayuda="cambio">Cambio</Th>
+                <Th col="participacion" ayuda="participacion">% del total</Th>
+                <Th col="margen_pct" ayuda="margen_bruto">Margen</Th>
                 <Th col="clientes">Clientes</Th>
                 {masColumnas && <>
-                  <Th col="unidades">Unidades</Th>
-                  {esHoja && <Th col="precio_promedio">Precio prom.</Th>}
-                  <Th col="efecto_precio" ayuda="Cuánto cambiaron las ventas por subir o bajar el precio de los mismos productos">Por precio</Th>
-                  <Th col="efecto_volumen" ayuda="Cuánto cambiaron las ventas por vender más o menos unidades de los mismos productos">Por cantidad</Th>
-                  {!esHoja && <Th col="skus" ayuda="Productos distintos vendidos">Productos</Th>}
+                  <Th col="unidades" ayuda="unidades">Unidades</Th>
+                  {esHoja && <Th col="precio_promedio" ayuda="precio_promedio">Precio prom.</Th>}
+                  <Th col="efecto_precio" ayuda="efecto_precio">Por precio</Th>
+                  <Th col="efecto_volumen" ayuda="efecto_cantidad">Por cantidad</Th>
+                  {!esHoja && <Th col="skus" ayuda="productos_skus">Productos</Th>}
                 </>}
                 {!esHoja && <th />}
               </tr>
@@ -399,6 +391,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
         <Seccion
           icon={ChartBarIcon}
           titulo="¿Por qué cambiaron las ventas vs el año anterior?"
+          leyenda="puente"
           subtitulo="De las ventas del año anterior (izquierda) a las de este período (derecha): qué sumó y qué restó"
         >
           <Puente puente={d.puente} />
@@ -418,7 +411,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
       </div>
 
       {/* 5. Evolución mensual */}
-      <Seccion icon={ChartBarIcon} titulo="Evolución mensual" subtitulo={`Ventas por mes de las principales ${nivel.plural.toLowerCase()}`}>
+      <Seccion icon={ChartBarIcon} titulo="Evolución mensual" leyenda="serie_mensual" subtitulo={`Ventas por mes de las principales ${nivel.plural.toLowerCase()}`}>
         {!serie?.serie?.length ? (
           <p className="py-10 text-center text-sm text-[var(--text-muted)]">{sLoading ? 'Cargando…' : 'Sin datos.'}</p>
         ) : (
@@ -564,9 +557,9 @@ function RankingCruzado({ icon: Icon, titulo, subtitulo, data, loading }) {
               <tr className="text-xs text-[var(--text-muted)]">
                 <th className="text-left font-semibold pb-2">Nombre</th>
                 <th className="text-right font-semibold pb-2">Ventas</th>
-                <th className="text-right font-semibold pb-2">Cambio</th>
-                <th className="text-right font-semibold pb-2">% del total</th>
-                <th className="text-right font-semibold pb-2">Margen</th>
+                <th className="text-right font-semibold pb-2">Cambio <Leyenda k="cambio" /></th>
+                <th className="text-right font-semibold pb-2">% del total <Leyenda k="participacion" /></th>
+                <th className="text-right font-semibold pb-2">Margen <Leyenda k="margen_bruto" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">

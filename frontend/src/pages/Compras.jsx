@@ -28,6 +28,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { Leyenda } from '../components/common/leyendas'
 
 // -------------------------------------------------------------------
 // Helpers
@@ -152,7 +153,7 @@ export default function Compras() {
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Gasto en compras (sin IVA)</span>
+          <span className="kpi-label flex items-center gap-1">Gasto en compras (sin IVA) <Leyenda k="gasto_compras" /></span>
           <p className="kpi-value">{fmtQ(resumen.gasto_sin_iva)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             Con IVA: {fmtQ(resumen.gasto_con_iva)}
@@ -160,7 +161,7 @@ export default function Compras() {
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">IVA acreditable</span>
+          <span className="kpi-label flex items-center gap-1">IVA acreditable <Leyenda k="iva_acreditable" /></span>
           <p className="kpi-value">{fmtQ(resumen.iva_acreditable)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             {resumen.gasto_sin_iva > 0
@@ -170,7 +171,7 @@ export default function Compras() {
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Devoluciones</span>
+          <span className="kpi-label flex items-center gap-1">Devoluciones <Leyenda k="devoluciones_compras" /></span>
           <p className="kpi-value">{fmtQ(resumen.devoluciones_sin_iva)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             Gasto neto: {fmtQ(resumen.gasto_neto_sin_iva)}
@@ -178,7 +179,7 @@ export default function Compras() {
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Tendencia mes actual</span>
+          <span className="kpi-label flex items-center gap-1">Tendencia mes actual <Leyenda k="tendencia_mes" /></span>
           {tendenciaMensual === null ? (
             <p className="kpi-value text-[var(--text-muted)]">—</p>
           ) : (
@@ -224,6 +225,7 @@ export default function Compras() {
         <div className="section-header">
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Gasto mensual en compras</h2>
+          <Leyenda k="gasto_compras" />
         </div>
         <div className="p-5 pt-0">
           {serie.length === 0 ? (
@@ -253,6 +255,7 @@ export default function Compras() {
           <div className="section-header">
             <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Top categorías por gasto</h2>
+          <Leyenda k="top_categorias_compras" />
           </div>
           <div className="p-5 pt-0 space-y-3">
             {cats.length === 0 && <p className="text-sm text-[var(--text-muted)]">Sin datos.</p>}
@@ -291,6 +294,7 @@ export default function Compras() {
           <div className="section-header">
             <BuildingOfficeIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Top proveedores</h2>
+          <Leyenda k="top_proveedores" />
           </div>
           <div className="p-5 pt-0">
             <table className="w-full">
@@ -482,7 +486,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
           <div>
             <div className="flex items-center gap-2">
               <ClipboardDocumentCheckIcon className="w-5 h-5 text-amber-300" />
-              <h2 className="text-lg font-bold">Recomendación de reposición</h2>
+              <h2 className="text-lg font-bold flex items-center gap-1.5">Recomendación de reposición <Leyenda k="reposicion" claro /></h2>
             </div>
             <p className="text-xs text-white/60 mt-1">
               Basado en consumo de {params.meses_consumo}m · lead time {params.lead_time}d · horizonte {params.horizonte_meses}m · safety stock 30%
@@ -523,6 +527,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
           <RecoKpi
             label="SKUs urgentes"
+            leyenda="prioridad_reposicion"
             value={kpis.skus_urgentes ?? 0}
             sublabel={`de ${kpis.skus_activos || 0} activos`}
             icon={FireIcon}
@@ -530,6 +535,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
           />
           <RecoKpi
             label="Alta prioridad"
+            leyenda="prioridad_reposicion"
             value={kpis.skus_alta ?? 0}
             sublabel="< 1.5x lead time"
             icon={ExclamationTriangleIcon}
@@ -537,6 +543,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
           />
           <RecoKpi
             label="Valor sugerido"
+            leyenda="reposicion"
             value={fmtQm(kpis.valor_sugerido_total)}
             sublabel={`Cobertura prom ${kpis.cobertura_promedio_dias || 0}d`}
             icon={BoltIcon}
@@ -545,6 +552,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
           />
           <RecoKpi
             label="Inventario actual"
+            leyenda="reposicion"
             value={fmtQm(kpis.valor_inventario_total)}
             sublabel={`${kpis.skus_ok || 0} SKUs OK · ${kpis.skus_media || 0} media`}
             icon={CubeIcon}
@@ -605,13 +613,13 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
               <table className="w-full">
                 <thead>
                   <tr className="text-[10px] text-[var(--text-muted)] uppercase border-b border-[var(--border-default)]">
-                    <th className="text-left  font-semibold py-2">Prioridad</th>
+                    <th className="text-left  font-semibold py-2">Prioridad <Leyenda k="prioridad_reposicion" /></th>
                     <th className="text-left  font-semibold py-2">Artículo</th>
                     <th className="text-left  font-semibold py-2">Línea</th>
                     <th className="text-right font-semibold py-2">Stock</th>
-                    <th className="text-right font-semibold py-2">Cobertura</th>
+                    <th className="text-right font-semibold py-2">Cobertura <Leyenda k="reposicion" /></th>
                     <th className="text-right font-semibold py-2">Consumo/mes</th>
-                    <th className="text-right font-semibold py-2">Sugerido (uds)</th>
+                    <th className="text-right font-semibold py-2">Sugerido (uds) <Leyenda k="reposicion" /></th>
                     <th className="text-right font-semibold py-2">Valor sugerido</th>
                     <th className="text-left  font-semibold py-2 pl-3">Proveedor</th>
                   </tr>
@@ -653,7 +661,7 @@ function TabBtn({ active, onClick, icon: Icon, count, children }) {
   )
 }
 
-function RecoKpi({ label, value, sublabel, icon: Icon, tone, isValue }) {
+function RecoKpi({ label, value, sublabel, icon: Icon, tone, isValue, leyenda }) {
   const toneCls = tone === 'rose'    ? 'text-rose-300'
                 : tone === 'amber'   ? 'text-amber-300'
                 : tone === 'emerald' ? 'text-emerald-300'
@@ -662,7 +670,7 @@ function RecoKpi({ label, value, sublabel, icon: Icon, tone, isValue }) {
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-3 backdrop-blur-sm">
       <div className="flex items-start justify-between mb-1">
-        <span className="text-[10px] uppercase tracking-wider text-white/60 font-semibold">{label}</span>
+        <span className="text-[10px] uppercase tracking-wider text-white/60 font-semibold flex items-center gap-1">{label} {leyenda && <Leyenda k={leyenda} claro />}</span>
         <Icon className={`w-4 h-4 ${toneCls}`} />
       </div>
       <p className={`text-2xl font-bold tabular-nums leading-tight ${toneCls}`}>{isValue ? value : Number(value).toLocaleString('es-GT')}</p>

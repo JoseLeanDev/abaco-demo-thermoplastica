@@ -16,6 +16,7 @@ import {
   InformationCircleIcon,
 } from '@heroicons/react/24/outline'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { Leyenda } from '../components/common/leyendas'
 import { usePeriodo } from '../context/PeriodoContext'
 
 const fmtQ  = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
@@ -93,7 +94,7 @@ export default function Inventario() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
           <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Valor total en stock</span>
+            <span className="kpi-label flex items-center gap-1">Valor total en stock <Leyenda k="valor_stock" /></span>
             <CurrencyDollarIcon className="w-4 h-4 text-[var(--text-muted)]" />
           </div>
           <p className="kpi-value">{fmtM(kpis.valor_total)}</p>
@@ -104,7 +105,7 @@ export default function Inventario() {
 
         <div className="kpi-card card-hover">
           <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Artículos con stock</span>
+            <span className="kpi-label flex items-center gap-1">Artículos con stock <Leyenda k="articulos_con_stock" /></span>
             <Squares2X2Icon className="w-4 h-4 text-[var(--text-muted)]" />
           </div>
           <p className="kpi-value">{fmtInt(kpis.articulos_con_stock)}</p>
@@ -115,7 +116,7 @@ export default function Inventario() {
 
         <div className="kpi-card card-hover">
           <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Margen bruto teórico</span>
+            <span className="kpi-label flex items-center gap-1">Margen bruto teórico <Leyenda k="margen_teorico" /></span>
             <ChartBarIcon className="w-4 h-4 text-[var(--text-muted)]" />
           </div>
           <p className={`kpi-value ${
@@ -129,7 +130,7 @@ export default function Inventario() {
 
         <div className="kpi-card card-hover">
           <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Stock en tránsito</span>
+            <span className="kpi-label flex items-center gap-1">Stock en tránsito <Leyenda k="transito" /></span>
             <TruckIcon className="w-4 h-4 text-[var(--text-muted)]" />
           </div>
           <p className="kpi-value">{fmtM(kpis.valor_transito)}</p>
@@ -142,17 +143,17 @@ export default function Inventario() {
       {/* Movimiento del período (filtro global) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card">
-          <span className="kpi-label">Costo vendido en el período</span>
+          <span className="kpi-label flex items-center gap-1">Costo vendido en el período <Leyenda k="costo_vendido" /></span>
           <p className="kpi-value mt-2">{fmtM(mov.costo_vendido)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">Costo de las facturas de venta</p>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Compras en el período</span>
+          <span className="kpi-label flex items-center gap-1">Compras en el período <Leyenda k="compras_periodo" /></span>
           <p className="kpi-value mt-2">{fmtM(mov.compras)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">Materia prima y mercadería, sin gastos operativos</p>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Rotación anual</span>
+          <span className="kpi-label flex items-center gap-1">Rotación anual <Leyenda k="rotacion_anual" /></span>
           <p className="kpi-value mt-2">{mov.rotacion_anual != null ? `${mov.rotacion_anual}x` : '—'}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             {mov.dias_inventario != null ? `${fmtInt(mov.dias_inventario)} días de inventario al ritmo del período` : 'Sin ventas en el período'}
@@ -163,7 +164,7 @@ export default function Inventario() {
           onClick={() => setFiltro('sin_venta_periodo')}
           className="kpi-card card-hover text-left"
         >
-          <span className="kpi-label">Con stock y sin venta en el período</span>
+          <span className="kpi-label flex items-center gap-1">Con stock y sin venta en el período <Leyenda k="sin_venta_periodo" /></span>
           <p className="kpi-value mt-2 text-[var(--warning)]">{fmtM(mov.sin_venta_valor)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(mov.sin_venta_articulos)} artículos · ver listado</p>
         </button>
@@ -193,6 +194,7 @@ export default function Inventario() {
             <h2 className="font-semibold">
               {categoriaSel ? <>Subcategorías de {categoriaSel}</> : 'Valor por categoría'}
             </h2>
+            <Leyenda k="dias_inventario_grupo" />
             {categoriaSel && (
               <button onClick={() => { setCategoria(''); setLinea('') }} className="ml-auto text-xs text-[var(--accent-blue)] hover:underline">
                 ← Todas las categorías
@@ -242,6 +244,7 @@ export default function Inventario() {
           <div className="section-header">
             <BuildingOfficeIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Top proveedores por valor en stock</h2>
+          <Leyenda k="top_proveedores_stock" />
           </div>
           <div className="p-5 pt-0 overflow-x-auto">
             <table className="w-full">
@@ -286,6 +289,7 @@ export default function Inventario() {
         <div className="section-header">
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Top 10 artículos por valor en inventario</h2>
+          <Leyenda k="valor_stock" />
         </div>
         <div className="p-5 pt-0 overflow-x-auto">
           <table className="w-full">
@@ -297,7 +301,7 @@ export default function Inventario() {
                 <th className="text-right font-semibold py-2">Stock</th>
                 <th className="text-right font-semibold py-2">Costo prom</th>
                 <th className="text-right font-semibold py-2">Precio</th>
-                <th className="text-right font-semibold py-2">Margen</th>
+                <th className="text-right font-semibold py-2">Margen <Leyenda k="margen_teorico" /></th>
                 <th className="text-right font-semibold py-2">Valor</th>
               </tr>
             </thead>
@@ -394,7 +398,7 @@ export default function Inventario() {
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Stock<br /><span className="normal-case font-normal">actual · tránsito</span></th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Costo prom</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Precio 1</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Margen</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Margen <Leyenda k="margen_teorico" /></th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Vendido<br /><span className="normal-case font-normal">en el período</span></th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Valor</th>
               </tr>

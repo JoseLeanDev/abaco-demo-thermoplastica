@@ -3,6 +3,7 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts'
 import { fmtM, fmtQ, fmtPct, fmtMes, tooltipStyle } from './formato'
+import { Leyenda } from '../common/leyendas'
 
 /**
  * Proyección de ventas mensuales (sin IVA): historia real, lo que el modelo habría
@@ -43,16 +44,17 @@ export default function ProyeccionVentas({ data, isLoading }) {
       <div className="section-header">
         <ArrowTrendingUpIcon className="w-5 h-5 text-[var(--text-muted)]" />
         <h2 className="font-semibold">Proyección de ventas</h2>
+        <Leyenda k="proyeccion_ventas" />
         <span className="hidden sm:inline text-xs text-[var(--text-muted)] ml-auto">Sin IVA · próximos {n} meses</span>
       </div>
 
       <div className="px-5 pb-5 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Dato titulo={`Próximos ${n} meses`} valor={fmtM(data.total_proyectado)}
+          <Dato titulo={`Próximos ${n} meses`} leyenda="proyeccion_ventas" valor={fmtM(data.total_proyectado)}
             nota={variacion !== null ? `${variacion >= 0 ? '+' : ''}${variacion.toFixed(1)}% vs mismo periodo año anterior` : null} />
-          <Dato titulo="Crecimiento interanual" valor={fmtPct(data.crecimiento_interanual_pct)}
+          <Dato titulo="Crecimiento interanual" leyenda="crecimiento_interanual" valor={fmtPct(data.crecimiento_interanual_pct)}
             nota="Últimos 12 meses vs los 12 anteriores" />
-          <Dato titulo="Error típico del modelo" valor={`±${fmtPct(data.error_tipico_pct, 0)}`}
+          <Dato titulo="Error típico del modelo" leyenda="error_modelo" valor={`±${fmtPct(data.error_tipico_pct, 0)}`}
             nota={data.mape_backtest_pct !== null ? `Error medio de los últimos 6 meses: ${fmtPct(data.mape_backtest_pct)}` : null} />
           <Dato
             titulo={primero ? `Cierre ${primero.etiqueta}${primero.real_parcial != null ? ' (en curso)' : ''}` : 'Próximo mes'}
@@ -111,10 +113,10 @@ const LEYENDA_ITEMS = [
   { value: 'parcial', type: 'circle', color: '#D97706' },
 ]
 
-export function Dato({ titulo, valor, nota, tono }) {
+export function Dato({ titulo, valor, nota, tono, leyenda }) {
   return (
     <div className="p-3 rounded-lg bg-[var(--bg-secondary)]">
-      <p className="text-xs text-[var(--text-muted)]">{titulo}</p>
+      <p className="text-xs text-[var(--text-muted)] flex items-center gap-1">{titulo} {leyenda && <Leyenda k={leyenda} />}</p>
       <p className={`text-lg font-semibold tabular-nums ${tono || ''}`}>{valor}</p>
       {nota && <p className="text-xs text-[var(--text-muted)] mt-0.5">{nota}</p>}
     </div>

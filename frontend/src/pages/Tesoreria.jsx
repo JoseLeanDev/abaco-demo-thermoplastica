@@ -15,6 +15,7 @@ import {
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { Leyenda } from '../components/common/leyendas'
 
 const fmtQ  = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtM  = (n) => {
@@ -66,7 +67,7 @@ export default function Tesoreria() {
         {/* Efectivo bancos - N/D */}
         <div className="kpi-card card-hover border-dashed border-2 border-[var(--border-default)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Efectivo en bancos</span>
+            <span className="kpi-label flex items-center gap-1">Efectivo en bancos <Leyenda k="efectivo_bancos" /></span>
             <span className="badge-info text-xs">N/D</span>
           </div>
           <p className="kpi-value text-[var(--text-muted)]">—</p>
@@ -78,7 +79,7 @@ export default function Tesoreria() {
         {/* CxC */}
         <div className="kpi-card card-hover">
           <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Por cobrar (CxC)</span>
+            <span className="kpi-label flex items-center gap-1">Por cobrar (CxC) <Leyenda k="cxc_total" /></span>
             <ArrowTrendingUpIcon className="w-4 h-4 text-[var(--success)]" />
           </div>
           <p className="kpi-value">{loadingPos ? '—' : fmtQ(cxc.total)}</p>
@@ -90,7 +91,7 @@ export default function Tesoreria() {
         {/* CxP */}
         <div className="kpi-card card-hover">
           <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Por pagar (CxP)</span>
+            <span className="kpi-label flex items-center gap-1">Por pagar (CxP) <Leyenda k="cxp_total" /></span>
             <ArrowTrendingDownIcon className="w-4 h-4 text-[var(--warning)]" />
           </div>
           <p className="kpi-value">{loadingPos ? '—' : fmtQ(cxp.total)}</p>
@@ -102,7 +103,7 @@ export default function Tesoreria() {
         {/* Posición neta */}
         <div className="kpi-card card-hover">
           <div className="flex items-center justify-between mb-2">
-            <span className="kpi-label">Posición neta WC</span>
+            <span className="kpi-label flex items-center gap-1">Posición neta WC <Leyenda k="posicion_neta_wc" /></span>
             <ScaleIcon className="w-4 h-4 text-[var(--text-muted)]" />
           </div>
           <p className={`kpi-value ${netaPositiva ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
@@ -138,6 +139,7 @@ export default function Tesoreria() {
             <div className="flex items-center gap-2">
               <ArrowTrendingUpIcon className="w-5 h-5 text-[var(--text-muted)]" />
               <h2 className="font-semibold">Cuentas por Cobrar</h2>
+          <Leyenda k="aging_cxc" />
             </div>
             <Link to="/tesoreria/cuentas-por-cobrar" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
               Ver detalle <ArrowRightIcon className="w-3 h-3" />
@@ -150,7 +152,7 @@ export default function Tesoreria() {
                 <span className="text-lg font-semibold tabular-nums">{fmtQ(cxcDetalle.total_cxc || cxc.total)}</span>
               </div>
               <p className="text-xs text-[var(--text-muted)]">
-                DSO promedio {cxcDetalle.promedio_dias_cobro || 0} días · {fmtNum(cxcDetalle.facturas || cxc.documentos)} documentos
+                Atraso promedio {cxcDetalle.promedio_dias_cobro || 0} días <Leyenda k="atraso_promedio" /> · {fmtNum(cxcDetalle.facturas || cxc.documentos)} documentos
               </p>
             </div>
 
@@ -179,6 +181,7 @@ export default function Tesoreria() {
             <div className="flex items-center gap-2">
               <ArrowTrendingDownIcon className="w-5 h-5 text-[var(--text-muted)]" />
               <h2 className="font-semibold">Cuentas por Pagar</h2>
+          <Leyenda k="aging_cxp" />
             </div>
             <Link to="/tesoreria/cuentas-por-pagar" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
               Ver detalle <ArrowRightIcon className="w-3 h-3" />
@@ -191,7 +194,7 @@ export default function Tesoreria() {
                 <span className="text-lg font-semibold tabular-nums">{fmtQ(cxpDetalle.total_cxp || cxp.total)}</span>
               </div>
               <p className="text-xs text-[var(--text-muted)]">
-                {fmtNum(cxpDetalle.facturas || cxp.facturas)} facturas · {fmtNum(cxpDetalle.proveedores || cxp.proveedores)} proveedores · crédito prom {cxpDetalle.dias_credito_promedio || 0}d
+                {fmtNum(cxpDetalle.facturas || cxp.facturas)} facturas · {fmtNum(cxpDetalle.proveedores || cxp.proveedores)} proveedores · crédito prom {cxpDetalle.dias_credito_promedio || 0}d <Leyenda k="dias_credito" />
               </p>
             </div>
 
@@ -235,6 +238,7 @@ export default function Tesoreria() {
         <div className="section-header">
           <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Top proveedores con saldo pendiente</h2>
+          <Leyenda k="top_proveedores_cxp" />
         </div>
         <div className="p-5 pt-0 overflow-x-auto">
           <table className="w-full">
@@ -243,7 +247,7 @@ export default function Tesoreria() {
                 <th className="text-left  font-semibold py-2">Proveedor</th>
                 <th className="text-right font-semibold py-2">Facturas</th>
                 <th className="text-right font-semibold py-2">Saldo pendiente</th>
-                <th className="text-right font-semibold py-2">% del CxP</th>
+                <th className="text-right font-semibold py-2">% del CxP <Leyenda k="pct_cxp" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
@@ -276,6 +280,7 @@ export default function Tesoreria() {
         <div className="section-header">
           <ClockIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Próximos pagos estimados (30 días)</h2>
+          <Leyenda k="proximos_pagos" />
         </div>
         <div className="p-5 pt-0 overflow-x-auto">
           <table className="w-full">
@@ -285,7 +290,7 @@ export default function Tesoreria() {
                 <th className="text-left  font-semibold py-2">Proveedor</th>
                 <th className="text-left  font-semibold py-2">Factura</th>
                 <th className="text-right font-semibold py-2">Monto</th>
-                <th className="text-right font-semibold py-2">Días</th>
+                <th className="text-right font-semibold py-2">Días <Leyenda k="dias_restantes" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">

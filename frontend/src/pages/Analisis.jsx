@@ -92,26 +92,26 @@ function Kpis({ salud }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="kpi-card card-hover">
-        <span className="kpi-label">Ciclo de caja</span>
+        <span className="kpi-label flex items-center gap-1">Ciclo de caja <Leyenda k="ciclo_caja" /></span>
         <p className="kpi-value">{fmtDias(ciclo.ciclo_caja)}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
           Cobro {Math.round(ciclo.dso)} + inventario {Math.round(ciclo.dio)} − pago {Math.round(ciclo.dpo)}
         </p>
       </div>
       <div className="kpi-card card-hover">
-        <span className="kpi-label">Capital de trabajo</span>
+        <span className="kpi-label flex items-center gap-1">Capital de trabajo <Leyenda k="capital_trabajo" /></span>
         <p className="kpi-value">{fmtM(ct.capital_trabajo)}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
           {fmtPct(ct.capital_trabajo_pct_ventas)} de las ventas anualizadas del período
         </p>
       </div>
       <div className="kpi-card card-hover">
-        <span className="kpi-label">Inventario inmovilizado</span>
+        <span className="kpi-label flex items-center gap-1">Inventario inmovilizado <Leyenda k="inmovilizado" /></span>
         <p className="kpi-value text-[var(--warning)]">{fmtM(inmov)}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">+ {fmtM(lento)} de rotación lenta</p>
       </div>
       <div className="kpi-card card-hover">
-        <span className="kpi-label">Caja que pide el crecimiento</span>
+        <span className="kpi-label flex items-center gap-1">Caja que pide el crecimiento <Leyenda k="caja_crecimiento" /></span>
         <p className="kpi-value">{fmtM(ct.caja_requerida_crecimiento)}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
           Si las ventas crecen {fmtPct(ct.crecimiento_pct)} (lo mismo que este período vs el año anterior)
@@ -137,6 +137,7 @@ function CicloCaja({ ciclo, mensual }) {
       <div className="section-header">
         <ArrowPathIcon className="w-5 h-5 text-[var(--text-muted)]" />
         <h2 className="font-semibold">Ciclo de conversión de efectivo</h2>
+        <Leyenda k="ciclo_caja" />
         <span className="text-xs text-[var(--text-muted)] ml-auto">Período seleccionado</span>
       </div>
 
@@ -159,14 +160,14 @@ function CicloCaja({ ciclo, mensual }) {
                 <div className="h-full rounded-full" style={{ width: `${(c.dias / max) * 100}%`, background: c.color }} />
               </div>
               <p className="text-xs text-[var(--text-muted)] mt-1">
-                Si se logra {c.accion}, se liberan <strong className="text-[var(--text-primary)]">{fmtM(c.valorDia * 10)}</strong> de caja.
+                Si se logra {c.accion}, se liberan <strong className="text-[var(--text-primary)]">{fmtM(c.valorDia * 10)}</strong> de caja. <Leyenda k="liberar_caja" />
               </p>
             </div>
           ))}
         </div>
 
         <div>
-          <p className="text-sm font-medium mb-1">Días reales de cobro y pago, mes a mes</p>
+          <p className="text-sm font-medium mb-1 flex items-center gap-1">Días reales de cobro y pago, mes a mes <Leyenda k="dias_reales" /></p>
           <p className="text-xs text-[var(--text-muted)] mb-3">
             Facturas cobradas o pagadas cada mes, ponderadas por monto. Si la distancia entre las líneas crece,
             la empresa financia más a sus clientes de lo que la financian sus proveedores.

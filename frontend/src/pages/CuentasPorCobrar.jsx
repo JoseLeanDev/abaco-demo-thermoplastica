@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { Leyenda } from '../components/common/leyendas'
 import {
   ArrowTrendingUpIcon,
   ArrowLeftIcon,
@@ -73,7 +74,7 @@ export default function CuentasPorCobrar() {
             <div>
               <h1 className="text-2xl font-semibold">Cuentas por Cobrar</h1>
               <p className="text-sm text-[var(--text-muted)]">
-                {loadingResumen ? 'Cargando…' : `${totalFacturas.toLocaleString()} documentos abiertos • DSO promedio ${resumen.promedio_dias_cobro || 0} días`}
+                {loadingResumen ? 'Cargando…' : <>{totalFacturas.toLocaleString()} documentos abiertos • atraso promedio {resumen.promedio_dias_cobro || 0} días <Leyenda k="atraso_promedio" /></>}
               </p>
               <PeriodoActivo nota="saldos de documentos emitidos en el período" className="mt-1" />
             </div>
@@ -88,22 +89,22 @@ export default function CuentasPorCobrar() {
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Total por Cobrar</span>
+          <span className="kpi-label flex items-center gap-1">Total por Cobrar <Leyenda k="cxc_total" /></span>
           <p className="kpi-value">{fmtQ(resumen.total_cxc)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{totalFacturas.toLocaleString()} documentos</p>
         </div>
         <div className="kpi-card card-hover">
-          <span className="kpi-label">Al Corriente (por vencer)</span>
+          <span className="kpi-label flex items-center gap-1">Al Corriente (por vencer) <Leyenda k="por_vencer" /></span>
           <p className="kpi-value text-[var(--success)]">{fmtQ(distribucion.al_corriente?.monto)}</p>
           <p className="text-xs text-[var(--success)] mt-1">{distribucion.al_corriente?.porcentaje || 0}%</p>
         </div>
         <div className="kpi-card card-hover">
-          <span className="kpi-label">1-30 días vencido</span>
+          <span className="kpi-label flex items-center gap-1">1-30 días vencido <Leyenda k="dias_vencido" /></span>
           <p className="kpi-value text-[var(--warning)]">{fmtQ(distribucion._30_dias?.monto)}</p>
           <p className="text-xs text-[var(--warning)] mt-1">{distribucion._30_dias?.porcentaje || 0}%</p>
         </div>
         <div className="kpi-card card-hover">
-          <span className="kpi-label">+60 días (riesgo)</span>
+          <span className="kpi-label flex items-center gap-1">+60 días (riesgo) <Leyenda k="cxc_riesgo" /></span>
           <p className="kpi-value text-[var(--danger)]">{fmtQ((distribucion._60_dias?.monto || 0) + (distribucion._90_dias?.monto || 0))}</p>
           <p className="text-xs text-[var(--danger)] mt-1">Atención requerida</p>
         </div>
@@ -114,6 +115,7 @@ export default function CuentasPorCobrar() {
         <div className="section-header">
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Distribución por Antigüedad</h2>
+          <Leyenda k="aging_cxc" />
         </div>
         <div className="p-5 pt-0 space-y-4">
           {[
@@ -191,9 +193,9 @@ export default function CuentasPorCobrar() {
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Documento</th>
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Emisión</th>
                 <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Vencimiento</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Crédito<br /><span className="normal-case font-normal">ficha · factura</span></th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Crédito <Leyenda k="credito_ficha_factura" /><br /><span className="normal-case font-normal">ficha · factura</span></th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Saldo</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Días</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Días <Leyenda k="dias_vencido" /></th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Estado</th>
               </tr>
             </thead>

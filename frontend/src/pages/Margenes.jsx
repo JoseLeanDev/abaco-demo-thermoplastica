@@ -32,6 +32,7 @@ import {
 } from '../hooks/useCfoData'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import MargenCategorias from '../components/margenes/MargenCategorias'
+import { Leyenda } from '../components/common/leyendas'
 
 const formatGTQ = (value) => {
   if (!value && value !== 0) return 'Q 0'
@@ -77,6 +78,7 @@ function SortableTable({ columns, data, onRowClick, keyField = 'id' }) {
               >
                 <div className="flex items-center gap-1">
                   {col.label}
+                  {col.leyenda && <Leyenda k={col.leyenda} />}
                   {sortKey === col.key && (
                     sortDir === 'asc' ? <ChevronUpIcon className="w-3 h-3" /> : <ChevronDownIcon className="w-3 h-3" />
                   )}
@@ -153,22 +155,22 @@ export default function Margenes() {
       {/* KPIs globales */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="card p-5">
-          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Margen Bruto Total</p>
+          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">Margen Bruto Total <Leyenda k="margen_bruto" /></p>
           <p className="text-2xl font-bold text-emerald-400">{formatGTQ(resumen?.total_margen_bruto_q || 0)}</p>
           <p className="text-xs text-[var(--text-muted)]">{formatNum(resumen?.margen_global_pct)}% sobre ventas</p>
           {resumen?.pct_ventas_sin_costo >= 1 && (
             <p className="text-[10px] text-[var(--text-muted)] mt-0.5" title="El margen % se calcula solo con las líneas que traen costo en el ERP">
-              {formatNum(resumen.pct_ventas_sin_costo)}% de ventas sin costo, excluidas del %
+              {formatNum(resumen.pct_ventas_sin_costo)}% de ventas sin costo, excluidas del % <Leyenda k="pct_sin_costo" />
             </p>
           )}
         </div>
         <div className="card p-5">
-          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Dejaste de ganar (período)</p>
+          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">Dejaste de ganar (período) <Leyenda k="dejaste_de_ganar" /></p>
           <p className="text-2xl font-bold text-red-400">{formatGTQ(resumen?.total_margen_perdido_12m || 0)}</p>
           <p className="text-xs text-[var(--text-muted)]">Productos que no ajustaron precio</p>
         </div>
         <div className="card p-5">
-          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Necesitan ajuste de precio</p>
+          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">Necesitan ajuste de precio <Leyenda k="necesitan_ajuste" /></p>
           <div className="flex items-baseline gap-2">
             <p className="text-2xl font-bold text-red-400">{resumen?.productos_rojo || 0}</p>
             <p className="text-sm text-amber-400">+ {resumen?.productos_ambar || 0} en ámbar</p>
@@ -176,7 +178,7 @@ export default function Margenes() {
           <p className="text-xs text-[var(--text-muted)]">De {resumen?.total_productos || 0} totales</p>
         </div>
         <div className="card p-5">
-          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Total Ventas</p>
+          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">Total Ventas <Leyenda k="ventas" /></p>
           <p className="text-2xl font-bold text-[var(--accent-primary)]">{formatGTQ(resumen?.total_ventas_q || 0)}</p>
           <p className="text-xs text-[var(--text-muted)]">Período seleccionado</p>
         </div>
@@ -232,18 +234,18 @@ export default function Margenes() {
                     </div>
                   )},
                   { key: 'precio_actual', label: 'Precio', className: 'text-right', render: r => `Q ${formatNum(r.precio_actual, 2)}` },
-                  { key: 'costo_actual', label: 'Costo', className: 'text-right', render: r => `Q ${formatNum(r.costo_actual, 2)}` },
-                  { key: 'margen_pct_actual', label: 'Margen Hoy', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
-                  { key: 'margen_pct_historico', label: 'Año anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
-                  { key: 'delta_puntos', label: 'Puntos perdidos', className: 'text-right', render: r => (
+                  { key: 'costo_actual', label: 'Costo', leyenda: 'costo_unitario', className: 'text-right', render: r => `Q ${formatNum(r.costo_actual, 2)}` },
+                  { key: 'margen_pct_actual', label: 'Margen Hoy', leyenda: 'margen_bruto', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
+                  { key: 'margen_pct_historico', label: 'Año anterior', leyenda: 'vs_anio_anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
+                  { key: 'delta_puntos', label: 'Puntos perdidos', leyenda: 'margen_pts', className: 'text-right', render: r => (
                     <span className={r.delta_puntos < 0 ? 'text-red-400' : 'text-emerald-400'}>
                       {r.delta_puntos > 0 ? '+' : ''}{formatNum(r.delta_puntos)}
                     </span>
                   )},
-                  { key: 'quetzales_perdidos', label: 'Q que dejaste de ganar', className: 'text-right', render: r => (
+                  { key: 'quetzales_perdidos', label: 'Q que dejaste de ganar', leyenda: 'dejaste_de_ganar', className: 'text-right', render: r => (
                     r.quetzales_perdidos > 0 ? <span className="text-red-400">{formatGTQ(r.quetzales_perdidos)}</span> : '-'
                   )},
-                  { key: 'semaforo', label: '', className: 'text-center', sortable: false, render: r => (
+                  { key: 'semaforo', label: '', leyenda: 'semaforo_margen', className: 'text-center', sortable: false, render: r => (
                     <span className={`inline-block w-3 h-3 rounded-full ${
                       r.semaforo === 'rojo' ? 'bg-red-500' :
                       r.semaforo === 'ambar' ? 'bg-amber-500' : 'bg-emerald-500'
@@ -273,7 +275,7 @@ export default function Margenes() {
 
                 {productoSeleccionado.precio_sugerido > productoSeleccionado.precio_actual && (
                   <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg mb-6">
-                    <p className="text-xs text-red-400 uppercase tracking-wider">Precio sugerido para recuperar margen</p>
+                    <p className="text-xs text-red-400 uppercase tracking-wider flex items-center gap-1">Precio sugerido para recuperar margen <Leyenda k="precio_sugerido" /></p>
                     <p className="text-xl font-bold text-red-400">Q {formatNum(productoSeleccionado.precio_sugerido, 2)}</p>
                     <p className="text-xs text-[var(--text-muted)]">
                       vs Q {formatNum(productoSeleccionado.precio_actual, 2)} actual (+{formatNum((productoSeleccionado.precio_sugerido / productoSeleccionado.precio_actual - 1) * 100)}%)
@@ -352,17 +354,17 @@ export default function Margenes() {
                   columns={[
                     { key: 'nombre', label: 'Vendedor', sortable: false },
                     { key: 'ventas_12m', label: 'Ventas período', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
-                    { key: 'margen_pct_actual', label: 'Margen Actual', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
-                    { key: 'margen_pct_historico', label: 'Año anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
-                    { key: 'delta_puntos', label: 'Puntos perdidos', className: 'text-right', render: r => (
+                    { key: 'margen_pct_actual', label: 'Margen Actual', leyenda: 'margen_bruto', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
+                    { key: 'margen_pct_historico', label: 'Año anterior', leyenda: 'vs_anio_anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
+                    { key: 'delta_puntos', label: 'Puntos perdidos', leyenda: 'margen_pts', className: 'text-right', render: r => (
                       <span className={r.delta_puntos < 0 ? 'text-red-400' : 'text-emerald-400'}>
                         {r.delta_puntos > 0 ? '+' : ''}{formatNum(r.delta_puntos)}
                       </span>
                     )},
-                    { key: 'quetzales_perdidos', label: 'Q que dejaste de ganar', className: 'text-right', render: r => (
+                    { key: 'quetzales_perdidos', label: 'Q que dejaste de ganar', leyenda: 'dejaste_de_ganar', className: 'text-right', render: r => (
                       r.quetzales_perdidos > 0 ? <span className="text-red-400">{formatGTQ(r.quetzales_perdidos)}</span> : '-'
                     )},
-                    { key: 'semaforo', label: '', className: 'text-center', sortable: false, render: r => (
+                    { key: 'semaforo', label: '', leyenda: 'semaforo_margen', className: 'text-center', sortable: false, render: r => (
                       <span className={`inline-block w-3 h-3 rounded-full ${
                         r.semaforo === 'rojo' ? 'bg-red-500' :
                         r.semaforo === 'ambar' ? 'bg-amber-500' : 'bg-emerald-500'
@@ -428,17 +430,17 @@ export default function Margenes() {
                   columns={[
                     { key: 'nombre', label: 'Cliente', sortable: false },
                     { key: 'ventas_12m', label: 'Comprado período', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
-                    { key: 'margen_pct_actual', label: 'Margen Actual', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
-                    { key: 'margen_pct_historico', label: 'Año anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
-                    { key: 'delta_puntos', label: 'Puntos perdidos', className: 'text-right', render: r => (
+                    { key: 'margen_pct_actual', label: 'Margen Actual', leyenda: 'margen_bruto', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
+                    { key: 'margen_pct_historico', label: 'Año anterior', leyenda: 'vs_anio_anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
+                    { key: 'delta_puntos', label: 'Puntos perdidos', leyenda: 'margen_pts', className: 'text-right', render: r => (
                       <span className={r.delta_puntos < 0 ? 'text-red-400' : 'text-emerald-400'}>
                         {r.delta_puntos > 0 ? '+' : ''}{formatNum(r.delta_puntos)}
                       </span>
                     )},
-                    { key: 'quetzales_perdidos', label: 'Q que dejaste de ganar', className: 'text-right', render: r => (
+                    { key: 'quetzales_perdidos', label: 'Q que dejaste de ganar', leyenda: 'dejaste_de_ganar', className: 'text-right', render: r => (
                       r.quetzales_perdidos > 0 ? <span className="text-red-400">{formatGTQ(r.quetzales_perdidos)}</span> : '-'
                     )},
-                    { key: 'semaforo', label: '', className: 'text-center', sortable: false, render: r => (
+                    { key: 'semaforo', label: '', leyenda: 'semaforo_margen', className: 'text-center', sortable: false, render: r => (
                       <span className={`inline-block w-3 h-3 rounded-full ${
                         r.semaforo === 'rojo' ? 'bg-red-500' :
                         r.semaforo === 'ambar' ? 'bg-amber-500' : 'bg-emerald-500'

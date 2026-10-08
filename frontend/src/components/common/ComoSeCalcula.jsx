@@ -14,7 +14,7 @@ import { InformationCircleIcon } from '@heroicons/react/24/outline'
  */
 const ANCHO = 288
 
-export default function ComoSeCalcula({ titulo, children, className = '' }) {
+export default function ComoSeCalcula({ titulo, children, className = '', claro = false }) {
   const [pos, setPos] = useState(null) // { top, left } cuando está abierta
   const btn = useRef(null)
   const tarjeta = useRef(null)
@@ -53,8 +53,8 @@ export default function ComoSeCalcula({ titulo, children, className = '' }) {
         aria-label={`Cómo se calcula${titulo ? `: ${titulo}` : ''}`}
         onMouseEnter={abrir}
         onMouseLeave={cerrar}
-        onClick={(e) => { e.stopPropagation(); pos ? setPos(null) : abrir() }}
-        className="inline-flex p-0.5 -m-0.5 text-[var(--text-muted)] opacity-50 hover:opacity-100 focus:opacity-100 focus:outline-none"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); pos ? setPos(null) : abrir() }}
+        className={`inline-flex p-0.5 -m-0.5 ${claro ? 'text-white' : 'text-[var(--text-muted)]'} opacity-50 hover:opacity-100 focus:opacity-100 focus:outline-none`}
       >
         <InformationCircleIcon className="w-3.5 h-3.5" />
       </button>

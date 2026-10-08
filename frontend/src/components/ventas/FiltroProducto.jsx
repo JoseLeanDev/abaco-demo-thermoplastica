@@ -2,6 +2,7 @@ import { useQuery } from 'react-query'
 import { ChevronRightIcon, CubeIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { endpoints } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
+import { Leyenda } from '../common/leyendas'
 
 // Filtro de producto: Categoría › Subcategoría › Sublínea.
 // value = { categoria, subcategoria, sublinea } ('' = todas).
@@ -79,7 +80,7 @@ export default function FiltroProducto({ value, onChange, fuente = 'ventas' }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] mr-1">
-        <CubeIcon className="w-4 h-4" /> Producto
+        <CubeIcon className="w-4 h-4" /> Producto <Leyenda k="jerarquia_producto" />
       </span>
       {visibles.map((n, i) => {
         const arriba = Object.fromEntries(NIVELES_PRODUCTO.slice(0, i).map(x => [x.dim, value[x.dim]]))
