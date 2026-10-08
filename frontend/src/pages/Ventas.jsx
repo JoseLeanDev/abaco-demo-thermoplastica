@@ -19,12 +19,16 @@ import {
   UsersIcon,
   ReceiptPercentIcon,
   BuildingOffice2Icon,
+  TableCellsIcon,
 } from '@heroicons/react/24/outline'
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
   CartesianGrid, Legend, PieChart, Pie, Cell,
 } from 'recharts'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import TabCategorias from '../components/ventas/TabCategorias'
+import TabMatriz from '../components/ventas/TabMatriz'
+import FiltroProducto from '../components/ventas/FiltroProducto'
 
 // -------------------------------------------------------------------
 // Helpers
@@ -61,6 +65,14 @@ const SinCosto = ({ pct }) => (pct >= 1 ? (
   </p>
 ) : null)
 
+// Variación vs período anterior
+const Var = ({ pct, nuevo }) => {
+  if (nuevo) return <span className="text-xs font-semibold text-[var(--success)]">nuevo</span>
+  if (pct === null || pct === undefined) return <span className="text-[var(--text-muted)]">—</span>
+  const tone = pct > 0 ? 'text-[var(--success)]' : pct < 0 ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'
+  return <span className={`tabular-nums font-semibold ${tone}`}>{pct > 0 ? '+' : ''}{Number(pct).toFixed(1)}%</span>
+}
+
 const PIE_COLORS = ['#001639', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#a855f7']
 
 // -------------------------------------------------------------------
@@ -72,6 +84,10 @@ export default function Ventas() {
   const [busqueda, setBusqueda]   = useState('')
   const [clienteSel, setCliente]  = useState('')
   const [vendedorSel, setVendedor] = useState('')
+  // Filtro de producto para Vendedores, Clientes y Matriz
+  const [producto, setProducto]   = useState({ categoria: '', subcategoria: '' })
+  const prodParams = Object.fromEntries(Object.entries(producto).filter(([, v]) => v))
+  const prodKey = JSON.stringify(prodParams)
 
   const commonParams = { desde, hasta }
 
@@ -81,13 +97,13 @@ export default function Ventas() {
     { keepPreviousData: true }
   )
   const { data: cRes } = useQuery(
-    ['ventas-clientes', desde, hasta],
-    () => endpoints.ventas.clientes({ ...commonParams, limit: 30 }),
+    ['ventas-clientes', desde, hasta, prodKey],
+    () => endpoints.ventas.clientes({ ...commonParams, ...prodParams, limit: 30 }),
     { keepPreviousData: true }
   )
   const { data: vRes } = useQuery(
-    ['ventas-vendedores', desde, hasta],
-    () => endpoints.ventas.vendedores(commonParams),
+    ['ventas-vendedores', desde, hasta, prodKey],
+    () => endpoints.ventas.vendedores({ ...commonParams, ...prodParams }),
     { keepPreviousData: true }
   )
   const { data: aRes } = useQuery(
@@ -95,20 +111,10 @@ export default function Ventas() {
     () => endpoints.ventas.articulos({ ...commonParams, limit: 15 }),
     { keepPreviousData: true }
   )
-  const { data: lRes } = useQuery(
-    ['ventas-lineas', desde, hasta],
-    () => endpoints.ventas.lineas(commonParams),
-    { keepPreviousData: true }
-  )
   const { data: svRes } = useQuery(
-    ['ventas-serie-vend', desde, hasta],
-    () => endpoints.ventas.serieVendedores({ ...commonParams, limit: 5 }),
+    ['ventas-serie-vend', desde, hasta, prodKey],
+    () => endpoints.ventas.serieVendedores({ ...commonParams, ...prodParams, limit: 5 }),
     { keepPreviousData: true, enabled: tab === 'vendedores' }
-  )
-  const { data: slRes } = useQuery(
-    ['ventas-serie-lin', desde, hasta],
-    () => endpoints.ventas.serieLineas({ ...commonParams, limit: 5 }),
-    { keepPreviousData: true, enabled: tab === 'lineas' }
   )
   const { data: dRes, isFetching: fetchingDetalle } = useQuery(
     ['ventas-detalle', desde, hasta, busqueda, clienteSel, vendedorSel],
@@ -124,9 +130,7 @@ export default function Ventas() {
   const clientes   = cRes?.data?.clientes || []
   const vendedores = vRes?.data?.vendedores || []
   const articulos  = aRes?.data?.articulos || []
-  const lineas     = lRes?.data?.lineas || []
   const serieVend  = svRes?.data
-  const serieLin   = slRes?.data
   const filas      = dRes?.data?.filas || []
   const totalFilas   = dRes?.data?.total_filas || 0
   const sumaFiltrada = dRes?.data?.suma_ventas || 0
@@ -179,9 +183,10 @@ export default function Ventas() {
       <div className="flex gap-1 border-b border-[var(--border-default)] overflow-x-auto">
         {[
           { id: 'resumen',   label: 'Resumen',     icon: ChartBarIcon },
+          { id: 'categorias',label: 'Categorías',  icon: Squares2X2Icon },
           { id: 'vendedores',label: 'Vendedores',  icon: UsersIcon },
-          { id: 'lineas',    label: 'Líneas',      icon: Squares2X2Icon },
           { id: 'clientes',  label: 'Clientes',    icon: UserGroupIcon },
+          { id: 'matriz',    label: 'Matriz',      icon: TableCellsIcon },
         ].map(t => {
           const Icon = t.icon
           const active = tab === t.id
@@ -211,14 +216,16 @@ export default function Ventas() {
           setCliente={setCliente} setVendedor={setVendedor}
         />
       )}
+      {['vendedores', 'clientes', 'matriz'].includes(tab) && (
+        <FiltroProducto value={producto} onChange={setProducto} />
+      )}
       {tab === 'vendedores' && (
-        <TabVendedores vendedores={vendedores} serieVend={serieVend} totalVentas={r.ventas_sin_iva} />
+        <TabVendedores vendedores={vendedores} serieVend={serieVend} resumen={vRes?.data} />
       )}
-      {tab === 'lineas'     && (
-        <TabLineas lineas={lineas} serieLin={serieLin} />
-      )}
+      {tab === 'categorias' && <TabCategorias />}
+      {tab === 'matriz'     && <TabMatriz filtroProducto={prodParams} />}
       {tab === 'clientes'   && (
-        <TabClientes clientes={clientes} totalVentas={r.ventas_sin_iva} />
+        <TabClientes clientes={clientes} resumen={cRes?.data} />
       )}
 
       <p className="text-xs text-[var(--text-muted)] italic">
@@ -456,7 +463,7 @@ function TabResumen({
 // -------------------------------------------------------------------
 // TAB: VENDEDORES
 // -------------------------------------------------------------------
-function TabVendedores({ vendedores, serieVend, totalVentas }) {
+function TabVendedores({ vendedores, serieVend, resumen }) {
   const top5 = vendedores.slice(0, 5)
   const topVendedor = vendedores[0]
   const topPct = topVendedor?.porcentaje || 0
@@ -564,6 +571,11 @@ function TabVendedores({ vendedores, serieVend, totalVentas }) {
           <div className="section-header">
             <UsersIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Ranking de vendedores ({vendedores.length})</h2>
+            {resumen && (
+              <span className="ml-auto text-xs text-[var(--text-muted)]">
+                Total {fmtM(resumen.total)} · <Var pct={resumen.variacion_pct} /> vs año ant.
+              </span>
+            )}
           </div>
           <div className="p-5 pt-0 overflow-x-auto">
             <table className="w-full">
@@ -573,6 +585,8 @@ function TabVendedores({ vendedores, serieVend, totalVentas }) {
                   <th className="text-right font-semibold pb-2">Clientes</th>
                   <th className="text-right font-semibold pb-2">Facturas</th>
                   <th className="text-right font-semibold pb-2">Ventas</th>
+                  <th className="text-right font-semibold pb-2">Año ant.</th>
+                  <th className="text-right font-semibold pb-2">Var.</th>
                   <th className="text-right font-semibold pb-2">Margen%</th>
                   <th className="text-right font-semibold pb-2">Share</th>
                 </tr>
@@ -589,11 +603,21 @@ function TabVendedores({ vendedores, serieVend, totalVentas }) {
                         </div>
                       </div>
                     </td>
-                    <td className="py-2 text-right tabular-nums">{fmtInt(v.clientes)}</td>
+                    <td className="py-2 text-right tabular-nums">
+                      {fmtInt(v.clientes)}
+                      {v.clientes_prev > 0 && v.clientes !== v.clientes_prev && (
+                        <span className="text-[10px] text-[var(--text-muted)] ml-1">({v.clientes > v.clientes_prev ? '+' : ''}{v.clientes - v.clientes_prev})</span>
+                      )}
+                    </td>
                     <td className="py-2 text-right tabular-nums">{fmtInt(v.facturas)}</td>
                     <td className="py-2 text-right tabular-nums font-semibold">{fmtM(v.ventas)}</td>
+                    <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{v.ventas_prev ? fmtM(v.ventas_prev) : '—'}</td>
+                    <td className="py-2 text-right"><Var pct={v.variacion_pct} nuevo={v.nuevo} /></td>
                     <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(v.margen_pct)}`}>
                       {v.margen_pct !== null ? `${v.margen_pct.toFixed(1)}%` : '—'}
+                    {v.margen_pct !== null && v.margen_pct_prev !== null && (
+                      <p className="text-[10px] font-normal text-[var(--text-muted)]">{v.margen_pct - v.margen_pct_prev >= 0 ? '+' : ''}{(v.margen_pct - v.margen_pct_prev).toFixed(1)} pts</p>
+                    )}
                     <SinCosto pct={v.pct_sin_costo} />
                     </td>
                     <td className={`py-2 text-right tabular-nums font-semibold ${v.porcentaje >= 20 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
@@ -614,131 +638,11 @@ function TabVendedores({ vendedores, serieVend, totalVentas }) {
 }
 
 // -------------------------------------------------------------------
-// TAB: LÍNEAS
-// -------------------------------------------------------------------
-function TabLineas({ lineas, serieLin }) {
-  const top10 = lineas.slice(0, 10)
-  return (
-    <div className="space-y-6">
-      {/* Distribución + Serie */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Pie distribución */}
-        <div className="card lg:col-span-1">
-          <div className="section-header">
-            <ChartPieIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">Mix por línea (top 10)</h2>
-          </div>
-          <div className="p-5 pt-0">
-            {top10.length === 0 ? (
-              <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie
-                      data={top10.map(l => ({ name: l.linea, value: l.ventas }))}
-                      dataKey="value" nameKey="name"
-                      innerRadius={40} outerRadius={90} paddingAngle={2}
-                    >
-                      {top10.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v) => fmtM(v)} contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-1.5 mt-3">
-                  {top10.map((l, i) => (
-                    <div key={l.linea} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                        <span className="truncate">{l.linea}</span>
-                      </div>
-                      <span className="tabular-nums font-semibold">{l.porcentaje}%</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Serie mensual top 5 líneas */}
-        <div className="card lg:col-span-2">
-          <div className="section-header">
-            <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">Evolución mensual (top 5 líneas)</h2>
-          </div>
-          <div className="p-5 pt-0">
-            {!serieLin || serieLin.serie?.length === 0 ? (
-              <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={serieLin.serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-                  <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
-                  <YAxis tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
-                  <Tooltip formatter={(v) => fmtQ(v)} labelFormatter={fmtPeriod} contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {(serieLin.lineas || []).map((l, i) => (
-                    <Line key={l} type="monotone" dataKey={l} stroke={PIE_COLORS[i % PIE_COLORS.length]} strokeWidth={2} dot={false} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Ranking completo */}
-      <div className="card">
-        <div className="section-header">
-          <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
-          <h2 className="font-semibold">Detalle por línea de producto</h2>
-        </div>
-        <div className="p-5 pt-0 overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-xs text-[var(--text-muted)] uppercase">
-                <th className="text-left  font-semibold pb-2">Línea</th>
-                <th className="text-right font-semibold pb-2">SKUs</th>
-                <th className="text-right font-semibold pb-2">Clientes</th>
-                <th className="text-right font-semibold pb-2">Unidades</th>
-                <th className="text-right font-semibold pb-2">Ventas</th>
-                <th className="text-right font-semibold pb-2">Margen%</th>
-                <th className="text-right font-semibold pb-2">Share</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border-default)]">
-              {lineas.map((l, i) => (
-                <tr key={l.linea} className="text-sm hover:bg-[var(--bg-secondary)]">
-                  <td className="py-2 pr-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
-                      <span className="font-medium">{l.linea}</span>
-                    </div>
-                  </td>
-                  <td className="py-2 text-right tabular-nums">{fmtInt(l.skus)}</td>
-                  <td className="py-2 text-right tabular-nums">{fmtInt(l.clientes)}</td>
-                  <td className="py-2 text-right tabular-nums">{fmtNum(l.unidades)}</td>
-                  <td className="py-2 text-right tabular-nums font-semibold">{fmtM(l.ventas)}</td>
-                  <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(l.margen_pct)}`}>
-                    {l.margen_pct !== null ? `${l.margen_pct.toFixed(1)}%` : '—'}
-                    <SinCosto pct={l.pct_sin_costo} />
-                  </td>
-                  <td className="py-2 text-right tabular-nums font-semibold">{l.porcentaje}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// -------------------------------------------------------------------
 // TAB: CLIENTES
 // -------------------------------------------------------------------
-function TabClientes({ clientes, totalVentas }) {
+function TabClientes({ clientes, resumen }) {
+  const totalVentas = resumen?.total || 0
+  const [verPerdidos, setVerPerdidos] = useState(false)
   // Concentración pareto: acumulado por rank
   const paretoData = useMemo(() => {
     let acum = 0
@@ -759,8 +663,8 @@ function TabClientes({ clientes, totalVentas }) {
 
   return (
     <div className="space-y-6">
-      {/* Métricas de concentración */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Concentración y movimiento de cartera */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="kpi-card">
           <span className="kpi-label">Top 10 clientes</span>
           <p className={`kpi-value ${top10Pct >= 50 ? 'text-[var(--warning)]' : 'text-[var(--text-primary)]'}`}>{top10Pct}%</p>
@@ -772,9 +676,19 @@ function TabClientes({ clientes, totalVentas }) {
           <p className="text-xs text-[var(--text-muted)] mt-1">del total facturado</p>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Clientes en top 30</span>
-          <p className="kpi-value">{fmtInt(clientes.length)}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">con ventas ≥ Q10k anuales</p>
+          <span className="kpi-label">Clientes activos</span>
+          <p className="kpi-value">{fmtInt(resumen?.n_clientes)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(resumen?.n_clientes_prev)} en el período anterior</p>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Clientes nuevos</span>
+          <p className="kpi-value text-[var(--success)]">{fmtInt(resumen?.n_nuevos)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{fmtM(resumen?.venta_nuevos)} vendidos</p>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Clientes perdidos</span>
+          <p className="kpi-value text-[var(--danger)]">{fmtInt(resumen?.n_perdidos)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{fmtM(resumen?.venta_perdida)} el período anterior</p>
         </div>
       </div>
 
@@ -826,6 +740,8 @@ function TabClientes({ clientes, totalVentas }) {
                 <th className="text-left  font-semibold pb-2">Cliente</th>
                 <th className="text-right font-semibold pb-2">Facturas</th>
                 <th className="text-right font-semibold pb-2">Ventas</th>
+                <th className="text-right font-semibold pb-2">Año ant.</th>
+                <th className="text-right font-semibold pb-2">Var.</th>
                 <th className="text-right font-semibold pb-2">Margen</th>
                 <th className="text-right font-semibold pb-2">Margen%</th>
                 <th className="text-right font-semibold pb-2">Share</th>
@@ -847,7 +763,9 @@ function TabClientes({ clientes, totalVentas }) {
                   </td>
                   <td className="py-2 text-right tabular-nums">{fmtInt(c.facturas)}</td>
                   <td className="py-2 text-right tabular-nums font-semibold">{fmtM(c.ventas)}</td>
-                  <td className="py-2 text-right tabular-nums">{fmtM(c.margen)}</td>
+                  <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{c.ventas_prev ? fmtM(c.ventas_prev) : '—'}</td>
+                  <td className="py-2 text-right"><Var pct={c.variacion_pct} nuevo={c.nuevo} /></td>
+                  <td className="py-2 text-right tabular-nums">{c.margen === null ? '—' : fmtM(c.margen)}</td>
                   <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(c.margen_pct)}`}>
                     {c.margen_pct !== null ? `${c.margen_pct.toFixed(1)}%` : '—'}
                     <SinCosto pct={c.pct_sin_costo} />
@@ -861,6 +779,38 @@ function TabClientes({ clientes, totalVentas }) {
           </table>
         </div>
       </div>
+
+      {(resumen?.perdidos || []).length > 0 && (
+        <div className="card">
+          <button className="section-header w-full text-left" onClick={() => setVerPerdidos(v => !v)}>
+            <ArrowTrendingDownIcon className="w-5 h-5 text-[var(--danger)]" />
+            <h2 className="font-semibold">Clientes que dejaron de comprar ({fmtInt(resumen.n_perdidos)}) · {fmtM(resumen.venta_perdida)} en el período anterior</h2>
+            <span className="ml-auto text-xs text-[var(--text-muted)]">{verPerdidos ? 'Ocultar' : 'Ver top 25'}</span>
+          </button>
+          {verPerdidos && (
+            <div className="p-5 pt-0 overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs text-[var(--text-muted)] uppercase">
+                    <th className="text-left font-semibold pb-2">Cliente</th>
+                    <th className="text-right font-semibold pb-2">Ventas año ant.</th>
+                    <th className="text-right font-semibold pb-2">Margen% año ant.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-default)]">
+                  {resumen.perdidos.map(c => (
+                    <tr key={c.codigo} className="text-sm">
+                      <td className="py-2 pr-2">{c.cliente}</td>
+                      <td className="py-2 text-right tabular-nums font-semibold text-[var(--danger)]">{fmtM(c.ventas_prev)}</td>
+                      <td className="py-2 text-right tabular-nums">{c.margen_pct_prev === null ? '—' : `${c.margen_pct_prev.toFixed(1)}%`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

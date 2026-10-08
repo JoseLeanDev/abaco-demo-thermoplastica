@@ -79,120 +79,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/ventas/clientes   Top clientes por venta
-router.get('/clientes', async (req, res) => {
-  try {
-    const { desde, hasta } = parseWindow(req);
-    const limit = Math.min(parseInt(req.query.limit) || 15, 100);
 
-    const rows = await db.allAsync(`
-      WITH tot AS (
-        SELECT COALESCE(SUM(total_sin_iva), 0) AS total
-        FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision BETWEEN ? AND ? AND tipo_doc = 'FACT'
-      )
-      SELECT
-        c.codigo_cliente         AS codigo,
-        c.nombre                 AS cliente,
-        c.forma_pago,
-        COUNT(DISTINCT f.fact_num) AS facturas,
-        COUNT(*)                 AS lineas,
-        COALESCE(SUM(f.total_sin_iva), 0)     AS ventas,
-        ${M.margen('f')}      AS margen,
-        CASE WHEN SUM(f.total_sin_iva) > 0
-             THEN ROUND(${M.pct('f')}::numeric, 1)
-             ELSE NULL END       AS margen_pct,
-        ROUND(${M.pctSinCosto('f')}::numeric, 1)  AS pct_sin_costo,
-        CASE WHEN (SELECT total FROM tot) > 0
-             THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
-             ELSE 0 END          AS porcentaje
-      FROM thermoplastica.fact_ventas_linea f
-      JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
-      WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
-      GROUP BY c.codigo_cliente, c.nombre, c.forma_pago
-      ORDER BY ventas DESC
-      LIMIT ${limit}
-    `, [desde, hasta, desde, hasta]);
-
-    res.json({
-      status: 'success',
-      timestamp: new Date().toISOString(),
-      data: {
-        ventana: { desde, hasta },
-        clientes: rows.map(r => ({
-          codigo: r.codigo,
-          cliente: r.cliente,
-          forma_pago: r.forma_pago,
-          facturas: parseInt(r.facturas) || 0,
-          lineas: parseInt(r.lineas) || 0,
-          ventas: parseFloat(r.ventas) || 0,
-          margen: parseFloat(r.margen) || 0,
-          margen_pct: r.margen_pct !== null ? parseFloat(r.margen_pct) : null,
-          pct_sin_costo: parseFloat(r.pct_sin_costo) || 0,
-          porcentaje: parseFloat(r.porcentaje) || 0,
-        })),
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
-  }
-});
-
-// GET /api/ventas/vendedores   Ranking vendedores
-router.get('/vendedores', async (req, res) => {
-  try {
-    const { desde, hasta } = parseWindow(req);
-
-    const rows = await db.allAsync(`
-      WITH tot AS (
-        SELECT COALESCE(SUM(total_sin_iva), 0) AS total
-        FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision BETWEEN ? AND ? AND tipo_doc = 'FACT'
-      )
-      SELECT
-        v.nombre                                AS vendedor,
-        v.codigo_vendedor                       AS codigo,
-        COUNT(DISTINCT f.cliente_id)            AS clientes,
-        COUNT(DISTINCT f.fact_num)              AS facturas,
-        COALESCE(SUM(f.total_sin_iva), 0)       AS ventas,
-        ${M.margen('f')}        AS margen,
-        CASE WHEN SUM(f.total_sin_iva) > 0
-             THEN ROUND(${M.pct('f')}::numeric, 1)
-             ELSE NULL END                      AS margen_pct,
-        ROUND(${M.pctSinCosto('f')}::numeric, 1)  AS pct_sin_costo,
-        CASE WHEN (SELECT total FROM tot) > 0
-             THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
-             ELSE 0 END                         AS porcentaje
-      FROM thermoplastica.fact_ventas_linea f
-      LEFT JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
-      WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
-        AND v.vendedor_id IS NOT NULL
-      GROUP BY v.nombre, v.codigo_vendedor
-      ORDER BY ventas DESC
-    `, [desde, hasta, desde, hasta]);
-
-    res.json({
-      status: 'success',
-      timestamp: new Date().toISOString(),
-      data: {
-        ventana: { desde, hasta },
-        vendedores: rows.map(r => ({
-          codigo: r.codigo,
-          vendedor: r.vendedor,
-          clientes: parseInt(r.clientes) || 0,
-          facturas: parseInt(r.facturas) || 0,
-          ventas: parseFloat(r.ventas) || 0,
-          margen: parseFloat(r.margen) || 0,
-          margen_pct: r.margen_pct !== null ? parseFloat(r.margen_pct) : null,
-          pct_sin_costo: parseFloat(r.pct_sin_costo) || 0,
-          porcentaje: parseFloat(r.porcentaje) || 0,
-        })),
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
-  }
-});
 
 // GET /api/ventas/articulos   Top artículos por venta
 router.get('/articulos', async (req, res) => {
@@ -304,52 +191,6 @@ router.get('/lineas', async (req, res) => {
   }
 });
 
-// GET /api/ventas/serie-vendedores   Serie mensual de los top N vendedores
-router.get('/serie-vendedores', async (req, res) => {
-  try {
-    const { desde, hasta } = parseWindow(req);
-    const limit = Math.min(parseInt(req.query.limit) || 5, 20);
-    const rows = await db.allAsync(`
-      WITH top_v AS (
-        SELECT vendedor_id
-        FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision BETWEEN ? AND ? AND tipo_doc = 'FACT' AND vendedor_id IS NOT NULL
-        GROUP BY vendedor_id
-        ORDER BY SUM(total_sin_iva) DESC
-        LIMIT ${limit}
-      )
-      SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM') AS periodo,
-             v.nombre AS vendedor,
-             COALESCE(SUM(f.total_sin_iva), 0) AS ventas
-      FROM thermoplastica.fact_ventas_linea f
-      JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
-      JOIN top_v tv ON tv.vendedor_id = f.vendedor_id
-      WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
-      GROUP BY 1, v.nombre
-      ORDER BY 1
-    `, [desde, hasta, desde, hasta]);
-
-    // Pivot: { periodo, 'MARIA JOSE MARTINEZ': 12345, 'SERGIO SOSA': 6789, ... }
-    const periodos = {};
-    const vendedoresSet = new Set();
-    rows.forEach(r => {
-      vendedoresSet.add(r.vendedor);
-      if (!periodos[r.periodo]) periodos[r.periodo] = { periodo: r.periodo };
-      periodos[r.periodo][r.vendedor] = parseFloat(r.ventas) || 0;
-    });
-
-    res.json({
-      status: 'success',
-      data: {
-        ventana: { desde, hasta },
-        vendedores: [...vendedoresSet],
-        serie: Object.values(periodos).sort((a,b) => a.periodo.localeCompare(b.periodo)),
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
-  }
-});
 
 // GET /api/ventas/serie-lineas   Serie mensual de las top N líneas
 router.get('/serie-lineas', async (req, res) => {
@@ -496,6 +337,361 @@ router.get('/detalle', async (req, res) => {
           tipo_cliente: r.tipo_cliente,
         })),
       },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// -------------------------------------------------------------------
+// Desglose genérico con drill-down y filtros cruzados
+// -------------------------------------------------------------------
+// Jerarquía de producto del ERP (Profit):
+//   Categoría    = campo "marca"    (Laminados, Liners, Soplado, ...)
+//   Subcategoría = campo "linea"    (Induccion, Envase PE, PVDC, ...)
+//   Sublínea     = campo "sublinea" (cuello 28, 250 micras, ...)
+// El campo "categoria" del ERP es casi siempre igual a "linea", por eso no se usa.
+const limpio = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;
+const DIMS = {
+  categoria:    { expr: limpio('a.marca', 'Sin categoría'),    label: null },
+  subcategoria: { expr: limpio('a.linea', 'Sin subcategoría'), label: null },
+  sublinea:     { expr: limpio('a.sublinea', 'Sin sublínea'),  label: null },
+  articulo:     { expr: 'a.codigo_articulo',                   label: 'MAX(a.descripcion)', extra: 'MAX(a.marca)' },
+  cliente:      { expr: 'c.codigo_cliente',                    label: 'MAX(c.nombre)',      extra: 'MAX(c.forma_pago)' },
+  vendedor:     { expr: limpio('v.nombre', 'Sin vendedor'),    label: null,                 extra: 'MAX(v.codigo_vendedor)' },
+  sucursal:     { expr: limpio('s.nombre', 'Sin sucursal'),    label: null },
+  tipo_cliente: { expr: limpio(`REGEXP_REPLACE(f.tipo_cliente, '^\\s*\\d+\\s*-\\s*', '')`, 'Sin tipo'), label: null },
+};
+const JOINS = `
+  FROM thermoplastica.fact_ventas_linea f
+  JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+  JOIN thermoplastica.dim_cliente  c ON c.cliente_id  = f.cliente_id
+  JOIN thermoplastica.dim_sucursal s ON s.sucursal_id = f.sucursal_id
+  LEFT JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id`;
+
+const dimDe = (x, def) => (DIMS[x] ? x : def);
+
+// Filtros ?categoria=..&subcategoria=..&cliente=.. (se pueden combinar todos)
+function filtrosDesglose(req, params) {
+  const where = [];
+  for (const [k, d] of Object.entries(DIMS)) {
+    const val = req.query[k];
+    if (val === undefined || val === '') continue;
+    params.push(String(val));
+    where.push(`${d.expr} = $${params.length}`);
+  }
+  return where;
+}
+
+const n = (x) => parseFloat(x) || 0;
+const r1 = (x) => (x === null || x === undefined ? null : Math.round(parseFloat(x) * 10) / 10);
+const varPct = (v, vp) => (vp > 0 ? Math.round((v - vp) / vp * 1000) / 10 : null);
+
+// Ranking del período por `dim`, con comparación contra el período anterior y la
+// descomposición de la variación en efecto precio / volumen / nuevos / perdidos.
+// La descomposición se hace artículo por artículo dentro de cada grupo (mismo
+// artículo en ambos períodos → precio y volumen; solo en uno → nuevo o perdido).
+async function calcularDesglose(req, dim) {
+  const P = parseWindow(req);
+  const D = DIMS[dim];
+  const params = [];
+  const filtros = filtrosDesglose(req, params);
+  const act  = `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`;
+  const prev = `f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}`;
+  const where = [`f.tipo_doc = 'FACT'`, `((${act}) OR (${prev}))`, ...filtros].join(' AND ');
+
+  const [rows, efectos] = await Promise.all([
+    db.allAsync(`
+      SELECT
+        ${D.expr}                                                     AS clave,
+        ${D.label || D.expr}                                          AS nombre,
+        ${D.extra || 'NULL'}                                          AS extra,
+        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${act}), 0)       AS ventas,
+        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${prev}), 0)      AS ventas_prev,
+        COALESCE(SUM(f.unidades) FILTER (WHERE ${act}), 0)            AS unidades,
+        COALESCE(SUM(f.unidades) FILTER (WHERE ${prev}), 0)           AS unidades_prev,
+        COUNT(DISTINCT f.fact_num)    FILTER (WHERE ${act})           AS facturas,
+        COUNT(DISTINCT f.cliente_id)  FILTER (WHERE ${act})           AS clientes,
+        COUNT(DISTINCT f.cliente_id)  FILTER (WHERE ${prev})          AS clientes_prev,
+        COUNT(DISTINCT f.articulo_id) FILTER (WHERE ${act})           AS skus,
+        ${M.margen('f', act)}                                         AS margen,
+        ${M.pct('f', act)}                                            AS margen_pct,
+        ${M.pct('f', prev)}                                           AS margen_pct_prev,
+        ${M.pctSinCosto('f', act)}                                    AS pct_sin_costo,
+        MAX(f.fecha_emision) FILTER (WHERE ${act})                    AS ultima_venta
+      ${JOINS}
+      WHERE ${where}
+      GROUP BY ${D.expr}
+      ORDER BY ventas DESC, ventas_prev DESC
+    `, params),
+    db.allAsync(`
+      WITH base AS (
+        SELECT ${D.expr} AS clave, f.articulo_id,
+               COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${act}), 0)  AS v1,
+               COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${prev}), 0) AS v0,
+               COALESCE(SUM(f.unidades) FILTER (WHERE ${act}), 0)       AS u1,
+               COALESCE(SUM(f.unidades) FILTER (WHERE ${prev}), 0)      AS u0
+        ${JOINS}
+        WHERE ${where}
+        GROUP BY 1, 2
+      )
+      SELECT clave,
+        SUM(CASE WHEN v1 > 0 AND v0 > 0 AND u1 > 0 AND u0 > 0 THEN (v1 / u1 - v0 / u0) * u1 ELSE 0 END) AS precio,
+        SUM(CASE WHEN v1 > 0 AND v0 > 0 AND u1 > 0 AND u0 > 0 THEN (u1 - u0) * (v0 / u0)    ELSE 0 END) AS volumen,
+        SUM(CASE WHEN v1 > 0 AND v0 <= 0 THEN v1  ELSE 0 END)                                         AS nuevos,
+        SUM(CASE WHEN v0 > 0 AND v1 <= 0 THEN -v0 ELSE 0 END)                                         AS perdidos
+      FROM base GROUP BY clave
+    `, params),
+  ]);
+
+  const ef = Object.fromEntries(efectos.map(e => [e.clave, e]));
+  const total = rows.reduce((s, r) => s + n(r.ventas), 0);
+  const items = rows.map(r => {
+    const v = n(r.ventas), vp = n(r.ventas_prev);
+    const e = ef[r.clave] || {};
+    const precio = n(e.precio), volumen = n(e.volumen), nuevos = n(e.nuevos), perdidos = n(e.perdidos);
+    return {
+      clave: r.clave,
+      nombre: r.nombre,
+      extra: r.extra,
+      ventas: v,
+      ventas_prev: vp,
+      variacion: v - vp,
+      variacion_pct: varPct(v, vp),
+      efecto_precio: precio,
+      efecto_volumen: volumen,
+      efecto_nuevos: nuevos,
+      efecto_perdidos: perdidos,
+      // Notas de crédito, servicios sin unidades, etc.
+      efecto_otros: (v - vp) - precio - volumen - nuevos - perdidos,
+      unidades: n(r.unidades),
+      unidades_prev: n(r.unidades_prev),
+      precio_promedio: n(r.unidades) > 0 ? v / n(r.unidades) : null,
+      precio_promedio_prev: n(r.unidades_prev) > 0 ? vp / n(r.unidades_prev) : null,
+      facturas: parseInt(r.facturas) || 0,
+      clientes: parseInt(r.clientes) || 0,
+      clientes_prev: parseInt(r.clientes_prev) || 0,
+      skus: parseInt(r.skus) || 0,
+      margen: r.margen === null ? null : n(r.margen),
+      margen_pct: r1(r.margen_pct),
+      margen_pct_prev: r1(r.margen_pct_prev),
+      pct_sin_costo: r1(r.pct_sin_costo) || 0,
+      participacion: total > 0 ? Math.round(v / total * 1000) / 10 : 0,
+      ultima_venta: r.ultima_venta,
+      nuevo: v > 0 && vp === 0,
+      perdido: v === 0 && vp > 0,
+    };
+  });
+  const suma = (k) => items.reduce((s, i) => s + i[k], 0);
+  const totalPrev = suma('ventas_prev');
+  return {
+    P, items, total, totalPrev,
+    puente: {
+      anterior: totalPrev,
+      precio: suma('efecto_precio'),
+      volumen: suma('efecto_volumen'),
+      nuevos: suma('efecto_nuevos'),
+      perdidos: suma('efecto_perdidos'),
+      otros: suma('efecto_otros'),
+      actual: total,
+    },
+  };
+}
+
+// GET /api/ventas/desglose?dim=categoria&categoria=Laminados&limit=100
+router.get('/desglose', async (req, res) => {
+  try {
+    const dim = dimDe(req.query.dim, 'categoria');
+    const limit = Math.min(parseInt(req.query.limit) || 200, 1000);
+    const { P, items, total, totalPrev, puente } = await calcularDesglose(req, dim);
+    const perdidos = items.filter(i => i.perdido);
+    res.json({
+      status: 'success',
+      data: {
+        ventana: P.ventana(),
+        dim,
+        total,
+        total_prev: totalPrev,
+        variacion_pct: varPct(total, totalPrev),
+        puente,
+        n_items: items.filter(i => i.ventas > 0).length,
+        n_items_prev: items.filter(i => i.ventas_prev > 0).length,
+        items: items.filter(i => !i.perdido).slice(0, limit),
+        // Vendían en el período anterior y en este no (ordenados por lo que se dejó de vender)
+        perdidos: perdidos.sort((a, b) => b.ventas_prev - a.ventas_prev).slice(0, 25),
+        venta_perdida: perdidos.reduce((s, i) => s + i.ventas_prev, 0),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/ventas/vendedores   Ranking de vendedores (acepta filtros de producto)
+router.get('/vendedores', async (req, res) => {
+  try {
+    const { P, items, total, totalPrev } = await calcularDesglose(req, 'vendedor');
+    res.json({
+      status: 'success',
+      data: {
+        ventana: P.ventana(),
+        total, total_prev: totalPrev, variacion_pct: varPct(total, totalPrev),
+        vendedores: items.filter(i => i.clave !== 'Sin vendedor' && i.ventas > 0).map(i => ({
+          ...i, vendedor: i.nombre, codigo: i.extra, porcentaje: i.participacion,
+        })),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/ventas/clientes   Top clientes (acepta filtros de producto)
+router.get('/clientes', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 15, 500);
+    const { P, items, total, totalPrev } = await calcularDesglose(req, 'cliente');
+    const activos = items.filter(i => i.ventas > 0);
+    const perdidos = items.filter(i => i.perdido);
+    res.json({
+      status: 'success',
+      data: {
+        ventana: P.ventana(),
+        total, total_prev: totalPrev, variacion_pct: varPct(total, totalPrev),
+        n_clientes: activos.length,
+        n_clientes_prev: items.filter(i => i.ventas_prev > 0).length,
+        n_nuevos: activos.filter(i => i.nuevo).length,
+        venta_nuevos: activos.filter(i => i.nuevo).reduce((s, i) => s + i.ventas, 0),
+        n_perdidos: perdidos.length,
+        venta_perdida: perdidos.reduce((s, i) => s + i.ventas_prev, 0),
+        clientes: activos.slice(0, limit).map(i => ({
+          ...i, codigo: i.clave, cliente: i.nombre, forma_pago: i.extra, porcentaje: i.participacion,
+        })),
+        perdidos: perdidos.sort((a, b) => b.ventas_prev - a.ventas_prev).slice(0, 25)
+          .map(i => ({ ...i, codigo: i.clave, cliente: i.nombre })),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/ventas/desglose-serie?dim=categoria&top=6&otros=1   Serie mensual de los top N (+ "Otros")
+async function serieDesglose(req, dim, top, conOtros) {
+  const P = parseWindow(req);
+  const D = DIMS[dim];
+  const params = [];
+  const filtros = filtrosDesglose(req, params);
+  const where = [`f.tipo_doc = 'FACT'`, `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`, ...filtros].join(' AND ');
+
+  const rows = await db.allAsync(`
+    WITH base AS (
+      SELECT ${D.expr} AS clave, ${D.label ? D.label.replace(/^MAX\((.*)\)$/, '$1') : D.expr} AS nombre_fila,
+             TO_CHAR(f.fecha_emision, 'YYYY-MM') AS periodo, f.total_sin_iva
+      ${JOINS}
+      WHERE ${where}
+    ),
+    ranking AS (
+      SELECT clave, MAX(nombre_fila) AS nombre, SUM(total_sin_iva) AS total,
+             ROW_NUMBER() OVER (ORDER BY SUM(total_sin_iva) DESC) AS rk
+      FROM base GROUP BY clave
+    )
+    SELECT b.periodo,
+           CASE WHEN r.rk <= ${top} THEN r.nombre ELSE 'Otros' END AS serie,
+           MIN(r.rk) AS rk,
+           SUM(b.total_sin_iva) AS ventas
+    FROM base b JOIN ranking r USING (clave)
+    ${conOtros ? '' : `WHERE r.rk <= ${top}`}
+    GROUP BY 1, 2 ORDER BY 1, 3
+  `, params);
+
+  const nombres = [];
+  for (const r of [...rows].sort((a, b) => a.rk - b.rk)) if (!nombres.includes(r.serie)) nombres.push(r.serie);
+  const orden = [...nombres.filter(x => x !== 'Otros'), ...(nombres.includes('Otros') ? ['Otros'] : [])];
+  const porMes = {};
+  for (const r of rows) {
+    porMes[r.periodo] = porMes[r.periodo] || { periodo: r.periodo };
+    porMes[r.periodo][r.serie] = parseFloat(r.ventas) || 0;
+  }
+  return { ventana: P.ventana(), dim, series: orden, serie: Object.values(porMes).sort((a, b) => a.periodo.localeCompare(b.periodo)) };
+}
+
+router.get('/desglose-serie', async (req, res) => {
+  try {
+    const dim = dimDe(req.query.dim, 'categoria');
+    const top = Math.min(parseInt(req.query.top) || 6, 12);
+    res.json({ status: 'success', data: await serieDesglose(req, dim, top, req.query.otros !== '0') });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/ventas/serie-vendedores   Serie mensual de los top N vendedores (acepta filtros de producto)
+router.get('/serie-vendedores', async (req, res) => {
+  try {
+    const top = Math.min(parseInt(req.query.limit) || 5, 20);
+    const s = await serieDesglose(req, 'vendedor', top, false);
+    res.json({ status: 'success', data: { ventana: s.ventana, vendedores: s.series, serie: s.serie } });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/ventas/matriz?filas=categoria&columnas=vendedor&top_columnas=8&top_filas=30
+// Tabla cruzada de ventas entre dos dimensiones (acepta los mismos filtros).
+router.get('/matriz', async (req, res) => {
+  try {
+    const P = parseWindow(req);
+    const fd = dimDe(req.query.filas, 'categoria');
+    const cd = dimDe(req.query.columnas, 'vendedor');
+    if (fd === cd) return res.status(400).json({ status: 'error', message: 'Filas y columnas deben ser dimensiones distintas' });
+    const F = DIMS[fd], C = DIMS[cd];
+    const topC = Math.min(parseInt(req.query.top_columnas) || 8, 15);
+    const topF = Math.min(parseInt(req.query.top_filas) || 30, 100);
+    const params = [];
+    const filtros = filtrosDesglose(req, params);
+    const where = [`f.tipo_doc = 'FACT'`, `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`, ...filtros].join(' AND ');
+    const nom = (d) => (d.label ? d.label.replace(/^MAX\((.*)\)$/, '$1') : d.expr);
+
+    const rows = await db.allAsync(`
+      WITH base AS (
+        SELECT ${F.expr} AS fk, ${nom(F)} AS fn, ${C.expr} AS ck, ${nom(C)} AS cn,
+               f.total_sin_iva, f.margen_bruto, f.costo_total_facturado
+        ${JOINS}
+        WHERE ${where}
+      ),
+      rc AS (SELECT ck, MAX(cn) AS cn, ROW_NUMBER() OVER (ORDER BY SUM(total_sin_iva) DESC) AS rk FROM base GROUP BY ck),
+      rf AS (SELECT fk, MAX(fn) AS fn, ROW_NUMBER() OVER (ORDER BY SUM(total_sin_iva) DESC) AS rk FROM base GROUP BY fk)
+      SELECT CASE WHEN rf.rk <= ${topF} THEN rf.fn ELSE 'Otros' END AS fila,
+             CASE WHEN rc.rk <= ${topC} THEN rc.cn ELSE 'Otros' END AS columna,
+             MIN(rf.rk) AS frk, MIN(rc.rk) AS crk,
+             SUM(b.total_sin_iva) AS ventas,
+             SUM(b.margen_bruto) FILTER (WHERE b.costo_total_facturado > 0)
+               / NULLIF(SUM(b.total_sin_iva) FILTER (WHERE b.costo_total_facturado > 0), 0) * 100 AS margen_pct
+      FROM base b JOIN rc USING (ck) JOIN rf USING (fk)
+      GROUP BY 1, 2
+    `, params);
+
+    const orden = (key, rk) => {
+      const m = new Map();
+      for (const r of rows) m.set(r[key], Math.min(m.get(r[key]) ?? Infinity, r[key === 'fila' ? 'frk' : 'crk'] * (r[key] === 'Otros' ? 1e9 : 1)));
+      return [...m.entries()].sort((a, b) => a[1] - b[1]).map(e => e[0]);
+    };
+    const columnas = orden('columna');
+    const filasN = orden('fila');
+    const filas = filasN.map(fn => {
+      const celdas = {};
+      let total = 0;
+      for (const r of rows.filter(x => x.fila === fn)) {
+        celdas[r.columna] = { ventas: n(r.ventas), margen_pct: r1(r.margen_pct) };
+        total += n(r.ventas);
+      }
+      return { nombre: fn, total, celdas };
+    });
+    const totalesCol = Object.fromEntries(columnas.map(c => [c, filas.reduce((s, f) => s + (f.celdas[c]?.ventas || 0), 0)]));
+    res.json({
+      status: 'success',
+      data: { ventana: P.ventana(), filas_dim: fd, columnas_dim: cd, columnas, filas, totales_columna: totalesCol, total: filas.reduce((s, f) => s + f.total, 0) },
     });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });

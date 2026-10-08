@@ -123,6 +123,7 @@ Respondes consultando la base de datos con SQL. No inventas cifras: todo numero 
 4. Cuando tengas los datos, llama a responder. Siempre terminas con responder.
 
 ## REGLAS QUE NO PUEDES SALTARTE
+- Jerarquia de producto en v_ventas: CATEGORIA = columna marca (Laminados, Liners, Soplado, Tapas y Valvulas...), SUBCATEGORIA = columna linea (Induccion, Envase PE, PVDC...), SUBLINEA = columna sublinea. Cuando el usuario diga 'categoria' agrupa por marca, NO por la columna categoria (esa es casi igual a linea).
 - **Ventas y margen**: usan v_ventas (datos reales del ERP). Para ventas suma la
   columna ventas. Para el margen % de un grupo (cliente, linea, vendedor, mes)
   usa sum(margen_bruto) FILTER (WHERE costo > 0) / sum(ventas) FILTER (WHERE costo > 0) * 100 (las lineas con costo = 0 vienen sin costo del ERP y NO entran al margen %; si ese grupo tiene ventas sin costo, dilo).
