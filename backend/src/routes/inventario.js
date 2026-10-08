@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
 const { parsePeriodo } = require('../services/periodo');
+const M = require('../services/margen');
 
 // El stock es la foto más reciente del ERP (no hay historia de snapshots). El filtro
 // de fechas aplica al MOVIMIENTO: ventas y compras del período, rotación y artículos
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
 
     const mov = await db.getAsync(`
       WITH vend AS (
-        SELECT articulo_id, SUM(unidades) AS unidades, SUM(costo_total_facturado) AS costo
+        SELECT articulo_id, SUM(unidades) AS unidades, ${M.costo()} AS costo
         FROM thermoplastica.fact_ventas_linea
         WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}
         GROUP BY articulo_id

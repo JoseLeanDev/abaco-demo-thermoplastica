@@ -54,6 +54,13 @@ const margenTone = (pct) => {
   return 'text-[var(--danger)]'
 }
 
+// Aviso de ventas sin costo en el ERP: no entran al margen %. Solo se muestra si pesa.
+const SinCosto = ({ pct }) => (pct >= 1 ? (
+  <p className="text-[10px] font-normal text-[var(--text-muted)] whitespace-nowrap" title="El margen % se calcula solo con las líneas que traen costo en el ERP">
+    {Number(pct).toFixed(1)}% de ventas sin costo
+  </p>
+) : null)
+
 const PIE_COLORS = ['#001639', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#a855f7']
 
 // -------------------------------------------------------------------
@@ -238,6 +245,7 @@ function KPIs({ r, tendencia }) {
         <p className={`text-xs mt-1 ${margenTone(r.margen_bruto_pct)}`}>
           {fmtPct(r.margen_bruto_pct)} · costo {fmtM(r.costo_total)}
         </p>
+        <SinCosto pct={r.pct_ventas_sin_costo} />
       </div>
       <div className="kpi-card card-hover">
         <span className="kpi-label">Ticket promedio</span>
@@ -348,6 +356,7 @@ function TabResumen({
                   <td className="py-2 text-right tabular-nums">{fmtM(a.margen)}</td>
                   <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(a.margen_pct)}`}>
                     {a.margen_pct !== null ? `${a.margen_pct.toFixed(1)}%` : '—'}
+                    <SinCosto pct={a.pct_sin_costo} />
                   </td>
                 </tr>
               ))}
@@ -430,7 +439,9 @@ function TabResumen({
                   <td className="px-3 py-2 text-right text-sm tabular-nums">{fmtNum(f.unidades)}</td>
                   <td className="px-3 py-2 text-right text-sm tabular-nums font-semibold">{fmtM(f.total_sin_iva)}</td>
                   <td className={`px-3 py-2 text-right text-sm tabular-nums font-semibold ${margenTone(f.margen_bruto_pct)}`}>
-                    {f.margen_bruto_pct !== null ? `${f.margen_bruto_pct.toFixed(1)}%` : '—'}
+                    {f.margen_bruto_pct !== null ? `${f.margen_bruto_pct.toFixed(1)}%` : (
+                      <span className="text-xs font-normal text-[var(--text-muted)]" title="El ERP no trae costo para esta línea">sin costo</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -583,6 +594,7 @@ function TabVendedores({ vendedores, serieVend, totalVentas }) {
                     <td className="py-2 text-right tabular-nums font-semibold">{fmtM(v.ventas)}</td>
                     <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(v.margen_pct)}`}>
                       {v.margen_pct !== null ? `${v.margen_pct.toFixed(1)}%` : '—'}
+                    <SinCosto pct={v.pct_sin_costo} />
                     </td>
                     <td className={`py-2 text-right tabular-nums font-semibold ${v.porcentaje >= 20 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
                       {v.porcentaje}%
@@ -710,6 +722,7 @@ function TabLineas({ lineas, serieLin }) {
                   <td className="py-2 text-right tabular-nums font-semibold">{fmtM(l.ventas)}</td>
                   <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(l.margen_pct)}`}>
                     {l.margen_pct !== null ? `${l.margen_pct.toFixed(1)}%` : '—'}
+                    <SinCosto pct={l.pct_sin_costo} />
                   </td>
                   <td className="py-2 text-right tabular-nums font-semibold">{l.porcentaje}%</td>
                 </tr>
@@ -837,6 +850,7 @@ function TabClientes({ clientes, totalVentas }) {
                   <td className="py-2 text-right tabular-nums">{fmtM(c.margen)}</td>
                   <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(c.margen_pct)}`}>
                     {c.margen_pct !== null ? `${c.margen_pct.toFixed(1)}%` : '—'}
+                    <SinCosto pct={c.pct_sin_costo} />
                   </td>
                   <td className={`py-2 text-right tabular-nums font-semibold ${c.porcentaje >= 15 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
                     {c.porcentaje}%

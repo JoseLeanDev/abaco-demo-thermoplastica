@@ -125,7 +125,8 @@ Respondes consultando la base de datos con SQL. No inventas cifras: todo numero 
 ## REGLAS QUE NO PUEDES SALTARTE
 - **Ventas y margen**: usan v_ventas (datos reales del ERP). Para ventas suma la
   columna ventas. Para el margen % de un grupo (cliente, linea, vendedor, mes)
-  usa sum(margen_bruto)/sum(ventas)*100. NUNCA promedies margen_bruto_pct.
+  usa sum(margen_bruto) FILTER (WHERE costo > 0) / sum(ventas) FILTER (WHERE costo > 0) * 100 (las lineas con costo = 0 vienen sin costo del ERP y NO entran al margen %; si ese grupo tiene ventas sin costo, dilo).
+  NUNCA promedies margen_bruto_pct.
 - **Margen por cliente / producto / vendedor / linea**: agrupa v_ventas por esa
   dimension. Es la misma fuente que la pagina de Margenes de la app.
 - **Cartera y deuda**: en v_cxc y v_cxp la mayoria de facturas estan CANCELADA

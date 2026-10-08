@@ -4,6 +4,7 @@ const router = express.Router();
 // NUEVO: Importar abaco Core v2.0
 const CFOAICore = require('../agents');
 const { parsePeriodo } = require('../services/periodo');
+const M = require('../services/margen');
 
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
@@ -82,7 +83,7 @@ async function generateInsightsFromDB(db) {
     const meses = await db.allAsync(`
       SELECT DATE_TRUNC('month', fecha_emision) AS mes,
              SUM(total_sin_iva) AS ventas,
-             SUM(margen_bruto) / NULLIF(SUM(total_sin_iva), 0) * 100 AS margen_pct
+             ${M.pct()} AS margen_pct
       FROM thermoplastica.fact_ventas_linea
       WHERE tipo_doc = 'FACT' AND fecha_emision >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
       GROUP BY 1 ORDER BY 1 DESC
@@ -194,13 +195,13 @@ async function generateInsightsFromDB(db) {
   await regla('lineas_margen_bajo', async () => {
     const r = await db.getAsync(`
       SELECT a.linea, SUM(f.total_sin_iva) AS ventas,
-             SUM(f.margen_bruto) / NULLIF(SUM(f.total_sin_iva), 0) * 100 AS margen
+             ${M.pct('f')} AS margen
       FROM thermoplastica.fact_ventas_linea f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
       WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= CURRENT_DATE - 90 AND a.linea IS NOT NULL
       GROUP BY a.linea
       HAVING SUM(f.total_sin_iva) > 100000
-         AND SUM(f.margen_bruto) / NULLIF(SUM(f.total_sin_iva), 0) < 0.20
+         AND ${M.pct('f')} < 20
       ORDER BY ventas DESC LIMIT 1
     `);
     if (r) {
@@ -712,7 +713,7 @@ const numerosFila = (fila) => Object.fromEntries(
 async function cicloPeriodo(db, P) {
   return db.getAsync(`
     WITH ventas AS (
-      SELECT sum(total_sin_iva) AS sin_iva, sum(total_con_iva) AS con_iva, sum(costo_total_facturado) AS costo,
+      SELECT sum(total_sin_iva) AS sin_iva, sum(total_con_iva) AS con_iva, ${M.costo()} AS costo,
              max(fecha_emision) AS fecha_corte
       FROM thermoplastica.fact_ventas_linea
       WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}

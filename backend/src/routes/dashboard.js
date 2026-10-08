@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
 const { parsePeriodo } = require('../services/periodo');
+const M = require('../services/margen');
 
 // GET /api/dashboard
 // Executive briefing CEO-grade: KPIs, aging, YoY, márgenes, inventario, concentración, insights.
@@ -17,8 +18,8 @@ router.get('/', async (req, res) => {
       SELECT EXTRACT(YEAR FROM fecha_emision)::int  AS anio,
              EXTRACT(MONTH FROM fecha_emision)::int AS mes,
              COALESCE(SUM(total_sin_iva), 0)        AS ventas,
-             COALESCE(SUM(margen_bruto), 0)         AS margen,
-             COALESCE(SUM(costo_total_facturado),0) AS costo,
+             ${M.margen()}         AS margen,
+             ${M.costo()} AS costo,
              COUNT(DISTINCT fact_num)               AS facturas
       FROM thermoplastica.fact_ventas_linea
       WHERE tipo_doc = 'FACT'
@@ -34,9 +35,10 @@ router.get('/', async (req, res) => {
       SELECT
         COALESCE(SUM(total_sin_iva)         FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS ventas_actual,
         COALESCE(SUM(total_sin_iva)         FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS ventas_previo,
-        COALESCE(SUM(margen_bruto)          FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS margen_actual,
-        COALESCE(SUM(margen_bruto)          FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS margen_previo,
-        COALESCE(SUM(costo_total_facturado) FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS costo_actual,
+        ${M.margen('', `fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS margen_actual,
+        ${M.margen('', `fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}`)} AS margen_previo,
+        ${M.costo('', `fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS costo_actual,
+        ${M.pctSinCosto('', `fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS pct_sin_costo,
         COUNT(DISTINCT fact_num)            FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H})    AS facturas_actual,
         COUNT(DISTINCT cliente_id)          FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H})    AS clientes_actual,
         COUNT(DISTINCT cliente_id)          FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH})    AS clientes_previo
@@ -203,9 +205,9 @@ router.get('/', async (req, res) => {
       )
       SELECT COALESCE(a.linea, 'Sin línea') AS linea,
              COALESCE(SUM(f.total_sin_iva), 0)  AS ventas,
-             COALESCE(SUM(f.margen_bruto), 0)   AS margen,
+             ${M.margen('f')}   AS margen,
              CASE WHEN SUM(f.total_sin_iva) > 0
-                  THEN ROUND(SUM(f.margen_bruto) / SUM(f.total_sin_iva) * 100, 1)
+                  THEN ROUND(${M.pct('f')}::numeric, 1)
                   ELSE 0 END AS margen_pct,
              ROUND(100 * SUM(f.total_sin_iva) / NULLIF((SELECT total FROM tot), 0), 1) AS porcentaje
       FROM thermoplastica.fact_ventas_linea f
@@ -263,7 +265,7 @@ router.get('/', async (req, res) => {
              COUNT(DISTINCT f.cliente_id) AS clientes,
              COALESCE(SUM(f.total_sin_iva), 0) AS ventas,
              CASE WHEN SUM(f.total_sin_iva) > 0
-                  THEN ROUND(SUM(f.margen_bruto) / SUM(f.total_sin_iva) * 100, 1)
+                  THEN ROUND(${M.pct('f')}::numeric, 1)
                   ELSE NULL END AS margen_pct,
              CASE WHEN (SELECT total FROM tot) > 0
                   THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
@@ -499,6 +501,7 @@ router.get('/', async (req, res) => {
           margen_bruto_previo_12m: margenPrev12m,
           margen_bruto_pct: margenRealPct,
           margen_bruto_pct_previo: margenPrevPct,
+          pct_ventas_sin_costo: Math.round((parseFloat(yoy.pct_sin_costo) || 0) * 10) / 10,
           delta_margen_pp: deltaMargenPp,
           facturas_12m: facturas12m,
           clientes_activos_12m: clientesAct12m,

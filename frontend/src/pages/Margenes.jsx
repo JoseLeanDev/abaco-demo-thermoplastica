@@ -158,6 +158,11 @@ export default function Margenes() {
           <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Margen Bruto Total</p>
           <p className="text-2xl font-bold text-emerald-400">{formatGTQ(resumen?.total_margen_bruto_q || 0)}</p>
           <p className="text-xs text-[var(--text-muted)]">{formatNum(resumen?.margen_global_pct)}% sobre ventas</p>
+          {resumen?.pct_ventas_sin_costo >= 1 && (
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5" title="El margen % se calcula solo con las líneas que traen costo en el ERP">
+              {formatNum(resumen.pct_ventas_sin_costo)}% de ventas sin costo, excluidas del %
+            </p>
+          )}
         </div>
         <div className="card p-5">
           <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Dejaste de ganar (período)</p>

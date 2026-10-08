@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
 const { parsePeriodo } = require('../services/periodo');
+const M = require('../services/margen');
 
 // -------------------------------------------------------------------
 // Semáforo: margen del período del filtro global vs el mismo período un año antes.
@@ -35,8 +36,8 @@ router.get('/', async (req, res) => {
         SELECT f.articulo_id,
                SUM(f.unidades)              AS unidades,
                SUM(f.total_sin_iva)         AS ventas,
-               SUM(f.costo_total_facturado) AS costo,
-               SUM(f.margen_bruto)          AS margen
+               ${M.costo('f')} AS costo,
+               ${M.margen('f')}          AS margen
         FROM thermoplastica.fact_ventas_linea f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
@@ -49,7 +50,7 @@ router.get('/', async (req, res) => {
         SELECT articulo_id,
                SUM(unidades)              AS unidades,
                SUM(total_sin_iva)         AS ventas,
-               SUM(margen_bruto)          AS margen
+               ${M.margen()}          AS margen
         FROM thermoplastica.fact_ventas_linea
         WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND tipo_doc = 'FACT'
@@ -80,6 +81,8 @@ router.get('/', async (req, res) => {
         const hist = parseFloat(r.margen_pct_historico);
         // Si no hay histórico está OK (se marcará como verde). Si hay pero es > 90% o < -10%,
         // probablemente es un rebalance de costo, no un comparable real.
+        // Sin ninguna línea con costo no hay margen que comparar.
+        if (r.margen_pct_actual === null) return false;
         return r.margen_pct_historico === null || (hist <= 90 && hist >= -10);
       })
       .map(r => {
@@ -113,7 +116,8 @@ router.get('/', async (req, res) => {
     // Resumen global desde el mismo dataset
     const totalRow = await db.getAsync(`
       SELECT COALESCE(SUM(total_sin_iva), 0)         AS ventas,
-             COALESCE(SUM(margen_bruto), 0)          AS margen
+             ${M.margen()}          AS margen,
+             ${M.pctSinCosto()}     AS pct_sin_costo
       FROM thermoplastica.fact_ventas_linea
       WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
     `);
@@ -131,6 +135,7 @@ router.get('/', async (req, res) => {
           margen_global_pct:    Number(margenGlobal.toFixed(1)),
           total_margen_perdido_12m: totalPerdido,
           total_ventas_q:       Math.round(totalVentas),
+          pct_ventas_sin_costo: Math.round((parseFloat(totalRow.pct_sin_costo) || 0) * 10) / 10,
           productos_rojo:  productos.filter(p => p.semaforo === 'rojo').length,
           productos_ambar: productos.filter(p => p.semaforo === 'ambar').length,
           productos_verde: productos.filter(p => p.semaforo === 'verde').length,
@@ -155,8 +160,8 @@ router.get('/producto/:id/detalle', async (req, res) => {
       WITH agg AS (
         SELECT SUM(unidades)              AS unidades,
                SUM(total_sin_iva)         AS ventas,
-               SUM(costo_total_facturado) AS costo,
-               SUM(margen_bruto)          AS margen
+               ${M.costo()} AS costo,
+               ${M.margen()}          AS margen
         FROM thermoplastica.fact_ventas_linea
         WHERE articulo_id = ? AND tipo_doc = 'FACT'
           AND fecha_emision BETWEEN ${P.D} AND ${P.H}
@@ -177,8 +182,8 @@ router.get('/producto/:id/detalle', async (req, res) => {
     const historial = await db.allAsync(`
       SELECT TO_CHAR(DATE_TRUNC('month', fecha_emision), 'YYYY-MM-DD') AS fecha,
              CASE WHEN SUM(unidades) > 0 THEN SUM(total_sin_iva) / SUM(unidades) ELSE NULL END      AS precio_promedio_realizado,
-             CASE WHEN SUM(unidades) > 0 THEN SUM(costo_total_facturado) / SUM(unidades) ELSE NULL END AS costo_unitario,
-             CASE WHEN SUM(total_sin_iva) > 0 THEN SUM(margen_bruto) / SUM(total_sin_iva) * 100 ELSE NULL END AS margen_pct,
+             CASE WHEN SUM(unidades) > 0 THEN (${M.costo()}) / SUM(unidades) ELSE NULL END AS costo_unitario,
+             ${M.pct()} AS margen_pct,
              SUM(unidades)      AS unidades,
              SUM(total_sin_iva) AS ventas
       FROM thermoplastica.fact_ventas_linea
@@ -196,7 +201,7 @@ router.get('/producto/:id/detalle', async (req, res) => {
           nombre: producto.nombre,
           precio_actual: parseFloat(producto.precio_actual) || 0,
           costo_actual:  parseFloat(producto.costo_actual) || 0,
-          margen_pct_actual: parseFloat(producto.margen_pct_actual) || 0,
+          margen_pct_actual: producto.margen_pct_actual !== null ? parseFloat(producto.margen_pct_actual) : null,
           unidades_12m: Math.round(parseFloat(producto.unidades_12m) || 0),
           ventas_12m:   Math.round(parseFloat(producto.ventas_12m) || 0),
         },
@@ -223,7 +228,7 @@ router.get('/vendedores', async (req, res) => {
       WITH actual AS (
         SELECT vendedor_id,
                SUM(total_sin_iva)         AS ventas,
-               SUM(margen_bruto)          AS margen
+               ${M.margen()}          AS margen
         FROM thermoplastica.fact_ventas_linea
         WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}
           AND tipo_doc = 'FACT' AND vendedor_id IS NOT NULL
@@ -232,7 +237,7 @@ router.get('/vendedores', async (req, res) => {
       historico AS (
         SELECT vendedor_id,
                SUM(total_sin_iva) AS ventas,
-               SUM(margen_bruto)  AS margen
+               ${M.margen()}  AS margen
         FROM thermoplastica.fact_ventas_linea
         WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND tipo_doc = 'FACT' AND vendedor_id IS NOT NULL
@@ -248,7 +253,8 @@ router.get('/vendedores', async (req, res) => {
       ORDER BY a.ventas DESC
     `);
 
-    const vendedores = rows.map(r => {
+    // Sin ninguna línea con costo no hay margen conocido: se omite.
+    const vendedores = rows.filter(r => r.margen_pct_actual !== null).map(r => {
       const act  = parseFloat(r.margen_pct_actual)   || 0;
       const hist = r.margen_pct_historico !== null ? parseFloat(r.margen_pct_historico) : act;
       const delta = Number((act - hist).toFixed(2));
@@ -278,7 +284,7 @@ router.get('/clientes', async (req, res) => {
       WITH actual AS (
         SELECT cliente_id,
                SUM(total_sin_iva) AS ventas,
-               SUM(margen_bruto)  AS margen
+               ${M.margen()}  AS margen
         FROM thermoplastica.fact_ventas_linea
         WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
         GROUP BY cliente_id
@@ -286,7 +292,7 @@ router.get('/clientes', async (req, res) => {
       historico AS (
         SELECT cliente_id,
                SUM(total_sin_iva) AS ventas,
-               SUM(margen_bruto)  AS margen
+               ${M.margen()}  AS margen
         FROM thermoplastica.fact_ventas_linea
         WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND tipo_doc = 'FACT'
@@ -304,7 +310,8 @@ router.get('/clientes', async (req, res) => {
       LIMIT 30
     `);
 
-    const clientes = rows.map(r => {
+    // Sin ninguna línea con costo no hay margen conocido: se omite.
+    const clientes = rows.filter(r => r.margen_pct_actual !== null).map(r => {
       const act  = parseFloat(r.margen_pct_actual) || 0;
       const hist = r.margen_pct_historico !== null ? parseFloat(r.margen_pct_historico) : act;
       const delta = Number((act - hist).toFixed(2));
@@ -335,7 +342,7 @@ router.get('/lineas', async (req, res) => {
         SELECT a.linea       AS linea,
                SUM(f.unidades)      AS unidades,
                SUM(f.total_sin_iva) AS ventas,
-               SUM(f.margen_bruto)  AS margen
+               ${M.margen('f')}  AS margen
         FROM thermoplastica.fact_ventas_linea f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
@@ -345,7 +352,7 @@ router.get('/lineas', async (req, res) => {
       historico AS (
         SELECT a.linea       AS linea,
                SUM(f.total_sin_iva) AS ventas,
-               SUM(f.margen_bruto)  AS margen
+               ${M.margen('f')}  AS margen
         FROM thermoplastica.fact_ventas_linea f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
@@ -362,7 +369,8 @@ router.get('/lineas', async (req, res) => {
       ORDER BY a.ventas DESC
     `);
 
-    const lineas = rows.map((r, i) => {
+    // Sin ninguna línea con costo no hay margen conocido: se omite.
+    const lineas = rows.filter(r => r.margen_pct_actual !== null).map((r, i) => {
       const act  = parseFloat(r.margen_pct_actual) || 0;
       const hist = r.margen_pct_historico !== null ? parseFloat(r.margen_pct_historico) : act;
       const delta = Number((act - hist).toFixed(2));

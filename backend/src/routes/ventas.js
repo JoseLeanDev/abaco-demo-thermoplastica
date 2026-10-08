@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
+const M = require('../services/margen');
 
 // Ventana default: año en curso (ver services/periodo.js).
 const { parsePeriodo: parseWindow } = require('../services/periodo');
@@ -14,8 +15,9 @@ router.get('/', async (req, res) => {
       SELECT
         COALESCE(SUM(total_sin_iva), 0)                                            AS ventas_sin_iva,
         COALESCE(SUM(total_con_iva), 0)                                            AS ventas_con_iva,
-        COALESCE(SUM(costo_total_facturado), 0)                                    AS costo_total,
-        COALESCE(SUM(margen_bruto), 0)                                             AS margen_bruto,
+        ${M.costo()}                                    AS costo_total,
+        ${M.margen()}                                             AS margen_bruto,
+        ${M.pctSinCosto()}                                        AS pct_sin_costo,
         COALESCE(SUM(iva), 0)                                                      AS iva_debito,
         COUNT(DISTINCT fact_num)                                                   AS facturas,
         COUNT(DISTINCT cliente_id)                                                 AS clientes,
@@ -29,8 +31,8 @@ router.get('/', async (req, res) => {
     const mensual = await db.allAsync(`
       SELECT TO_CHAR(fecha_emision, 'YYYY-MM')     AS periodo,
              COALESCE(SUM(total_sin_iva), 0)       AS ventas,
-             COALESCE(SUM(costo_total_facturado), 0) AS costo,
-             COALESCE(SUM(margen_bruto), 0)         AS margen,
+             ${M.costo()} AS costo,
+             ${M.margen()}         AS margen,
              COUNT(DISTINCT fact_num)               AS facturas
       FROM thermoplastica.fact_ventas_linea
       WHERE fecha_emision BETWEEN ? AND ?
@@ -54,6 +56,8 @@ router.get('/', async (req, res) => {
         costo_total: costo,
         margen_bruto: margen,
         margen_bruto_pct: margenPct,
+        // % de las ventas sin costo en el ERP (excluidas del cálculo de margen %)
+        pct_ventas_sin_costo: Math.round((parseFloat(kpis.pct_sin_costo) || 0) * 10) / 10,
         iva_debito: parseFloat(kpis.iva_debito) || 0,
         facturas: parseInt(kpis.facturas) || 0,
         clientes: parseInt(kpis.clientes) || 0,
@@ -94,10 +98,11 @@ router.get('/clientes', async (req, res) => {
         COUNT(DISTINCT f.fact_num) AS facturas,
         COUNT(*)                 AS lineas,
         COALESCE(SUM(f.total_sin_iva), 0)     AS ventas,
-        COALESCE(SUM(f.margen_bruto), 0)      AS margen,
+        ${M.margen('f')}      AS margen,
         CASE WHEN SUM(f.total_sin_iva) > 0
-             THEN ROUND((SUM(f.margen_bruto) / SUM(f.total_sin_iva) * 100)::numeric, 1)
+             THEN ROUND(${M.pct('f')}::numeric, 1)
              ELSE NULL END       AS margen_pct,
+        ROUND(${M.pctSinCosto('f')}::numeric, 1)  AS pct_sin_costo,
         CASE WHEN (SELECT total FROM tot) > 0
              THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
              ELSE 0 END          AS porcentaje
@@ -123,6 +128,7 @@ router.get('/clientes', async (req, res) => {
           ventas: parseFloat(r.ventas) || 0,
           margen: parseFloat(r.margen) || 0,
           margen_pct: r.margen_pct !== null ? parseFloat(r.margen_pct) : null,
+          pct_sin_costo: parseFloat(r.pct_sin_costo) || 0,
           porcentaje: parseFloat(r.porcentaje) || 0,
         })),
       },
@@ -149,10 +155,11 @@ router.get('/vendedores', async (req, res) => {
         COUNT(DISTINCT f.cliente_id)            AS clientes,
         COUNT(DISTINCT f.fact_num)              AS facturas,
         COALESCE(SUM(f.total_sin_iva), 0)       AS ventas,
-        COALESCE(SUM(f.margen_bruto), 0)        AS margen,
+        ${M.margen('f')}        AS margen,
         CASE WHEN SUM(f.total_sin_iva) > 0
-             THEN ROUND((SUM(f.margen_bruto) / SUM(f.total_sin_iva) * 100)::numeric, 1)
+             THEN ROUND(${M.pct('f')}::numeric, 1)
              ELSE NULL END                      AS margen_pct,
+        ROUND(${M.pctSinCosto('f')}::numeric, 1)  AS pct_sin_costo,
         CASE WHEN (SELECT total FROM tot) > 0
              THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
              ELSE 0 END                         AS porcentaje
@@ -177,6 +184,7 @@ router.get('/vendedores', async (req, res) => {
           ventas: parseFloat(r.ventas) || 0,
           margen: parseFloat(r.margen) || 0,
           margen_pct: r.margen_pct !== null ? parseFloat(r.margen_pct) : null,
+          pct_sin_costo: parseFloat(r.pct_sin_costo) || 0,
           porcentaje: parseFloat(r.porcentaje) || 0,
         })),
       },
@@ -201,10 +209,11 @@ router.get('/articulos', async (req, res) => {
         COUNT(DISTINCT f.cliente_id)           AS clientes,
         COALESCE(SUM(f.unidades), 0)           AS unidades,
         COALESCE(SUM(f.total_sin_iva), 0)      AS ventas,
-        COALESCE(SUM(f.margen_bruto), 0)       AS margen,
+        ${M.margen('f')}       AS margen,
         CASE WHEN SUM(f.total_sin_iva) > 0
-             THEN ROUND((SUM(f.margen_bruto) / SUM(f.total_sin_iva) * 100)::numeric, 1)
-             ELSE NULL END                     AS margen_pct
+             THEN ROUND(${M.pct('f')}::numeric, 1)
+             ELSE NULL END                     AS margen_pct,
+        ROUND(${M.pctSinCosto('f')}::numeric, 1)  AS pct_sin_costo
       FROM thermoplastica.fact_ventas_linea f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
       WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
@@ -229,6 +238,7 @@ router.get('/articulos', async (req, res) => {
           ventas: parseFloat(r.ventas) || 0,
           margen: parseFloat(r.margen) || 0,
           margen_pct: r.margen_pct !== null ? parseFloat(r.margen_pct) : null,
+          pct_sin_costo: parseFloat(r.pct_sin_costo) || 0,
         })),
       },
     });
@@ -254,11 +264,12 @@ router.get('/lineas', async (req, res) => {
         COUNT(DISTINCT f.articulo_id)           AS skus,
         COALESCE(SUM(f.unidades), 0)            AS unidades,
         COALESCE(SUM(f.total_sin_iva), 0)       AS ventas,
-        COALESCE(SUM(f.costo_total_facturado), 0) AS costo,
-        COALESCE(SUM(f.margen_bruto), 0)        AS margen,
+        ${M.costo('f')} AS costo,
+        ${M.margen('f')}        AS margen,
         CASE WHEN SUM(f.total_sin_iva) > 0
-             THEN ROUND((SUM(f.margen_bruto) / SUM(f.total_sin_iva) * 100)::numeric, 1)
+             THEN ROUND(${M.pct('f')}::numeric, 1)
              ELSE NULL END                       AS margen_pct,
+        ROUND(${M.pctSinCosto('f')}::numeric, 1)  AS pct_sin_costo,
         CASE WHEN (SELECT total FROM tot) > 0
              THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
              ELSE 0 END                          AS porcentaje
@@ -283,6 +294,7 @@ router.get('/lineas', async (req, res) => {
           costo: parseFloat(r.costo) || 0,
           margen: parseFloat(r.margen) || 0,
           margen_pct: r.margen_pct !== null ? parseFloat(r.margen_pct) : null,
+          pct_sin_costo: parseFloat(r.pct_sin_costo) || 0,
           porcentaje: parseFloat(r.porcentaje) || 0,
         })),
       },
@@ -477,8 +489,10 @@ router.get('/detalle', async (req, res) => {
           saldo: parseFloat(r.saldo) || 0,
           costo_promedio_facturado: parseFloat(r.costo_promedio_facturado) || 0,
           costo_total_facturado: parseFloat(r.costo_total_facturado) || 0,
-          margen_bruto: parseFloat(r.margen_bruto) || 0,
-          margen_bruto_pct: r.margen_bruto_pct !== null ? parseFloat(r.margen_bruto_pct) : null,
+          // Línea sin costo en el ERP: su margen es desconocido, no 100%.
+          sin_costo: !(parseFloat(r.costo_total_facturado) > 0),
+          margen_bruto: parseFloat(r.costo_total_facturado) > 0 ? parseFloat(r.margen_bruto) || 0 : null,
+          margen_bruto_pct: parseFloat(r.costo_total_facturado) > 0 && r.margen_bruto_pct !== null ? parseFloat(r.margen_bruto_pct) : null,
           tipo_cliente: r.tipo_cliente,
         })),
       },
