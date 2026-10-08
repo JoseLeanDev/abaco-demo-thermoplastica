@@ -11,352 +11,247 @@ const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes
 const insightsCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 
-// Helper: Generar insights desde la base de datos
-async function generateInsightsFromDB(db, empresaId) {
+// Insights en vivo sobre los datos reales de Thermoplastica (esquema thermoplastica.*).
+// Ventanas móviles cortas a propósito: son alertas de lo que está pasando ahora,
+// no dependen del filtro de fechas. Cada regla corre aparte para que una consulta
+// rota no apague las demás. Los montos de impacto salen de los datos, no de supuestos.
+const fmtQ = (n) => `Q${Math.round(n).toLocaleString('es-GT')}`;
+
+async function regla(nombre, fn) {
+  try { await fn(); } catch (error) { console.error(`[insights:${nombre}] Error:`, error.message); }
+}
+
+async function generateInsightsFromDB(db) {
   const insights = [];
-  
-  try {
-    // === INSIGHTS ESTRATÉGICOS (no solo conteos) ===
-    
-    // 1. CONCENTRACIÓN DE CLIENTES - Riesgo estratégico
-    const concentracionClientes = await db.allAsync(`
-      SELECT 
-        cliente_nombre,
-        SUM(monto_total) as total_ventas,
-        COUNT(*) as facturas
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? 
-        AND fecha_emision >= CURRENT_DATE - INTERVAL '90 days'
-      GROUP BY cliente_nombre
-      ORDER BY total_ventas DESC
-      LIMIT 5
-    `, [empresaId]);
-    
-    if (concentracionClientes && concentracionClientes.length > 0) {
-      const totalVentas = concentracionClientes.reduce((s, c) => s + parseFloat(c.total_ventas), 0);
-      const topCliente = concentracionClientes[0];
-      const pctTopCliente = ((parseFloat(topCliente.total_ventas) / totalVentas) * 100).toFixed(1);
-      
-      if (parseFloat(pctTopCliente) > 30) {
-        insights.push({
-          tipo: 'cliente_en_riesgo',
-          severidad: 'alta',
-          titulo: `Alto riesgo: ${pctTopCliente}% de ventas dependen de ${topCliente.cliente_nombre}`,
-          descripcion: `Tu cliente más grande representa ${pctTopCliente}% de ventas trimestrales. Perderlo afectaría gravemente el flujo de caja. Considera diversificar cartera.`,
-          monto_impacto: parseFloat(topCliente.total_ventas),
-          accion_sugerida: 'Ver plan de diversificación',
-          categoria: 'analisis'
-        });
-      }
-    }
-    
-    // 2. EFICIENCIA DE COBRANZA vs BENCHMARK
-    const eficienciaCobranza = await db.getAsync(`
-      SELECT 
-        AVG(CASE WHEN dias_atraso <= 0 THEN 1 ELSE 0 END) * 100 as tasa_puntual,
-        AVG(dias_atraso) as dias_promedio_atraso
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? AND estado != 'cobrada'
-    `, [empresaId]);
-    
-    if (eficienciaCobranza && parseFloat(eficienciaCobranza.dias_promedio_atraso) > 15) {
-      const dias = Math.round(parseFloat(eficienciaCobranza.dias_promedio_atraso));
-      insights.push({
-        tipo: 'deterioro_flujo_caja',
-        severidad: dias > 30 ? 'alta' : 'media',
-        titulo: `Cobranza lenta: ${dias} días promedio de atraso`,
-        descripcion: `Tus clientes pagan en promedio ${dias} días tarde. El benchmark del sector es 15 días. Cada día de retraso cuesta aproximadamente Q${(dias * 2500).toLocaleString()} en costo de oportunidad.`,
-        monto_impacto: dias * 2500,
-        accion_sugerida: 'Implementar descuento 2% pronto pago',
-        categoria: 'tesoreria'
-      });
-    }
-    
-    // 3. MARGEN EN DETERIORO - Alerta de rentabilidad
-    const margenTendencia = await db.allAsync(`
-      SELECT 
-        TO_CHAR(fecha_emision, 'YYYY-MM') as mes,
-        SUM(monto_total) as ventas,
-        AVG(margen_estimado) as margen_promedio
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? 
-        AND fecha_emision >= CURRENT_DATE - INTERVAL '3 months'
-      GROUP BY TO_CHAR(fecha_emision, 'YYYY-MM')
-      ORDER BY mes DESC
-      LIMIT 3
-    `, [empresaId]);
-    
-    if (margenTendencia && margenTendencia.length >= 2) {
-      const mesActual = parseFloat(margenTendencia[0].margen_promedio) || 35;
-      const mesAnterior = parseFloat(margenTendencia[1].margen_promedio) || 35;
-      const variacionMargen = mesActual - mesAnterior;
-      
-      if (variacionMargen < -3) {
-        insights.push({
-          tipo: 'margen_decreciente',
-          severidad: 'alta',
-          titulo: `Margen cayendo: ${variacionMargen.toFixed(1)}pp este mes`,
-          descripcion: `Tu margen promedio bajó de ${mesAnterior.toFixed(1)}% a ${mesActual.toFixed(1)}%. Revisa descuentos otorgados y costos de materia prima. Un ajuste de precio del 3% recuperaría Q${Math.round(parseFloat(margenTendencia[0].ventas) * 0.03).toLocaleString()}.`,
-          monto_impacto: Math.abs(variacionMargen) * parseFloat(margenTendencia[0].ventas) / 100,
-          accion_sugerida: 'Revisar política de descuentos',
-          categoria: 'contabilidad'
-        });
-      }
-    }
-    
-    // 4. OPORTUNIDAD DE VENTAS CRUZADAS
-    const ventasCruzadas = await db.allAsync(`
-      SELECT 
-        c1.cliente_nombre,
-        COUNT(DISTINCT c1.producto_linea) as lineas_compradas,
-        (SELECT COUNT(DISTINCT producto_linea) FROM cuentas_cobrar WHERE empresa_id = ?) as lineas_totales
-      FROM cuentas_cobrar c1
-      WHERE c1.empresa_id = ? 
-        AND c1.fecha_emision >= CURRENT_DATE - INTERVAL '6 months'
-      GROUP BY c1.cliente_nombre
-      HAVING COUNT(DISTINCT c1.producto_linea) = 1
-      ORDER BY SUM(c1.monto_total) DESC
-      LIMIT 3
-    `, [empresaId, empresaId]);
-    
-    if (ventasCruzadas && ventasCruzadas.length > 0) {
-      const cliente = ventasCruzadas[0];
-      insights.push({
-        tipo: 'oportunidad',
-        severidad: 'info',
-        titulo: `Oportunidad: ${cliente.cliente_nombre} solo compra 1 línea`,
-        descripcion: `Este cliente compra solo 1 de ${cliente.lineas_totales} líneas de producto. Hay potencial de venta cruzada estimado en Q${Math.round(parseFloat(cliente.lineas_compradas) * 150000).toLocaleString()} anuales.`,
-        monto_impacto: 150000,
-        accion_sugerida: 'Contactar con propuesta de líneas adicionales',
-        categoria: 'analisis'
-      });
-    }
-    
-    // 5. PODER DE NEGOCIACIÓN CON PROVEEDORES
-    const poderNegociacion = await db.getAsync(`
-      SELECT 
-        AVG(EXTRACT(DAY FROM (fecha_vencimiento - fecha_emision))) as dias_credito_promedio,
-        COUNT(DISTINCT proveedor_nombre) as total_proveedores
-      FROM cuentas_pagar 
-      WHERE empresa_id = ? AND estado = 'pendiente'
-    `, [empresaId]);
-    
-    if (poderNegociacion && parseFloat(poderNegociacion.dias_credito_promedio) < 20) {
-      const dias = Math.round(parseFloat(poderNegociacion.dias_credito_promedio));
-      insights.push({
-        tipo: 'oportunidad',
-        severidad: 'info',
-        titulo: `Negocia mejores plazos: solo ${dias} días de crédito`,
-        descripcion: `Tus proveedores te dan ${dias} días promedio. El sector promedio es 30 días. Extender a 30 días liberaría Q${Math.round(parseFloat(poderNegociacion.total_proveedores) * 50000).toLocaleString()} en efectivo.`,
-        monto_impacto: parseFloat(poderNegociacion.total_proveedores) * 50000,
-        accion_sugerida: 'Renegociar plazos con top 3 proveedores',
-        categoria: 'tesoreria'
-      });
-    }
-    
-    // 6. SEASONALITY / TENDENCIA DE VENTAS
-    const tendenciaVentas = await db.allAsync(`
-      SELECT 
-        TO_CHAR(fecha_emision, 'YYYY-MM') as mes,
-        SUM(monto_total) as total
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? 
-        AND fecha_emision >= CURRENT_DATE - INTERVAL '6 months'
-      GROUP BY TO_CHAR(fecha_emision, 'YYYY-MM')
-      ORDER BY mes DESC
-      LIMIT 3
-    `, [empresaId]);
-    
-    if (tendenciaVentas && tendenciaVentas.length >= 2) {
-      const actual = parseFloat(tendenciaVentas[0].total);
-      const anterior = parseFloat(tendenciaVentas[1].total);
-      const variacion = ((actual - anterior) / anterior * 100).toFixed(1);
-      
-      if (parseFloat(variacion) < -10) {
-        insights.push({
-          tipo: 'caida_ingresos_brusca',
-          severidad: 'alta',
-          titulo: `Alerta: Ventas cayeron ${Math.abs(parseFloat(variacion)).toFixed(0)}% vs mes anterior`,
-          descripcion: `Las ventas pasaron de Q${Math.round(anterior).toLocaleString()} a Q${Math.round(actual).toLocaleString()}. Revisa si es estacionalidad o pérdida de clientes.`,
-          monto_impacto: anterior - actual,
-          accion_sugerida: 'Ver análisis de clientes perdidos',
-          categoria: 'analisis'
-        });
-      } else if (parseFloat(variacion) > 20) {
-        insights.push({
-          tipo: 'aumento_ingresos_brusco',
-          severidad: 'info',
-          titulo: `Ventas crecieron ${parseFloat(variacion).toFixed(0)}% - ¿Capacidad suficiente?`,
-          descripcion: `Crecimiento fuerte detectado. Verifica que tu capacidad operativa pueda sostener esta tendencia sin afectar calidad o márgenes.`,
-          monto_impacto: actual - anterior,
-          accion_sugerida: 'Ver capacidad operativa',
-          categoria: 'analisis'
-        });
-      }
-    }
-    
-    // 7. EFECTIVO vs BURN RATE (Runway)
-    const posicionLiquidez = await db.getAsync(`
-      SELECT SUM(saldo) as total_disponible
-      FROM cuentas_bancarias 
-      WHERE empresa_id = ? AND activa = TRUE
-    `, [empresaId]);
-    
-    const burnRate = await db.getAsync(`
-      SELECT COALESCE(AVG(monto), 0) as gasto_diario
-      FROM (
-        SELECT SUM(ABS(monto)) as monto, fecha
-        FROM transacciones t
-        JOIN cuentas_contables c ON t.cuenta_id = c.id
-        WHERE t.tipo = 'debe' AND c.codigo LIKE '5%'
-        AND t.fecha >= CURRENT_DATE - INTERVAL '30 days'
-        GROUP BY fecha
-      ) daily
+
+  // 1. Concentración de clientes (ventas últimos 90 días)
+  await regla('concentracion', async () => {
+    const top = await db.getAsync(`
+      WITH v AS (
+        SELECT cliente_id, SUM(total_sin_iva) AS ventas
+        FROM thermoplastica.fact_ventas_linea
+        WHERE tipo_doc = 'FACT' AND fecha_emision >= CURRENT_DATE - 90
+        GROUP BY cliente_id
+      )
+      SELECT c.nombre, v.ventas, v.ventas / NULLIF((SELECT SUM(ventas) FROM v), 0) * 100 AS pct
+      FROM v JOIN thermoplastica.dim_cliente c ON c.cliente_id = v.cliente_id
+      ORDER BY v.ventas DESC LIMIT 1
     `);
-    
-    const efectivo = parseFloat(posicionLiquidez?.total_disponible) || 0;
-    const gastoDiario = parseFloat(burnRate?.gasto_diario) || 50000;
-    const runway = Math.floor(efectivo / gastoDiario);
-    
-    if (runway < 60 && runway > 0) {
+    const pct = parseFloat(top?.pct) || 0;
+    if (pct > 20) {
       insights.push({
-        tipo: 'deterioro_flujo_caja',
-        severidad: runway < 30 ? 'alta' : 'media',
-        titulo: `Runway: ${runway} días de operación restantes`,
-        descripcion: `Con tu burn rate actual de Q${Math.round(gastoDiario).toLocaleString()}/día, el efectivo alcanza para ${runway} días. Umbral recomendado: 90 días.`,
-        monto_impacto: efectivo,
-        accion_sugerida: runway < 30 ? 'Acordar línea de crédito' : 'Acelerar cobranzas',
-        categoria: 'tesoreria'
+        tipo: 'cliente_en_riesgo',
+        severidad: pct > 30 ? 'alta' : 'media',
+        titulo: `${pct.toFixed(1)}% de las ventas dependen de ${top.nombre}`,
+        descripcion: `En los últimos 90 días este cliente compró ${fmtQ(parseFloat(top.ventas))}. Perderlo golpearía directo el flujo de caja; conviene diversificar.`,
+        monto_impacto: parseFloat(top.ventas),
+        accion_sugerida: 'Revisar concentración en Ventas',
+        categoria: 'analisis',
       });
     }
-    
-    // 8. PRODUCTOS ESTRELLA vs VAMPIROS
-    const productosRentabilidad = await db.allAsync(`
-      SELECT 
-        producto_linea,
-        SUM(monto_total) as ventas,
-        AVG(margen_estimado) as margen
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? 
-        AND fecha_emision >= CURRENT_DATE - INTERVAL '3 months'
-        AND producto_linea IS NOT NULL
-      GROUP BY producto_linea
-      ORDER BY ventas DESC
-    `, [empresaId]);
-    
-    if (productosRentabilidad && productosRentabilidad.length > 0) {
-      const estrella = productosRentabilidad.reduce((max, p) => 
-        parseFloat(p.ventas) * (parseFloat(p.margen)/100) > parseFloat(max.ventas) * (parseFloat(max.margen)/100) ? p : max
-      );
-      const vampiro = productosRentabilidad.reduce((min, p) => 
-        parseFloat(p.margen) < parseFloat(min.margen) ? p : min
-      );
-      
-      if (parseFloat(vampiro.margen) < 20 && parseFloat(vampiro.ventas) > 100000) {
-        insights.push({
-          tipo: 'margen_decreciente',
-          severidad: 'media',
-          titulo: `"Vampiro" detectado: ${vampiro.producto_linea} margen ${parseFloat(vampiro.margen).toFixed(0)}%`,
-          descripcion: `Esta línea genera Q${Math.round(parseFloat(vampiro.ventas)).toLocaleString()} pero con margen de solo ${parseFloat(vampiro.margen).toFixed(0)}%. Considera subir precio 5% o reducir costos.`,
-          monto_impacto: parseFloat(vampiro.ventas) * 0.05,
-          accion_sugerida: 'Revisar precios de línea',
-          categoria: 'contabilidad'
-        });
-      }
+  });
+
+  // 2. Cartera vencida y atraso promedio (snapshot CxC más reciente, ponderado por saldo)
+  await regla('cobranza', async () => {
+    const r = await db.getAsync(`
+      SELECT SUM(saldo_total) AS total,
+             SUM(saldo_total) FILTER (WHERE CURRENT_DATE - fecha_vencimiento > 30) AS vencido_30,
+             SUM(GREATEST(CURRENT_DATE - fecha_vencimiento, 0) * saldo_total) / NULLIF(SUM(saldo_total), 0) AS dias_atraso
+      FROM thermoplastica.fact_cxc_snapshot_diario
+      WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+        AND saldo_total > 0
+    `);
+    const total = parseFloat(r?.total) || 0;
+    const vencido = parseFloat(r?.vencido_30) || 0;
+    const dias = Math.round(parseFloat(r?.dias_atraso) || 0);
+    if (total > 0 && vencido / total > 0.10) {
+      insights.push({
+        tipo: 'cxc_vencidas',
+        severidad: vencido / total > 0.25 ? 'alta' : 'media',
+        titulo: `${fmtQ(vencido)} de cartera con más de 30 días de atraso`,
+        descripcion: `Es el ${(vencido / total * 100).toFixed(1)}% de la cartera (${fmtQ(total)}). Atraso promedio ponderado por saldo: ${dias} días.`,
+        monto_impacto: vencido,
+        accion_sugerida: 'Ver Cuentas por Cobrar',
+        categoria: 'tesoreria',
+      });
     }
-    
-    // 9. OPORTUNIDAD DE PRONTO PAGO
-    const oportunidadDescuento = await db.getAsync(`
-      SELECT SUM(monto_pendiente) as total_vencido
-      FROM cuentas_cobrar 
-      WHERE empresa_id = ? AND estado != 'cobrada' AND dias_atraso > 30
-    `, [empresaId]);
-    
-    if (oportunidadDescuento && parseFloat(oportunidadDescuento.total_vencido) > 100000) {
-      const monto = parseFloat(oportunidadDescuento.total_vencido);
+  });
+
+  // 3. Margen bruto: mes en curso vs mes anterior
+  await regla('margen', async () => {
+    const meses = await db.allAsync(`
+      SELECT DATE_TRUNC('month', fecha_emision) AS mes,
+             SUM(total_sin_iva) AS ventas,
+             SUM(margen_bruto) / NULLIF(SUM(total_sin_iva), 0) * 100 AS margen_pct
+      FROM thermoplastica.fact_ventas_linea
+      WHERE tipo_doc = 'FACT' AND fecha_emision >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+      GROUP BY 1 ORDER BY 1 DESC
+    `);
+    if (meses.length < 2) return;
+    const actual = parseFloat(meses[0].margen_pct), anterior = parseFloat(meses[1].margen_pct);
+    const delta = actual - anterior;
+    if (delta < -3) {
+      insights.push({
+        tipo: 'margen_decreciente',
+        severidad: delta < -6 ? 'alta' : 'media',
+        titulo: `Margen bruto bajó ${Math.abs(delta).toFixed(1)} pp este mes`,
+        descripcion: `Pasó de ${anterior.toFixed(1)}% a ${actual.toFixed(1)}%. Sobre las ventas del mes (${fmtQ(parseFloat(meses[0].ventas))}) son ${fmtQ(Math.abs(delta) / 100 * parseFloat(meses[0].ventas))} menos de margen.`,
+        monto_impacto: Math.abs(delta) / 100 * parseFloat(meses[0].ventas),
+        accion_sugerida: 'Revisar Márgenes',
+        categoria: 'contabilidad',
+      });
+    }
+  });
+
+  // 4. Venta cruzada: clientes grandes que compran una sola línea (6 meses)
+  await regla('venta_cruzada', async () => {
+    const r = await db.getAsync(`
+      SELECT c.nombre, MIN(a.linea) AS linea, SUM(f.total_sin_iva) AS ventas
+      FROM thermoplastica.fact_ventas_linea f
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+      JOIN thermoplastica.dim_cliente  c ON c.cliente_id  = f.cliente_id
+      WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= CURRENT_DATE - INTERVAL '6 months'
+        AND a.linea IS NOT NULL
+      GROUP BY c.nombre
+      HAVING COUNT(DISTINCT a.linea) = 1 AND SUM(f.total_sin_iva) >= 100000
+      ORDER BY ventas DESC LIMIT 1
+    `);
+    if (r) {
       insights.push({
         tipo: 'oportunidad',
         severidad: 'info',
-        titulo: `Descuento pronto pago recuperaría Q${Math.round(monto * 0.15).toLocaleString()}`,
-        descripcion: `Ofrecer 5% de descuento por pronto pago en facturas vencidas podría recuperar Q${Math.round(monto * 0.15).toLocaleString()} este mes, mejorando liquidez inmediatamente.`,
-        monto_impacto: monto * 0.15,
-        accion_sugerida: 'Enviar oferta de descuento',
-        categoria: 'tesoreria'
+        titulo: `${r.nombre} solo compra la línea ${r.linea}`,
+        descripcion: `Compró ${fmtQ(parseFloat(r.ventas))} en 6 meses, todo de una sola línea. Candidato para ofrecer otras líneas.`,
+        monto_impacto: parseFloat(r.ventas),
+        accion_sugerida: 'Ver cliente en Ventas',
+        categoria: 'analisis',
       });
     }
-    
-  } catch (error) {
-    console.error('[generateInsightsFromDB] Error:', error.message);
-  }
-  
+  });
+
+  // 5. Plazos de proveedores: crédito pactado promedio vs 30 días
+  await regla('plazos_proveedores', async () => {
+    const r = await db.getAsync(`
+      SELECT
+        (SELECT SUM(dias_credito_ficha * saldo) / NULLIF(SUM(saldo), 0)
+           FROM thermoplastica.fact_cxp_factura WHERE saldo > 0 AND dias_credito_ficha > 0) AS dias,
+        (SELECT SUM(total_sin_iva) / 90.0 FROM thermoplastica.fact_compras_linea
+          WHERE tipo_doc = 'FACT' AND fecha_emision >= CURRENT_DATE - 90) AS compra_diaria
+    `);
+    const dias = parseFloat(r?.dias), diaria = parseFloat(r?.compra_diaria) || 0;
+    if (dias && dias < 25 && diaria > 0) {
+      const libera = (30 - dias) * diaria;
+      insights.push({
+        tipo: 'oportunidad',
+        severidad: 'info',
+        titulo: `Crédito de proveedores: ${Math.round(dias)} días promedio`,
+        descripcion: `Llevar el plazo a 30 días, al ritmo de compra actual (${fmtQ(diaria)}/día), liberaría unos ${fmtQ(libera)} de caja.`,
+        monto_impacto: libera,
+        accion_sugerida: 'Renegociar plazos con los principales proveedores',
+        categoria: 'tesoreria',
+      });
+    }
+  });
+
+  // 6. Tendencia de ventas: último mes completo vs el anterior
+  await regla('tendencia_ventas', async () => {
+    const meses = await db.allAsync(`
+      SELECT DATE_TRUNC('month', fecha_emision) AS mes, SUM(total_sin_iva) AS total
+      FROM thermoplastica.fact_ventas_linea
+      WHERE tipo_doc = 'FACT'
+        AND fecha_emision >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 months'
+        AND fecha_emision <  DATE_TRUNC('month', CURRENT_DATE)
+      GROUP BY 1 ORDER BY 1 DESC
+    `);
+    if (meses.length < 2) return;
+    const actual = parseFloat(meses[0].total), anterior = parseFloat(meses[1].total);
+    if (!anterior) return;
+    const variacion = (actual - anterior) / anterior * 100;
+    if (variacion < -10) {
+      insights.push({
+        tipo: 'caida_ingresos_brusca',
+        severidad: variacion < -20 ? 'alta' : 'media',
+        titulo: `Ventas cayeron ${Math.abs(variacion).toFixed(0)}% el mes pasado`,
+        descripcion: `Pasaron de ${fmtQ(anterior)} a ${fmtQ(actual)}. Revisar si es estacionalidad o pérdida de clientes.`,
+        monto_impacto: anterior - actual,
+        accion_sugerida: 'Ver Ventas',
+        categoria: 'analisis',
+      });
+    } else if (variacion > 20) {
+      insights.push({
+        tipo: 'aumento_ingresos_brusco',
+        severidad: 'info',
+        titulo: `Ventas crecieron ${variacion.toFixed(0)}% el mes pasado`,
+        descripcion: `Pasaron de ${fmtQ(anterior)} a ${fmtQ(actual)}. Verificar inventario y capacidad para sostenerlo.`,
+        monto_impacto: actual - anterior,
+        accion_sugerida: 'Ver Inventario',
+        categoria: 'analisis',
+      });
+    }
+  });
+
+  // 7. Líneas con margen bajo y volumen material (90 días)
+  await regla('lineas_margen_bajo', async () => {
+    const r = await db.getAsync(`
+      SELECT a.linea, SUM(f.total_sin_iva) AS ventas,
+             SUM(f.margen_bruto) / NULLIF(SUM(f.total_sin_iva), 0) * 100 AS margen
+      FROM thermoplastica.fact_ventas_linea f
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+      WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= CURRENT_DATE - 90 AND a.linea IS NOT NULL
+      GROUP BY a.linea
+      HAVING SUM(f.total_sin_iva) > 100000
+         AND SUM(f.margen_bruto) / NULLIF(SUM(f.total_sin_iva), 0) < 0.20
+      ORDER BY ventas DESC LIMIT 1
+    `);
+    if (r) {
+      insights.push({
+        tipo: 'margen_decreciente',
+        severidad: 'media',
+        titulo: `Línea ${r.linea}: margen de ${parseFloat(r.margen).toFixed(0)}%`,
+        descripcion: `Vendió ${fmtQ(parseFloat(r.ventas))} en 90 días con margen bajo. Cada punto de precio son ${fmtQ(parseFloat(r.ventas) / 100)}.`,
+        monto_impacto: parseFloat(r.ventas) * 0.05,
+        accion_sugerida: 'Revisar precios en Márgenes',
+        categoria: 'contabilidad',
+      });
+    }
+  });
+
   return { insights };
 }
 
-// Helper: Detectar anomalías desde la base de datos
-async function detectAnomaliesFromDB(db, empresaId, umbral) {
+// Anomalías: clientes cuya compra de los últimos 30 días cayó a menos de la mitad
+// de los 30 días previos (solo clientes con compra previa material).
+async function detectAnomaliesFromDB(db) {
   const anomalias = [];
-  const alertas = [];
-  
-  try {
-    // Anomalía 1: Transacciones inusualmente grandes (últimos 30 días)
-    const transaccionesGrandes = await db.allAsync(`
-      SELECT t.*, c.nombre as cuenta_nombre
-      FROM transacciones t
-      JOIN cuentas_contables c ON t.cuenta_id = c.id
-      WHERE t.fecha >= CURRENT_DATE - INTERVAL '30 days'
-      AND ABS(t.monto) > (
-        SELECT AVG(ABS(monto)) * 3 
-        FROM transacciones 
-        WHERE fecha >= CURRENT_DATE - INTERVAL '90 days'
-      )
-      ORDER BY ABS(t.monto) DESC
-      LIMIT 5
+  await regla('caida_clientes', async () => {
+    const filas = await db.allAsync(`
+      SELECT c.nombre,
+             COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision >= CURRENT_DATE - 30), 0) AS actual,
+             COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision <  CURRENT_DATE - 30), 0) AS anterior
+      FROM thermoplastica.fact_ventas_linea f
+      JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
+      WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= CURRENT_DATE - 60
+      GROUP BY c.nombre
+      HAVING COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision < CURRENT_DATE - 30), 0) >= 50000
+         AND COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision >= CURRENT_DATE - 30), 0)
+           < 0.5 * SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision < CURRENT_DATE - 30)
+      ORDER BY anterior DESC LIMIT 5
     `);
-    
-    for (const t of transaccionesGrandes) {
+    for (const c of filas) {
+      const actual = parseFloat(c.actual), anterior = parseFloat(c.anterior);
+      const variacion = (actual - anterior) / anterior * 100;
       anomalias.push({
-        tipo: 'transaccion_anomala',
-        categoria: 'contabilidad',
+        tipo: 'cliente_en_riesgo',
+        categoria: 'analisis',
         severidad: 'alta',
-        titulo: `Transacción inusual: ${t.cuenta_nombre}`,
-        descripcion: `Monto de Q${Math.round(parseFloat(t.monto)).toLocaleString()} es significativamente mayor al promedio histórico.`,
-        datos: { monto_total: parseFloat(t.monto), cuenta: t.cuenta_nombre },
-        accion_recomendada: 'Verificar transacción manualmente'
+        titulo: `${c.nombre}: compras cayeron ${Math.abs(variacion).toFixed(0)}% en 30 días`,
+        descripcion: `Compró ${fmtQ(actual)} en los últimos 30 días contra ${fmtQ(anterior)} en los 30 previos.`,
+        datos: { monto_actual: actual, monto_anterior: anterior },
+        accion_recomendada: 'Contactar al cliente para evaluar la relación comercial',
       });
     }
-    
-    // Anomalía 2: Clientes con caída repentina de compras (simplificado)
-    const clienteCaida = await db.allAsync(`
-      SELECT 
-        cc.cliente_nombre,
-        SUM(CASE WHEN cc.fecha_emision >= CURRENT_DATE - INTERVAL '30 days' THEN cc.monto_total ELSE 0 END) as mes_actual,
-        SUM(CASE WHEN cc.fecha_emision >= CURRENT_DATE - INTERVAL '60 days' AND cc.fecha_emision < CURRENT_DATE - INTERVAL '30 days' THEN cc.monto_total ELSE 0 END) as mes_anterior
-      FROM cuentas_cobrar cc
-      WHERE cc.empresa_id = ? AND cc.estado != 'cobrada'
-      GROUP BY cc.cliente_nombre
-      HAVING mes_anterior > 0
-    `, [empresaId]);
-    
-    for (const c of clienteCaida) {
-      const variacion = ((parseFloat(c.mes_actual) - parseFloat(c.mes_anterior)) / parseFloat(c.mes_anterior)) * 100;
-      if (variacion < -50) {
-        anomalias.push({
-          tipo: 'cliente_en_riesgo',
-          categoria: 'analisis',
-          severidad: 'alta',
-          titulo: `${c.cliente_nombre}: caída del ${Math.abs(variacion).toFixed(0)}%`,
-          descripcion: `Este cliente ha reducido significativamente sus compras en el último mes.`,
-          datos: { monto_actual: parseFloat(c.mes_actual), monto_anterior: parseFloat(c.mes_anterior) },
-          accion_recomendada: 'Contactar al cliente para evaluar relación comercial'
-        });
-      }
-    }
-    
-  } catch (error) {
-    console.error('[detectAnomaliesFromDB] Error:', error.message);
-  }
-  
-  return { anomalias, alertas };
+  });
+  return { anomalias, alertas: [] };
 }
 
 /**

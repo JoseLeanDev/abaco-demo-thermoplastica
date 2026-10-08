@@ -96,10 +96,10 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    if (password.length < 8) {
+    if (password.length < 6) {
       return res.status(400).json({
         status: 'error',
-        message: 'La contraseña debe tener al menos 8 caracteres'
+        message: 'La contraseña debe tener al menos 6 caracteres'
       });
     }
 
