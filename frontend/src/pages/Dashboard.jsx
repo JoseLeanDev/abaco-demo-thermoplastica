@@ -265,10 +265,10 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
            style={{
              backgroundImage: 'radial-gradient(circle at 20% 30%, rgba(255,255,255,0.4) 0%, transparent 40%), radial-gradient(circle at 80% 70%, rgba(59,130,246,0.3) 0%, transparent 50%)'
            }} />
-      <div className="relative flex items-start justify-between flex-wrap gap-6">
-        <div className="min-w-0 flex-1">
+      <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+        <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 font-medium">Briefing ejecutivo</p>
-          <h1 className="text-3xl font-bold mt-1 tracking-tight text-white">{empresa || 'Thermoplástica, S.A.'}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold mt-1 tracking-tight text-white">{empresa || 'Thermoplástica, S.A.'}</h1>
           <p className="text-sm text-white/60 mt-1">
             Período: {etiqueta} · comparado con el mismo período del año anterior
           </p>
@@ -277,8 +277,9 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
           </p>
 
           {/* Composite Health Score */}
-          <div className="mt-5 flex items-center gap-4">
-            <div className="relative w-24 h-24">
+          <div className="mt-5 flex items-center flex-wrap gap-x-6 gap-y-4">
+            <div className="flex items-center gap-4">
+            <div className="relative w-24 h-24 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <RadialBarChart innerRadius="72%" outerRadius="100%" data={scoreData} startAngle={90} endAngle={-270}>
                   <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
@@ -295,9 +296,10 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
               <p className={`text-lg font-semibold capitalize ${color.text}`}>{h.grade || '—'}</p>
               <p className="text-xs text-white/50 mt-1 whitespace-nowrap">Compuesto de 7 dimensiones <Leyenda k="score_componentes" claro /></p>
             </div>
+            </div>
 
             {/* Mini componentes del score */}
-            <div className="ml-4 hidden md:grid grid-cols-4 gap-x-4 gap-y-1">
+            <div className="grid grid-cols-4 gap-x-5 gap-y-2 shrink-0">
               <ScorePip label="Crec." value={h.componentes?.crecimiento} />
               <ScorePip label="Margen" value={h.componentes?.margen} />
               <ScorePip label="EBITDA" value={h.componentes?.ebitda} />
@@ -310,27 +312,27 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
         </div>
 
         {/* Números north-star a la derecha */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 text-right">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 xl:text-right border-t border-white/10 pt-5 xl:border-0 xl:pt-0">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center justify-end gap-1">Ventas del período <Leyenda k="ventas" claro /></p>
-            <p className="text-2xl font-bold tabular-nums mt-1">{fmtM(k.ventas_12m)}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center xl:justify-end gap-1">Ventas del período <Leyenda k="ventas" claro /></p>
+            <p className="text-xl sm:text-2xl font-bold tabular-nums mt-1 whitespace-nowrap">{fmtM(k.ventas_12m)}</p>
             <DeltaBadge value={k.delta_ventas_pct} suffix="vs año ant." size="xs" leyenda="vs_anio_anterior" />
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center justify-end gap-1">Margen bruto <Leyenda k="margen_bruto" claro /></p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center xl:justify-end gap-1">Margen bruto <Leyenda k="margen_bruto" claro /></p>
             <p className="text-2xl font-bold tabular-nums mt-1 text-emerald-300">{fmtPct(k.margen_bruto_pct)}</p>
             <DeltaBadge value={k.delta_margen_pp} suffix="pp YoY" size="xs" unit="pp" leyenda="margen_pts" />
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center justify-end gap-1">EBITDA est. <Leyenda k="ebitda" claro /></p>
-            <p className={`text-2xl font-bold tabular-nums mt-1 ${k.ebitda_estimado >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center xl:justify-end gap-1">EBITDA est. <Leyenda k="ebitda" claro /></p>
+            <p className={`text-xl sm:text-2xl font-bold tabular-nums mt-1 whitespace-nowrap ${k.ebitda_estimado >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
               {fmtM(k.ebitda_estimado)}
             </p>
             <p className="text-[10px] text-white/50 mt-1">margen {fmtPct(k.ebitda_pct)}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center justify-end gap-1">Posición neta WC <Leyenda k="posicion_neta_wc" claro /></p>
-            <p className={`text-2xl font-bold tabular-nums mt-1 ${k.posicion_neta_wc >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center xl:justify-end gap-1">Posición neta WC <Leyenda k="posicion_neta_wc" claro /></p>
+            <p className={`text-xl sm:text-2xl font-bold tabular-nums mt-1 whitespace-nowrap ${k.posicion_neta_wc >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
               {fmtM(k.posicion_neta_wc)}
             </p>
             <p className="text-[10px] text-white/50 mt-1">cobertura {k.cobertura_cxc_cxp != null ? Number(k.cobertura_cxc_cxp).toFixed(2) + 'x' : '—'}</p>
@@ -345,7 +347,7 @@ function ScorePip({ label, value }) {
   const v = value || 0
   const color = v >= 75 ? 'bg-emerald-400' : v >= 55 ? 'bg-amber-400' : 'bg-rose-400'
   return (
-    <div className="flex items-center gap-2 text-[10px]">
+    <div className="flex items-center gap-2 text-[10px] min-w-[3.5rem]">
       <div className="w-1.5 h-4 bg-white/10 rounded overflow-hidden">
         <div className={`w-full ${color}`} style={{ height: `${v}%`, marginTop: `${100 - v}%` }} />
       </div>
@@ -368,7 +370,7 @@ function DeltaBadge({ value, suffix, size = 'sm', unit = '%', leyenda }) {
   const textSize = size === 'xs' ? 'text-[11px]' : 'text-xs'
   const sign = positive ? '+' : ''
   return (
-    <p className={`${textSize} ${cls} mt-1 flex items-center justify-end gap-0.5 tabular-nums font-medium`}>
+    <p className={`${textSize} ${cls} mt-1 flex items-center flex-wrap xl:justify-end gap-0.5 tabular-nums font-medium`}>
       <Icon className="w-3 h-3" />
       {sign}{v.toFixed(1)}{unit === 'pp' ? 'pp' : '%'}
       {suffix && <span className="text-white/40 ml-1 font-normal">{suffix}</span>}
@@ -745,7 +747,7 @@ function MiniKpiCard({ titulo, leyenda, deltaLeyenda, icon: Icon, color, valor, 
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1">{titulo} {leyenda && <Leyenda k={leyenda} />}</p>
-          <p className="text-2xl font-bold tabular-nums mt-1">{valor}</p>
+          <p className="text-xl sm:text-2xl font-bold tabular-nums mt-1 whitespace-nowrap">{valor}</p>
         </div>
         <Icon className={`w-8 h-8 ${iconColor} opacity-40`} />
       </div>
