@@ -17,6 +17,7 @@ import FlujoCajaProyectado from '../components/analisis/FlujoCajaProyectado'
 import { fmtM, fmtQ, fmtPct, fmtDias, fmtMes, tooltipStyle } from '../components/analisis/formato'
 import { useSaludFinanciera, useProyeccionVentas, useFlujoCaja } from '../hooks/useCfoData'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { Leyenda } from '../components/analisis/leyendasInventario'
 
 /**
  * Salud financiera: la única vista que cruza cartera, inventario y proveedores.
@@ -230,7 +231,8 @@ function CapitalInmovilizado({ inventario, ciclo }) {
       <div className="section-header">
         <CubeIcon className="w-5 h-5 text-[var(--text-muted)]" />
         <h2 className="font-semibold">Capital inmovilizado en inventario</h2>
-        <span className="text-xs text-[var(--text-muted)] ml-auto hidden sm:inline">Inventario total {fmtM(ciclo.inventario)} a costo</span>
+        <Leyenda k="corte" />
+        <span className="text-xs text-[var(--text-muted)] ml-auto hidden sm:inline-flex items-center gap-1">Inventario total {fmtM(ciclo.inventario)} a costo <Leyenda k="inventario" /></span>
         <Link to="/analisis/capital-inmovilizado" className="btn-secondary text-xs py-1 flex items-center gap-1 whitespace-nowrap">
           Ver por categoría <ArrowRightIcon className="w-3 h-3" />
         </Link>
@@ -240,9 +242,9 @@ function CapitalInmovilizado({ inventario, ciclo }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <p className="text-sm text-[var(--text-secondary)] mb-3">
-              <strong>{fmtM(inmov + lento)}</strong> del inventario están quietos: <strong className="text-[var(--danger)]">{fmtM(inmov)}</strong> inmovilizados
+              <strong>{fmtM(inmov + lento)}</strong> del inventario están quietos <Leyenda k="quieto" />: <strong className="text-[var(--danger)]">{fmtM(inmov)}</strong> inmovilizados <Leyenda k="inmovilizado" />
               (producto sin ventas en 180 días, materia prima que no se recompra hace un año o sin ningún movimiento) y{' '}
-              <strong className="text-[var(--warning)]">{fmtM(lento)}</strong> de rotación lenta (stock para más de 180 días).
+              <strong className="text-[var(--warning)]">{fmtM(lento)}</strong> de rotación lenta (stock para más de 180 días) <Leyenda k="lento" />.
             </p>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={porClase} layout="vertical" margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
@@ -257,13 +259,13 @@ function CapitalInmovilizado({ inventario, ciclo }) {
           </div>
 
           <div>
-            <p className="text-sm font-medium mb-2">Categorías con más inventario quieto</p>
+            <p className="text-sm font-medium mb-2 flex items-center gap-1">Categorías con más inventario quieto <Leyenda k="categoria" /></p>
             <table className="w-full text-sm">
               <thead className="text-xs text-[var(--text-muted)]">
                 <tr>
                   <th className="text-left font-medium py-1">Categoría</th>
                   <th className="text-left font-medium py-1 px-2">Inventario</th>
-                  <th className="text-right font-medium py-1">Quieto</th>
+                  <th className="text-right font-medium py-1">Quieto <Leyenda k="quieto" /></th>
                   <th className="text-right font-medium py-1">%</th>
                 </tr>
               </thead>
@@ -294,7 +296,7 @@ function CapitalInmovilizado({ inventario, ciclo }) {
         </div>
 
         <div>
-          <p className="text-sm font-medium mb-2">Artículos inmovilizados de mayor valor (top 5)</p>
+          <p className="text-sm font-medium mb-2 flex items-center gap-1">Artículos inmovilizados de mayor valor (top 5) <Leyenda k="tipo" /></p>
           <div className="overflow-x-auto rounded-lg border border-[var(--border-default)]">
             <table className="w-full text-sm">
               <thead className="bg-[var(--bg-secondary)] text-xs text-[var(--text-muted)]">

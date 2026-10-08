@@ -7,7 +7,6 @@ import {
   ChevronRightIcon,
   ClockIcon,
   CubeIcon,
-  InformationCircleIcon,
   LightBulbIcon,
   Squares2X2Icon,
 } from '@heroicons/react/24/outline'
@@ -15,6 +14,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { endpoints } from '../services/cfoApi'
 import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ventas/FiltroProducto'
 import { fmtM, fmtQ, tooltipStyle } from '../components/analisis/formato'
+import { Leyenda } from '../components/analisis/leyendasInventario'
 
 /**
  * Capital inmovilizado en inventario por Categoría › Subcategoría › Sublínea › Artículo
@@ -155,7 +155,7 @@ export default function InventarioQuieto() {
   const Th = ({ col, children, align = 'right', ayuda }) => (
     <th className={`text-${align} font-semibold pb-2 px-2 cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-primary)]`} onClick={() => sortBy(col)}>
       {children}
-      {ayuda && <span className="inline-flex align-middle ml-0.5 cursor-help" title={ayuda}><InformationCircleIcon className="w-3.5 h-3.5 opacity-60" /></span>}
+      {ayuda && <Leyenda k={ayuda} className="ml-1" />}
       {orden.col === col ? (orden.dir === 'desc' ? ' ↓' : ' ↑') : ''}
     </th>
   )
@@ -176,7 +176,7 @@ export default function InventarioQuieto() {
           <h1 className="text-2xl font-semibold">Capital inmovilizado en inventario</h1>
           <p className="text-sm text-[var(--text-muted)]">
             Dónde está el dinero quieto, por categoría, subcategoría y sublínea
-            {d?.fecha_corte && <> · stock al {fmtFecha(d.fecha_corte)}</>}
+            {d?.fecha_corte && <> · stock al {fmtFecha(d.fecha_corte)} <Leyenda k="corte" /></>}
           </p>
         </div>
       </div>
@@ -191,22 +191,22 @@ export default function InventarioQuieto() {
         )) : (
           <>
             <div className="kpi-card">
-              <span className="kpi-label">Inventario a costo</span>
+              <span className="kpi-label flex items-center gap-1">Inventario a costo <Leyenda k="inventario" /></span>
               <p className="kpi-value">{fmtM(t.total)}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(t.articulos)} artículos con stock</p>
             </div>
             <div className="kpi-card">
-              <span className="kpi-label" title={ESTADOS.inmovilizado.ayuda}>Inmovilizado</span>
+              <span className="kpi-label flex items-center gap-1">Inmovilizado <Leyenda k="inmovilizado" /></span>
               <p className="kpi-value" style={{ color: ESTADOS.inmovilizado.color }}>{fmtM(t.inmovilizado)}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{t.pct_inmovilizado}% del inventario</p>
             </div>
             <div className="kpi-card">
-              <span className="kpi-label" title={ESTADOS.lento.ayuda}>Lento (más de 6 meses de stock)</span>
+              <span className="kpi-label flex items-center gap-1">Lento (más de 6 meses de stock) <Leyenda k="lento" /></span>
               <p className="kpi-value" style={{ color: ESTADOS.lento.color }}>{fmtM(t.lento)}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{t.total > 0 ? ((t.lento / t.total) * 100).toFixed(1) : 0}% del inventario</p>
             </div>
             <div className="kpi-card">
-              <span className="kpi-label" title="Cuántos días alcanza el stock al ritmo de consumo actual">Cobertura</span>
+              <span className="kpi-label flex items-center gap-1">Cobertura <Leyenda k="cobertura" /></span>
               <p className="kpi-value">{fmtDias(t.dias_cobertura)}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(t.articulos_quietos)} de {fmtInt(t.articulos)} artículos quietos</p>
             </div>
@@ -220,7 +220,7 @@ export default function InventarioQuieto() {
           <LightBulbIcon className="w-5 h-5 text-[var(--warning)] shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
             De los <strong>{fmtM(t.total)}</strong> en inventario{path.length ? <> de <strong>{titulo}</strong></> : ''},{' '}
-            <strong>{fmtM(t.quieto)} ({t.pct_quieto}%)</strong> están quietos: {fmtM(t.inmovilizado)} inmovilizados y {fmtM(t.lento)} de rotación lenta.
+            <strong>{fmtM(t.quieto)} ({t.pct_quieto}%)</strong> están quietos <Leyenda k="quieto" />: {fmtM(t.inmovilizado)} inmovilizados y {fmtM(t.lento)} de rotación lenta.
             {!esHoja && filas[0] && filas[0].quieto > 0 && (
               <> La {nivel.singular.toLowerCase()} con más capital quieto es <strong>{filas[0].nombre}</strong> ({fmtM(filas[0].quieto)}, {filas[0].participacion_quieto}% del total quieto)
               {filas[0].dias_cobertura ? <>, con stock para {fmtDias(filas[0].dias_cobertura)}</> : ''}.</>
@@ -237,8 +237,9 @@ export default function InventarioQuieto() {
         accion={
           <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
             {['inmovilizado', 'lento', 'activo'].map(e => (
-              <span key={e} className="flex items-center gap-1" title={ESTADOS[e].ayuda}>
+              <span key={e} className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: ESTADOS[e].color }} />{ESTADOS[e].nombre}
+                <Leyenda k={e} />
               </span>
             ))}
           </div>
@@ -270,17 +271,17 @@ export default function InventarioQuieto() {
                 <thead>
                   <tr className="text-xs text-[var(--text-muted)]">
                     <Th col="nombre" align="left">{nivel.singular}</Th>
-                    <Th col="total" align="left" ayuda="Valor del stock a costo, dividido por estado">Inventario</Th>
+                    <Th col="total" align="left" ayuda="inventario">Inventario</Th>
                     {!esHoja && <>
-                      <Th col="inmovilizado" ayuda={ESTADOS.inmovilizado.ayuda}>Inmovilizado</Th>
-                      <Th col="lento" ayuda={ESTADOS.lento.ayuda}>Lento</Th>
-                      <Th col="pct_quieto" ayuda="(Inmovilizado + lento) ÷ inventario">% quieto</Th>
+                      <Th col="inmovilizado" ayuda="inmovilizado">Inmovilizado</Th>
+                      <Th col="lento" ayuda="lento">Lento</Th>
+                      <Th col="pct_quieto" ayuda="quieto">% quieto</Th>
                     </>}
-                    <Th col="dias_cobertura" ayuda="Días que alcanza el stock al ritmo de consumo actual">Cobertura</Th>
+                    <Th col="dias_cobertura" ayuda="cobertura">Cobertura</Th>
                     {esHoja ? <>
-                      <Th col="dias_sin_mov" ayuda="Venta (producto) o compra (materia prima)">Último movimiento</Th>
+                      <Th col="dias_sin_mov" ayuda="antiguedad">Último movimiento</Th>
                       <Th col="estado" align="left">Estado</Th>
-                    </> : <Th col="articulos_quietos" ayuda="Artículos quietos / artículos con stock">Artículos</Th>}
+                    </> : <Th col="articulos_quietos" ayuda="articulos">Artículos</Th>}
                     {!esHoja && <th />}
                   </tr>
                 </thead>
@@ -328,10 +329,10 @@ export default function InventarioQuieto() {
       {/* Antigüedad + tipo */}
       {!cargando && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Seccion icon={ClockIcon} titulo="¿Hace cuánto no se mueve?" subtitulo="Valor del stock según su última venta (producto) o compra (materia prima)">
+          <Seccion icon={ClockIcon} titulo="¿Hace cuánto no se mueve?" subtitulo={<>Valor del stock según su última venta (producto) o compra (materia prima) <Leyenda k="antiguedad" /></>}>
             <Antiguedad data={d.antiguedad} />
           </Seccion>
-          <Seccion icon={CubeIcon} titulo="¿Qué tipo de inventario es?" subtitulo="Producto que se vende, materia prima que se compra, o sin movimiento registrado">
+          <Seccion icon={CubeIcon} titulo="¿Qué tipo de inventario es?" subtitulo={<>Producto que se vende, materia prima que se compra, o sin movimiento registrado <Leyenda k="tipo" /></>}>
             <PorClase data={d.por_clase_estado} />
           </Seccion>
         </div>
@@ -377,12 +378,12 @@ export default function InventarioQuieto() {
             <table className="w-full text-sm">
               <thead className="text-xs text-[var(--text-muted)]">
                 <tr>
-                  <th className="text-left font-semibold pb-2 pr-2">Artículo</th>
-                  <th className="text-left font-semibold pb-2 px-2 hidden md:table-cell">Categoría › Subcategoría › Sublínea</th>
+                  <th className="text-left font-semibold pb-2 pr-2">Artículo <Leyenda k="tipo" /></th>
+                  <th className="text-left font-semibold pb-2 px-2 hidden md:table-cell">Categoría › Subcategoría › Sublínea <Leyenda k="categoria" /></th>
                   <th className="text-left font-semibold pb-2 px-2">Estado</th>
                   <th className="text-right font-semibold pb-2 px-2">Valor</th>
-                  <th className="text-right font-semibold pb-2 px-2 hidden sm:table-cell">Cobertura</th>
-                  <th className="text-right font-semibold pb-2 pl-2">Último movimiento</th>
+                  <th className="text-right font-semibold pb-2 px-2 hidden sm:table-cell">Cobertura <Leyenda k="cobertura" /></th>
+                  <th className="text-right font-semibold pb-2 pl-2">Último movimiento <Leyenda k="antiguedad" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-default)]">
