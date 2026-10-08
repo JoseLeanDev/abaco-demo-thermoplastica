@@ -23,7 +23,6 @@ const defaultAllowed = [
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
   /^https:\/\/.*\.onrender\.com$/,
-  /^https:\/\/.*\.vercel\.app$/,
 ];
 const envAllowed = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
