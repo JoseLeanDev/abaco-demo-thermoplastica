@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { useQuery } from 'react-query'
+import { endpoints } from '../services/cfoApi'
 import {
   HeartIcon,
   ArrowPathIcon,
@@ -204,6 +206,15 @@ const ESTADOS = [
 ]
 
 function CapitalInmovilizado({ inventario, ciclo }) {
+  // Por categoría (misma jerarquía que Ventas); el detalle completo vive en
+  // /analisis/capital-inmovilizado
+  const { data: catRes } = useQuery(
+    ['inventario-quieto', 'categoria', '{}', ''],
+    () => endpoints.analisis.inventarioQuieto({ dim: 'categoria' }),
+    { staleTime: 5 * 60 * 1000 }
+  )
+  const categorias = (catRes?.data?.items || []).filter(c => c.quieto > 0).slice(0, 8)
+  const maxCat = Math.max(1, ...categorias.map(c => c.total))
   const porClase = CLASES.map(c => {
     const fila = { clase: c.nombre }
     ESTADOS.forEach(e => {
@@ -212,21 +223,26 @@ function CapitalInmovilizado({ inventario, ciclo }) {
     return fila
   })
   const inmov = sumar(inventario.por_clase_estado.filter(r => r.estado === 'inmovilizado'))
+  const lento = sumar(inventario.por_clase_estado.filter(r => r.estado === 'lento'))
 
   return (
     <div className="card">
       <div className="section-header">
         <CubeIcon className="w-5 h-5 text-[var(--text-muted)]" />
         <h2 className="font-semibold">Capital inmovilizado en inventario</h2>
-        <span className="text-xs text-[var(--text-muted)] ml-auto">Inventario total {fmtM(ciclo.inventario)} a costo</span>
+        <span className="text-xs text-[var(--text-muted)] ml-auto hidden sm:inline">Inventario total {fmtM(ciclo.inventario)} a costo</span>
+        <Link to="/analisis/capital-inmovilizado" className="btn-secondary text-xs py-1 flex items-center gap-1 whitespace-nowrap">
+          Ver por categoría <ArrowRightIcon className="w-3 h-3" />
+        </Link>
       </div>
 
       <div className="px-5 pb-5 space-y-5">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <p className="text-sm text-[var(--text-secondary)] mb-3">
-              <strong>{fmtM(inmov)}</strong> están quietos: producto sin ventas en 180 días, materia prima que no se
-              recompra hace un año o artículos sin ningún movimiento registrado.
+              <strong>{fmtM(inmov + lento)}</strong> del inventario están quietos: <strong className="text-[var(--danger)]">{fmtM(inmov)}</strong> inmovilizados
+              (producto sin ventas en 180 días, materia prima que no se recompra hace un año o sin ningún movimiento) y{' '}
+              <strong className="text-[var(--warning)]">{fmtM(lento)}</strong> de rotación lenta (stock para más de 180 días).
             </p>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={porClase} layout="vertical" margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
@@ -241,32 +257,44 @@ function CapitalInmovilizado({ inventario, ciclo }) {
           </div>
 
           <div>
-            <p className="text-sm font-medium mb-2">Líneas con más inventario quieto</p>
+            <p className="text-sm font-medium mb-2">Categorías con más inventario quieto</p>
             <table className="w-full text-sm">
               <thead className="text-xs text-[var(--text-muted)]">
                 <tr>
-                  <th className="text-left font-medium py-1">Línea</th>
-                  <th className="text-right font-medium py-1">Inmovilizado</th>
-                  <th className="text-right font-medium py-1">Lento</th>
-                  <th className="text-right font-medium py-1">Total</th>
+                  <th className="text-left font-medium py-1">Categoría</th>
+                  <th className="text-left font-medium py-1 px-2">Inventario</th>
+                  <th className="text-right font-medium py-1">Quieto</th>
+                  <th className="text-right font-medium py-1">%</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-default)]">
-                {inventario.por_linea.map(l => (
-                  <tr key={l.linea}>
-                    <td className="py-1.5 pr-2">{l.linea}</td>
-                    <td className="py-1.5 text-right tabular-nums text-[var(--danger)]">{l.inmovilizado ? fmtM(l.inmovilizado) : '—'}</td>
-                    <td className="py-1.5 text-right tabular-nums text-[var(--warning)]">{l.lento ? fmtM(l.lento) : '—'}</td>
-                    <td className="py-1.5 text-right tabular-nums">{fmtM(l.total)}</td>
+                {categorias.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-center text-xs text-[var(--text-muted)]">Cargando…</td></tr>
+                )}
+                {categorias.map(c => (
+                  <tr key={c.clave}>
+                    <td className="py-1.5 pr-2 truncate max-w-[10rem]" title={c.nombre}>{c.nombre}</td>
+                    <td className="py-1.5 px-2 w-1/3">
+                      <div className="flex h-2 rounded-sm overflow-hidden bg-[var(--bg-tertiary)]" style={{ width: `${(c.total / maxCat) * 100}%` }} title={`Inmovilizado ${fmtQ(c.inmovilizado)} · Lento ${fmtQ(c.lento)} · Activo ${fmtQ(c.activo)}`}>
+                        <div style={{ width: `${(c.inmovilizado / c.total) * 100}%`, background: '#DC2626' }} />
+                        <div style={{ width: `${(c.lento / c.total) * 100}%`, background: '#F59E0B' }} />
+                        <div style={{ width: `${(c.activo / c.total) * 100}%`, background: '#059669' }} />
+                      </div>
+                    </td>
+                    <td className="py-1.5 text-right tabular-nums text-[var(--danger)]">{fmtM(c.quieto)}</td>
+                    <td className="py-1.5 text-right tabular-nums text-xs text-[var(--text-muted)]">{c.pct_quieto}%</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <Link to="/analisis/capital-inmovilizado" className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] hover:underline">
+              Ver detalle por subcategoría, sublínea y artículo <ArrowRightIcon className="w-3 h-3" />
+            </Link>
           </div>
         </div>
 
         <div>
-          <p className="text-sm font-medium mb-2">Artículos inmovilizados de mayor valor</p>
+          <p className="text-sm font-medium mb-2">Artículos inmovilizados de mayor valor (top 5)</p>
           <div className="overflow-x-auto rounded-lg border border-[var(--border-default)]">
             <table className="w-full text-sm">
               <thead className="bg-[var(--bg-secondary)] text-xs text-[var(--text-muted)]">
@@ -279,7 +307,7 @@ function CapitalInmovilizado({ inventario, ciclo }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-default)]">
-                {inventario.top_inmovilizado.map(a => (
+                {inventario.top_inmovilizado.slice(0, 5).map(a => (
                   <tr key={a.codigo_articulo}>
                     <td className="px-3 py-2">
                       <p className="truncate max-w-xs" title={a.articulo}>{a.articulo}</p>

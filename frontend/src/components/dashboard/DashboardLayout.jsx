@@ -32,7 +32,10 @@ const navigation = [
   { name: 'Inventario', href: '/inventario', icon: CubeIcon },
   { name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon },
   // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
-  { name: 'Salud financiera', href: '/analisis', icon: ChartBarIcon },
+  {
+    name: 'Salud financiera', href: '/analisis', icon: ChartBarIcon,
+    children: [{ name: 'Capital inmovilizado', href: '/analisis/capital-inmovilizado' }],
+  },
   { name: 'Márgenes', href: '/margenes', icon: TagIcon },
   // { name: 'SAT', href: '/sat', icon: DocumentCheckIcon },
   { name: 'Asistente IA', href: '/asistente', icon: ChatBubbleLeftRightIcon },
@@ -41,8 +44,13 @@ const navigation = [
   { name: 'Usuarios', href: '/usuarios', icon: UsersIcon, adminOnly: true },
 ]
 
+// Los subitems se muestran cuando se está en la sección (la página o una de sus hijas)
+const enSeccionDe = (pathname) => (item) =>
+  pathname === item.href || (item.children || []).some(c => pathname === c.href)
+
 export default function DashboardLayout({ children }) {
   const location = useLocation()
+  const enSeccion = enSeccionDe(location.pathname)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout, isAdmin } = useAuth()
 
@@ -82,8 +90,8 @@ export default function DashboardLayout({ children }) {
                 .map((item) => {
                 const isActive = location.pathname === item.href
                 return (
+                  <div key={item.name} className="space-y-1">
                   <Link
-                    key={item.name}
                     to={item.href}
                     className={isActive ? 'nav-link-active' : 'nav-link'}
                     onClick={() => setSidebarOpen(false)}
@@ -91,6 +99,17 @@ export default function DashboardLayout({ children }) {
                     <item.icon className="w-5 h-5" />
                     <span>{item.name}</span>
                   </Link>
+                  {item.children && enSeccion(item) && item.children.map(c => (
+                    <Link
+                      key={c.href}
+                      to={c.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`${location.pathname === c.href ? 'nav-link-active' : 'nav-link'} ml-8 py-1.5 text-sm`}
+                    >
+                      <span>{c.name}</span>
+                    </Link>
+                  ))}
+                  </div>
                 )
               })}
             </nav>
@@ -135,8 +154,8 @@ export default function DashboardLayout({ children }) {
               .map((item) => {
               const isActive = location.pathname === item.href
               return (
+                <div key={item.name} className="space-y-1">
                 <Link
-                  key={item.name}
                   to={item.href}
                   className={isActive ? 'nav-link-active' : 'nav-link'}
                 >
@@ -146,6 +165,16 @@ export default function DashboardLayout({ children }) {
                     <span className="ml-auto w-2 h-2 rounded-full bg-[var(--success)]"></span>
                   )}
                 </Link>
+                {item.children && enSeccion(item) && item.children.map(c => (
+                  <Link
+                    key={c.href}
+                    to={c.href}
+                    className={`${location.pathname === c.href ? 'nav-link-active' : 'nav-link'} ml-8 py-1.5 text-sm`}
+                  >
+                    <span>{c.name}</span>
+                  </Link>
+                ))}
+                </div>
               )
             })}
           </nav>
@@ -189,7 +218,7 @@ export default function DashboardLayout({ children }) {
                 <span className="text-[var(--text-muted)]">GT</span>
                 <span className="text-[var(--border-strong)]">/</span>
                 <span className="text-[var(--text-primary)] font-medium">
-                  {navigation.find(n => n.href === location.pathname)?.name || 'Dashboard'}
+                  {navigation.flatMap(n => [n, ...(n.children || [])]).find(n => n.href === location.pathname)?.name || 'Dashboard'}
                 </span>
               </nav>
             </div>

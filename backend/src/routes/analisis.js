@@ -907,6 +907,160 @@ router.get('/salud', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Capital inmovilizado por categoría
+// ---------------------------------------------------------------------------
+// Misma jerarquía de producto que Ventas: categoría (marca) › subcategoría (línea)
+// › sublínea › artículo. Es la foto del stock al corte (v_inventario_salud), no
+// depende del período.
+//
+// La vista es cara (agrega toda la historia de ventas y compras) y son ~1,200
+// artículos con stock, así que se lee una sola vez, se guarda 5 minutos en
+// memoria y los filtros/agrupaciones se hacen aquí.
+let cacheInv = { t: 0, filas: null, corte: null };
+async function inventarioSalud(db) {
+  if (cacheInv.filas && Date.now() - cacheInv.t < 5 * 60 * 1000) return cacheInv;
+  const limpio = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;
+  const [filas, corte] = await Promise.all([
+    db.allAsync(`
+      SELECT s.codigo_articulo, s.articulo, s.clase, s.estado, s.stock_actual,
+             s.valor_inventario, s.dias_cobertura, s.ultima_venta, s.ultima_compra,
+             s.dias_sin_venta, s.dias_sin_compra,
+             ${limpio('a.marca', 'Sin categoría')}       AS categoria,
+             ${limpio('a.linea', 'Sin subcategoría')}    AS subcategoria,
+             ${limpio('a.sublinea', 'Sin sublínea')}     AS sublinea
+      FROM analitica.v_inventario_salud s
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = s.articulo_id
+      WHERE s.valor_inventario > 0
+    `),
+    db.getAsync(`SELECT MAX(fecha_snapshot) AS f FROM thermoplastica.fact_inventario_snapshot`),
+  ]);
+  const num = (x) => (x === null || x === undefined ? null : Number(x));
+  cacheInv = {
+    t: Date.now(),
+    corte: corte?.f,
+    filas: filas.map(r => {
+      const dias = r.clase === 'producto' ? num(r.dias_sin_venta) : r.clase === 'materia_prima' ? num(r.dias_sin_compra) : null;
+      return {
+        ...r,
+        valor: Number(r.valor_inventario) || 0,
+        stock_actual: num(r.stock_actual),
+        dias_cobertura: num(r.dias_cobertura),
+        dias_sin_venta: num(r.dias_sin_venta),
+        dias_sin_compra: num(r.dias_sin_compra),
+        // Días desde el último movimiento relevante: venta (producto) o compra (materia prima)
+        dias_sin_mov: dias,
+      };
+    }),
+  };
+  return cacheInv;
+}
+
+function resumirInv(filas) {
+  const suma = (f) => filas.reduce((s, r) => s + (f(r) ? r.valor : 0), 0);
+  const total = suma(() => true);
+  const lento = suma(r => r.estado === 'lento');
+  const inmovilizado = suma(r => r.estado === 'inmovilizado');
+  // Cobertura del grupo = valor / consumo diario (consumo implícito = valor / días de cobertura)
+  const consumo = filas.reduce((s, r) => s + (r.dias_cobertura > 0 ? r.valor / r.dias_cobertura : 0), 0);
+  const r1 = (x) => Math.round(x * 10) / 10;
+  return {
+    articulos: filas.length,
+    articulos_quietos: filas.filter(r => r.estado !== 'activo').length,
+    total: Math.round(total),
+    activo: Math.round(total - lento - inmovilizado),
+    lento: Math.round(lento),
+    inmovilizado: Math.round(inmovilizado),
+    quieto: Math.round(lento + inmovilizado),
+    pct_quieto: total > 0 ? r1((lento + inmovilizado) / total * 100) : 0,
+    pct_inmovilizado: total > 0 ? r1(inmovilizado / total * 100) : 0,
+    dias_cobertura: consumo > 0 ? Math.round(total / consumo) : null,
+  };
+}
+
+const TRAMOS_INV = [
+  { id: '0_90', hasta: 90 }, { id: '91_180', hasta: 180 }, { id: '181_365', hasta: 365 },
+  { id: '366_730', hasta: 730 }, { id: 'mas_730', hasta: Infinity },
+];
+
+// GET /api/analisis/inventario-quieto?dim=categoria&categoria=&subcategoria=&sublinea=&estado=
+router.get('/inventario-quieto', async (req, res) => {
+  try {
+    const db = req.app.get('db');
+    const dim = ['categoria', 'subcategoria', 'sublinea', 'articulo'].includes(req.query.dim) ? req.query.dim : 'categoria';
+    const { filas: todas, corte } = await inventarioSalud(db);
+
+    let filas = todas;
+    for (const k of ['categoria', 'subcategoria', 'sublinea']) {
+      if (req.query[k]) filas = filas.filter(r => r[k] === req.query[k]);
+    }
+    const totales = resumirInv(filas);
+
+    // Agrupación por el nivel pedido
+    const grupos = new Map();
+    for (const r of filas) {
+      const clave = dim === 'articulo' ? r.codigo_articulo : r[dim];
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(r);
+    }
+    const items = [...grupos.entries()].map(([clave, rs]) => {
+      const g = resumirInv(rs);
+      const a = rs[0];
+      return {
+        clave,
+        nombre: dim === 'articulo' ? a.articulo : clave,
+        ...g,
+        participacion_quieto: totales.quieto > 0 ? Math.round(g.quieto / totales.quieto * 1000) / 10 : 0,
+        ...(dim === 'articulo' ? {
+          clase: a.clase, estado: a.estado, dias_sin_mov: a.dias_sin_mov, stock_actual: a.stock_actual,
+          ultima_venta: a.ultima_venta, ultima_compra: a.ultima_compra,
+        } : {}),
+      };
+    }).sort((x, y) => y.quieto - x.quieto || y.total - x.total);
+
+    const antiguedad = [
+      ...TRAMOS_INV.map((t, i) => {
+        const desde = i === 0 ? -Infinity : TRAMOS_INV[i - 1].hasta;
+        const rs = filas.filter(r => r.dias_sin_mov !== null && r.dias_sin_mov > desde && r.dias_sin_mov <= t.hasta);
+        return { tramo: t.id, articulos: rs.length, valor: Math.round(rs.reduce((s, r) => s + r.valor, 0)) };
+      }),
+      (() => {
+        const rs = filas.filter(r => r.dias_sin_mov === null);
+        return { tramo: 'sin_registro', articulos: rs.length, valor: Math.round(rs.reduce((s, r) => s + r.valor, 0)) };
+      })(),
+    ];
+
+    const porClase = [];
+    for (const clase of ['materia_prima', 'producto', 'sin_movimiento']) {
+      for (const estado of ['activo', 'lento', 'inmovilizado']) {
+        const rs = filas.filter(r => r.clase === clase && r.estado === estado);
+        if (rs.length) porClase.push({ clase, estado, articulos: rs.length, valor: Math.round(rs.reduce((s, r) => s + r.valor, 0)) });
+      }
+    }
+
+    // Artículos de la selección (los quietos por defecto), de mayor valor
+    const estado = ['inmovilizado', 'lento', 'activo'].includes(req.query.estado) ? req.query.estado : null;
+    const articulos = filas
+      .filter(r => (estado ? r.estado === estado : r.estado !== 'activo'))
+      .sort((x, y) => y.valor - x.valor)
+      .slice(0, 100)
+      .map(r => ({
+        codigo_articulo: r.codigo_articulo, articulo: r.articulo, clase: r.clase, estado: r.estado,
+        stock_actual: r.stock_actual, valor: Math.round(r.valor), dias_cobertura: r.dias_cobertura,
+        dias_sin_mov: r.dias_sin_mov, ultima_venta: r.ultima_venta, ultima_compra: r.ultima_compra,
+        categoria: r.categoria, subcategoria: r.subcategoria, sublinea: r.sublinea,
+      }));
+
+    res.json({
+      status: 'success',
+      data: { dim, fecha_corte: corte, totales, items: items.slice(0, 500), antiguedad, por_clase_estado: porClase, articulos },
+    });
+  } catch (error) {
+    console.error('[GET /analisis/inventario-quieto] Error:', error);
+    res.status(500).json({ status: 'error', message: 'Error al calcular el inventario inmovilizado' });
+  }
+});
+
 // GET /api/analisis/proyeccion-ventas?meses=6
 router.get('/proyeccion-ventas', async (req, res) => {
   try {
