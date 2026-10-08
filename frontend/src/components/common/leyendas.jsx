@@ -228,8 +228,8 @@ export const LEYENDAS = {
   dso_panel: {
     titulo: 'DSO · días cobrando',
     texto: <>
-      Cartera operativa por cobrar ÷ ventas diarias con IVA del período.
-      <Nota>“Operativa” excluye lo vencido hace más de 90 días (cobro dudoso). Mismo cálculo que Salud financiera.</Nota>
+      Lo que los clientes deben hoy ÷ lo que se vende en un día (con IVA, promedio del período).
+      <Nota>No cuenta facturas vencidas hace más de 90 días: se tratan como cobro dudoso y distorsionarían el número. Mismo cálculo que Salud financiera.</Nota>
     </>,
   },
   dio_panel: {
@@ -239,8 +239,8 @@ export const LEYENDAS = {
   dpo_panel: {
     titulo: 'DPO · días pagando',
     texto: <>
-      Saldo operativo por pagar a proveedores ÷ compras diarias con IVA del período.
-      <Nota>“Operativo” excluye facturas vencidas hace más de 90 días, que suelen estar sin depurar en el ERP. Mismo cálculo que Salud financiera.</Nota>
+      Lo que se debe hoy a proveedores ÷ lo que se compra en un día (con IVA, promedio del período).
+      <Nota>No cuenta facturas de proveedor vencidas hace más de 90 días: casi siempre son saldos viejos sin depurar en el ERP, no deudas reales. Mismo cálculo que Salud financiera.</Nota>
     </>,
   },
   ccc_panel: {
@@ -533,16 +533,27 @@ export const LEYENDAS = {
     texto: <>
       Días de cobro + días de inventario − días de pago.
       <L>
-        <li><strong>Cobro:</strong> cartera operativa ÷ ventas diarias con IVA del período.</li>
-        <li><strong>Inventario:</strong> inventario a costo hoy ÷ costo de venta diario.</li>
-        <li><strong>Pago:</strong> proveedores operativos ÷ compras diarias con IVA.</li>
+        <li><strong>Cobro:</strong> lo que deben los clientes hoy ÷ ventas de un día (con IVA).</li>
+        <li><strong>Inventario:</strong> inventario a costo hoy ÷ costo de lo vendido en un día.</li>
+        <li><strong>Pago:</strong> lo que se debe a proveedores hoy ÷ compras de un día (con IVA).</li>
       </L>
-      <Nota>“Operativo” excluye saldos vencidos hace más de 90 días (cobro dudoso o facturas sin depurar).</Nota>
+      <Nota>Los promedios diarios son del período seleccionado. No se cuentan saldos vencidos hace más de 90 días (cobros dudosos y facturas de proveedor sin depurar), que se muestran aparte al final de la página.</Nota>
     </>,
   },
   capital_trabajo: {
     titulo: 'Capital de trabajo',
-    texto: <>Cartera operativa + inventario − proveedores operativos, a hoy. El % es capital ÷ ventas del período anualizadas (× 365 ÷ días).</>,
+    texto: <>
+      El dinero que el negocio tiene “atrapado” en la operación del día a día:
+      <L>
+        <li><strong>+ Por cobrar a clientes:</strong> facturas de clientes pendientes de pago.</li>
+        <li><strong>+ Inventario:</strong> mercadería en bodega, valuada a costo.</li>
+        <li><strong>− Por pagar a proveedores:</strong> facturas de proveedores aún no pagadas; ese dinero lo financia el proveedor.</li>
+      </L>
+      <Nota>
+        Saldos a hoy. En cobros y pagos no se cuentan facturas vencidas hace más de 90 días: las de clientes se tratan como cobro dudoso y las de proveedores casi siempre son saldos viejos sin depurar en el ERP.
+        El % compara ese dinero con las ventas de un año al ritmo del período: cuántos quetzales hay atrapados por cada Q100 vendidos.
+      </Nota>
+    </>,
   },
   caja_crecimiento: {
     titulo: 'Caja que pide el crecimiento',

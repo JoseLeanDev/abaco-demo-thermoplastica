@@ -102,7 +102,10 @@ function Kpis({ salud }) {
         <span className="kpi-label flex items-center gap-1">Capital de trabajo <Leyenda k="capital_trabajo" /></span>
         <p className="kpi-value">{fmtM(ct.capital_trabajo)}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
-          {fmtPct(ct.capital_trabajo_pct_ventas)} de las ventas anualizadas del período
+          Clientes {fmtM(ciclo.cxc_operativa)} + inventario {fmtM(ciclo.inventario)} − proveedores {fmtM(ciclo.cxp_operativa)}
+        </p>
+        <p className="text-xs text-[var(--text-muted)]">
+          Equivale al {fmtPct(ct.capital_trabajo_pct_ventas)} de lo que se vende en un año
         </p>
       </div>
       <div className="kpi-card card-hover">

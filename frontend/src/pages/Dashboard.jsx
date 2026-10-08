@@ -242,7 +242,7 @@ export default function Dashboard() {
           Compras y gastos operativos separados por <code>es_gasto_operativo</code>. Flujos (ventas, compras, gastos, márgenes) = período del filtro vs mismo período del año anterior.
           Margen % = solo líneas de venta con costo en el ERP ({fmtPct(k.pct_ventas_sin_costo)} de las ventas vino sin costo y no entra al %); el margen en Q aplica ese % a todas las ventas.
           CxC = snapshot vivo por buckets (por vencer / 1-30 / 31-60 / 61-90 / 90+); CxC y CxP incluyen solo documentos emitidos en el período.
-          CxP = saldo pendiente × factura con fecha de vencimiento real del ERP. DSO/DIO/DPO y el ciclo de caja usan el mismo cálculo que Salud financiera: saldos operativos al corte (sin lo vencido hace más de 90 días) ÷ flujo diario del período. Health Score compone 7 dimensiones con pesos (crecimiento 20%, margen 20%, EBITDA 15%, cobertura CxC/CxP 15%, cobros 10%, concentración 10%, disciplina crédito 10%).
+          CxP = saldo pendiente × factura con fecha de vencimiento real del ERP. DSO/DIO/DPO y el ciclo de caja usan el mismo cálculo que Salud financiera: lo que deben los clientes / se debe a proveedores hoy (sin facturas vencidas hace más de 90 días) ÷ ventas / compras promedio de un día del período. Health Score compone 7 dimensiones con pesos (crecimiento 20%, margen 20%, EBITDA 15%, cobertura CxC/CxP 15%, cobros 10%, concentración 10%, disciplina crédito 10%).
           Sincronización diaria via n8n · Datos al {d.fecha_corte}.
         </p>
       </div>
