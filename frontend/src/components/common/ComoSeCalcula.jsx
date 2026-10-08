@@ -54,9 +54,9 @@ export default function ComoSeCalcula({ titulo, children, className = '', claro 
         onMouseEnter={abrir}
         onMouseLeave={cerrar}
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); pos ? setPos(null) : abrir() }}
-        className={`inline-flex p-0.5 -m-0.5 ${claro ? 'text-white' : 'text-[var(--text-muted)]'} opacity-50 hover:opacity-100 focus:opacity-100 focus:outline-none`}
+        className={`inline-flex p-0.5 -m-0.5 rounded-full cursor-help ${claro ? 'text-white/70 hover:text-white' : 'text-[var(--text-secondary)] hover:text-[#001639]'} opacity-80 hover:opacity-100 focus:opacity-100 focus:outline-none`}
       >
-        <InformationCircleIcon className="w-3.5 h-3.5" />
+        <InformationCircleIcon className="w-4 h-4" strokeWidth={1.8} />
       </button>
       {pos && createPortal(
         <div
