@@ -32,24 +32,26 @@ const fmtInt = (n) => Number(n || 0).toLocaleString('es-GT')
 export default function Inventario() {
   const [busqueda, setBusqueda] = useState('')
   const [lineaSel, setLinea]    = useState('')
+  const [categoriaSel, setCategoria] = useState('')
   const [filtro, setFiltro]     = useState('con_stock')
 
   const { params: periodo } = usePeriodo()
   const { data: resumenRes, isLoading: loadingResumen } = useQuery(
-    ['inventario-resumen', periodo],
-    () => endpoints.inventario.resumen(periodo),
+    ['inventario-resumen', periodo, categoriaSel],
+    () => endpoints.inventario.resumen({ ...periodo, categoria: categoriaSel || undefined }),
     { keepPreviousData: true }
   )
   const { data: detalleRes, isFetching: fetchingDetalle } = useQuery(
-    ['inventario-detalle', busqueda, lineaSel, filtro, periodo],
-    () => endpoints.inventario.detalle({ busqueda, linea: lineaSel, filtro, limit: 400, ...periodo }),
+    ['inventario-detalle', busqueda, categoriaSel, lineaSel, filtro, periodo],
+    () => endpoints.inventario.detalle({ busqueda, categoria: categoriaSel || undefined, linea: lineaSel, filtro, limit: 400, ...periodo }),
     { keepPreviousData: true }
   )
 
   const r      = resumenRes?.data || {}
   const kpis   = r.kpis || {}
   const mov    = r.movimiento || {}
-  const lineas = r.por_linea || []
+  // Sin categoría seleccionada se listan categorías; con una, sus subcategorías.
+  const grupos = categoriaSel ? (r.por_linea || []) : (r.por_categoria || [])
   const topVal = r.top_valor || []
   const topProv = r.top_proveedores || []
   const filas  = detalleRes?.data?.filas || []
@@ -188,36 +190,51 @@ export default function Inventario() {
         <div className="card">
           <div className="section-header">
             <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">Valor por línea de producto</h2>
+            <h2 className="font-semibold">
+              {categoriaSel ? <>Subcategorías de {categoriaSel}</> : 'Valor por categoría'}
+            </h2>
+            {categoriaSel && (
+              <button onClick={() => { setCategoria(''); setLinea('') }} className="ml-auto text-xs text-[var(--accent-blue)] hover:underline">
+                ← Todas las categorías
+              </button>
+            )}
           </div>
           <div className="p-5 pt-0 space-y-3">
-            {lineas.length === 0 && <p className="text-sm text-[var(--text-muted)]">Sin datos.</p>}
-            {lineas.map((c, i) => (
-              <button
-                key={c.linea}
-                onClick={() => setLinea(c.linea === lineaSel ? '' : c.linea)}
-                className="w-full text-left space-y-1.5 hover:opacity-90 transition-opacity"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
-                    <span className="text-sm truncate">{c.linea}</span>
-                    <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">· {fmtInt(c.articulos)}</span>
+            {grupos.length === 0 && <p className="text-sm text-[var(--text-muted)]">Sin datos.</p>}
+            {grupos.map((c, i) => {
+              const activo = categoriaSel ? lineaSel === c.nombre : false
+              return (
+                <button
+                  key={c.nombre}
+                  onClick={() => (categoriaSel
+                    ? setLinea(c.nombre === lineaSel ? '' : c.nombre)
+                    : (setCategoria(c.nombre), setLinea('')))}
+                  className="w-full text-left space-y-1.5 hover:opacity-90 transition-opacity"
+                  title={categoriaSel ? 'Filtrar el detalle por esta subcategoría' : 'Ver subcategorías'}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
+                      <span className="text-sm truncate">{c.nombre}</span>
+                      <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">· {fmtInt(c.articulos)} con stock</span>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums whitespace-nowrap">
+                      {fmtM(c.valor)} <span className="text-xs text-[var(--text-muted)]">({c.porcentaje}%)</span>
+                    </span>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums whitespace-nowrap">
-                    {fmtM(c.valor)} <span className="text-xs text-[var(--text-muted)]">({c.porcentaje}%)</span>
-                  </span>
-                </div>
-                <div className="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      lineaSel === c.linea ? 'bg-[#001639]' : 'bg-teal-500'
-                    }`}
-                    style={{ width: `${Math.max(c.porcentaje, 1)}%` }}
-                  />
-                </div>
-              </button>
-            ))}
+                  <div className="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${activo ? 'bg-[#001639]' : 'bg-teal-500'}`}
+                      style={{ width: `${Math.max(c.porcentaje, 1)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] pl-8">
+                    {c.dias_inventario !== null ? `${fmtInt(c.dias_inventario)} días de inventario` : 'sin ventas en el período'}
+                    {c.sin_venta_valor > 0 && <> · <span className={c.sin_venta_valor / c.valor >= 0.5 ? 'text-[var(--warning)]' : ''}>{fmtM(c.sin_venta_valor)} sin venta en el período</span></>}
+                  </p>
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -255,9 +272,9 @@ export default function Inventario() {
                 ))}
               </tbody>
             </table>
-            {lineaSel && (
-              <button onClick={() => setLinea('')} className="mt-3 text-xs text-[var(--accent-blue)] hover:underline">
-                Limpiar filtro de línea: {lineaSel}
+            {(categoriaSel || lineaSel) && (
+              <button onClick={() => { setCategoria(''); setLinea('') }} className="mt-3 text-xs text-[var(--accent-blue)] hover:underline">
+                Limpiar filtro: {[categoriaSel, lineaSel].filter(Boolean).join(' › ')}
               </button>
             )}
           </div>
@@ -356,9 +373,9 @@ export default function Inventario() {
             <CubeIcon className="w-5 h-5 text-[var(--text-muted)]" />
             <span className="text-sm text-[var(--text-muted)]">
               {fetchingDetalle ? 'Actualizando…' : `${fmtInt(filas.length)} de ${fmtInt(totalFilas)} artículos`}
-              {lineaSel && (
+              {categoriaSel && (
                 <>
-                  {' · línea: '}<span className="badge-warning ml-1">{lineaSel}</span>
+                  {' · categoría: '}<span className="badge-warning ml-1">{[categoriaSel, lineaSel].filter(Boolean).join(' › ')}</span>
                 </>
               )}
             </span>

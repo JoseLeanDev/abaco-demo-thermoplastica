@@ -29,9 +29,9 @@ import {
   useMargenProductoDetalle,
   useMargenVendedores,
   useMargenClientes,
-  useMargenLineas,
 } from '../hooks/useCfoData'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import MargenCategorias from '../components/margenes/MargenCategorias'
 
 const formatGTQ = (value) => {
   if (!value && value !== 0) return 'Q 0'
@@ -109,7 +109,6 @@ export default function Margenes() {
   const { data, isLoading, error } = useMargenes()
   const { data: vendedoresData, isLoading: vLoading } = useMargenVendedores()
   const { data: clientesData, isLoading: cLoading } = useMargenClientes()
-  const { data: lineasData, isLoading: lLoading } = useMargenLineas()
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null)
   const { data: detalleData } = useMargenProductoDetalle(productoSeleccionado?.id)
@@ -122,7 +121,6 @@ export default function Margenes() {
   const { resumen, productos } = data.data
   const vendedores = vendedoresData?.data || []
   const clientes = clientesData?.data || []
-  const lineas = lineasData?.data || []
 
   const chartData = detalleData?.data?.historial?.map(h => ({
     fecha: h.fecha.slice(0, 7),
@@ -135,7 +133,7 @@ export default function Margenes() {
     { id: 'productos', label: 'Por Producto', icon: TagIcon },
     { id: 'vendedores', label: 'Por Vendedor', icon: UsersIcon },
     { id: 'clientes', label: 'Por Cliente', icon: BuildingStorefrontIcon },
-    { id: 'lineas', label: 'Por Línea', icon: ChartBarIcon },
+    { id: 'categorias', label: 'Por Categoría', icon: ChartBarIcon },
   ]
 
   return (
@@ -147,7 +145,7 @@ export default function Margenes() {
           Márgenes
         </h1>
         <p className="text-sm text-[var(--text-muted)] mt-1">
-          Precio contra costo real: productos, vendedores, clientes y líneas
+          Precio contra costo real: productos, vendedores, clientes y categorías
         </p>
         <PeriodoActivo nota="margen vs mismo período del año anterior" className="mt-1" />
       </div>
@@ -485,67 +483,8 @@ export default function Margenes() {
         </div>
       )}
 
-      {/* TAB: LÍNEAS */}
-      {activeTab === 'lineas' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
-            <div className="card">
-              <div className="p-4 border-b border-[var(--border-color)]">
-                <h2 className="font-semibold flex items-center gap-2">
-                  <ChartBarIcon className="w-5 h-5 text-[var(--accent-primary)]" />
-                  Margen por Línea de Producto
-                </h2>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {lineas.filter(l => l.semaforo === 'rojo').length} líneas con pérdida de margen
-                </p>
-              </div>
-              {lLoading ? (
-                <div className="p-6 text-[var(--text-muted)]">Cargando líneas...</div>
-              ) : (
-                <SortableTable
-                  columns={[
-                    { key: 'nombre', label: 'Línea', sortable: false },
-                    { key: 'unidades_12m', label: 'Unidades', className: 'text-right', render: r => Math.round(r.unidades_12m).toLocaleString() },
-                    { key: 'ventas_12m', label: 'Ventas período', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
-                    { key: 'margen_pct_actual', label: 'Margen Actual', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
-                    { key: 'margen_pct_historico', label: 'Año anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
-                    { key: 'delta_puntos', label: 'Puntos perdidos', className: 'text-right', render: r => (
-                      <span className={r.delta_puntos < 0 ? 'text-red-400' : 'text-emerald-400'}>
-                        {r.delta_puntos > 0 ? '+' : ''}{formatNum(r.delta_puntos)}
-                      </span>
-                    )},
-                    { key: 'quetzales_perdidos', label: 'Q que dejaste de ganar', className: 'text-right', render: r => (
-                      r.quetzales_perdidos > 0 ? <span className="text-red-400">{formatGTQ(r.quetzales_perdidos)}</span> : '-'
-                    )},
-                    { key: 'semaforo', label: '', className: 'text-center', sortable: false, render: r => (
-                      <span className={`inline-block w-3 h-3 rounded-full ${
-                        r.semaforo === 'rojo' ? 'bg-red-500' :
-                        r.semaforo === 'ambar' ? 'bg-amber-500' : 'bg-emerald-500'
-                      }`} />
-                    )},
-                  ]}
-                  data={lineas}
-                  keyField="id"
-                />
-              )}
-            </div>
-          </div>
-          <div className="card p-6">
-            <h3 className="font-semibold mb-4">Margen por Línea</h3>
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={lineas} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                  <XAxis type="number" tick={{ fontSize: 10 }} />
-                  <YAxis dataKey="nombre" type="category" width={120} tick={{ fontSize: 10 }} />
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '12px' }} />
-                  <Bar dataKey="margen_pct_actual" fill="#10b981" name="Margen %" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* TAB: CATEGORÍAS (drill-down hasta artículo) */}
+      {activeTab === 'categorias' && <MargenCategorias />}
     </div>
   )
 }

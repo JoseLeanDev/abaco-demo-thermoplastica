@@ -8,6 +8,21 @@ const M = require('../services/margen');
 // de fechas aplica al MOVIMIENTO: ventas y compras del período, rotación y artículos
 // con stock que no se vendieron en la ventana.
 
+function grupoJSON(r, total, P) {
+  const valor = parseFloat(r.valor) || 0;
+  const cv = parseFloat(r.costo_vendido) || 0;
+  return {
+    nombre: r.grupo,
+    articulos: parseInt(r.articulos) || 0,
+    valor,
+    porcentaje: total > 0 ? Math.round(valor / total * 1000) / 10 : 0,
+    costo_vendido: cv,
+    // Días de inventario al ritmo de venta del período (null si no se vendió nada)
+    dias_inventario: cv > 0 ? Math.round(valor / (cv / P.dias)) : null,
+    sin_venta_valor: parseFloat(r.sin_venta_valor) || 0,
+  };
+}
+
 // GET /api/inventario   Resumen: KPIs + top artículos + distribución por línea
 router.get('/', async (req, res) => {
   try {
@@ -46,17 +61,35 @@ router.get('/', async (req, res) => {
       FROM thermoplastica.fact_inventario_snapshot
     `);
 
-    // Distribución por línea (top 10)
-    const porLinea = await db.allAsync(`
-      SELECT COALESCE(a.linea, 'Sin línea') AS linea,
-             COUNT(*)                        AS articulos,
-             COALESCE(SUM(i.valor_inventario), 0) AS valor
+    // Distribución por categoría y subcategoría, con el movimiento del período.
+    // Categoría = campo "marca" del ERP, subcategoría = "linea" (igual que en Ventas).
+    const categoriaSel = (req.query.categoria || '').trim();
+    const porGrupo = (expr, filtroSql, params) => db.allAsync(`
+      WITH vend AS (
+        SELECT articulo_id, ${M.costo()} AS costo
+        FROM thermoplastica.fact_ventas_linea
+        WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+        GROUP BY articulo_id
+      )
+      SELECT ${expr}                                           AS grupo,
+             COUNT(*) FILTER (WHERE i.stock_actual > 0)        AS articulos,
+             COALESCE(SUM(i.valor_inventario), 0)              AS valor,
+             COALESCE(SUM(v.costo), 0)                         AS costo_vendido,
+             COALESCE(SUM(i.valor_inventario) FILTER (WHERE i.stock_actual > 0 AND v.articulo_id IS NULL), 0) AS sin_venta_valor
       FROM thermoplastica.fact_inventario_snapshot i
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = i.articulo_id
-      GROUP BY a.linea
+      LEFT JOIN vend v ON v.articulo_id = i.articulo_id
+      ${filtroSql}
+      GROUP BY 1
+      HAVING SUM(i.valor_inventario) > 0
       ORDER BY valor DESC
-      LIMIT 10
-    `);
+    `, params);
+    const porCategoria = await porGrupo(`COALESCE(NULLIF(TRIM(a.marca), ''), 'Sin categoría')`, '', []);
+    const porLinea = await porGrupo(
+      `COALESCE(NULLIF(TRIM(a.linea), ''), 'Sin subcategoría')`,
+      categoriaSel ? `WHERE COALESCE(NULLIF(TRIM(a.marca), ''), 'Sin categoría') = ?` : '',
+      categoriaSel ? [categoriaSel] : []
+    );
 
     // Top 10 artículos por valor de inventario
     const topValor = await db.allAsync(`
@@ -114,12 +147,13 @@ router.get('/', async (req, res) => {
           margen_bruto_promedio: parseFloat(kpis.margen_bruto_promedio) || 0,
           articulos_con_margen: parseInt(kpis.articulos_con_margen) || 0,
         },
-        por_linea: porLinea.map(r => ({
-          linea: r.linea,
-          articulos: parseInt(r.articulos) || 0,
-          valor: parseFloat(r.valor) || 0,
-          porcentaje: total > 0 ? Math.round(parseFloat(r.valor) / total * 1000) / 10 : 0,
-        })),
+        categoria_sel: categoriaSel || null,
+        por_categoria: porCategoria.map(r => grupoJSON(r, total, P)),
+        // Subcategorías (de la categoría seleccionada, si hay)
+        por_linea: porLinea.map(r => {
+          const g = grupoJSON(r, porLinea.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0), P);
+          return { ...g, linea: g.nombre };
+        }),
         top_valor: topValor.map(r => ({
           codigo: r.codigo,
           descripcion: r.descripcion,
@@ -153,6 +187,7 @@ router.get('/detalle', async (req, res) => {
     const offset   = parseInt(req.query.offset) || 0;
     const busqueda = (req.query.busqueda || '').trim();
     const linea    = (req.query.linea || '').trim();
+    const categoria = (req.query.categoria || '').trim();
     const filtro   = (req.query.filtro || 'todos').trim();   // 'todos' | 'con_stock' | 'sin_stock' | 'sin_precio' | 'con_transito' | 'sin_venta_periodo'
     const P = parsePeriodo(req);
     // Ventas por artículo en el período del filtro global
@@ -172,9 +207,13 @@ router.get('/detalle', async (req, res) => {
       const p = `$${params.length}`;
       where.push(`(a.codigo_articulo ILIKE ${p} OR a.descripcion ILIKE ${p} OR p.nombre ILIKE ${p})`);
     }
+    if (categoria) {
+      params.push(categoria);
+      where.push(`COALESCE(NULLIF(TRIM(a.marca), ''), 'Sin categoría') = $${params.length}`);
+    }
     if (linea) {
       params.push(linea);
-      where.push(`a.linea = $${params.length}`);
+      where.push(`COALESCE(NULLIF(TRIM(a.linea), ''), 'Sin subcategoría') = $${params.length}`);
     }
     if (filtro === 'con_stock')     where.push(`i.stock_actual > 0`);
     else if (filtro === 'sin_stock')   where.push(`(i.stock_actual IS NULL OR i.stock_actual = 0)`);
