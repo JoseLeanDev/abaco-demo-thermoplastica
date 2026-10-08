@@ -17,7 +17,8 @@ function gastoFilter(incluirGastos) {
 // GET /api/compras   Resumen: KPIs + serie mensual
 router.get('/', async (req, res) => {
   try {
-    const { desde, hasta } = parseWindow(req);
+    const P = parseWindow(req);
+    const { desde, hasta } = P;
     const incluirGastos = req.query.incluir_gastos === 'true';
     const filtroGasto = gastoFilter(incluirGastos);
 
@@ -50,12 +51,26 @@ router.get('/', async (req, res) => {
       ORDER BY 1
     `, [desde, hasta]);
 
+    // Mismo período del año anterior (misma regla que el resto de la plataforma)
+    const prev = await db.getAsync(`
+      SELECT COALESCE(SUM(f.total_sin_iva), 0) AS gasto_sin_iva
+      FROM thermoplastica.fact_compras_linea f
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+      WHERE f.fecha_emision BETWEEN ? AND ?
+        ${filtroGasto}
+    `, [P.prevDesde, P.prevHasta]);
+    const gastoActual = parseFloat(kpis.gasto_sin_iva) || 0;
+    const gastoPrev = parseFloat(prev.gasto_sin_iva) || 0;
+
     res.json({
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
         ventana: { desde, hasta, incluye_gastos_operativos: incluirGastos },
-        gasto_sin_iva: parseFloat(kpis.gasto_sin_iva) || 0,
+        gasto_sin_iva: gastoActual,
+        gasto_prev_sin_iva: gastoPrev,
+        variacion_pct: gastoPrev > 0 ? Math.round((gastoActual - gastoPrev) / gastoPrev * 1000) / 10 : null,
+        comparacion: { desde: P.prevDesde, hasta: P.prevHasta },
         gasto_con_iva: parseFloat(kpis.gasto_con_iva) || 0,
         iva_acreditable: parseFloat(kpis.iva_acreditable) || 0,
         devoluciones_sin_iva: parseFloat(kpis.devoluciones_sin_iva) || 0,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { usePeriodo } from '../context/PeriodoContext'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
@@ -73,14 +73,6 @@ export default function GastosOperativos() {
   const totalFilas   = detalleRes?.data?.total_filas || 0
   const sumaFiltrada = detalleRes?.data?.suma_sin_iva_filtrada || 0
 
-  const tendenciaMensual = useMemo(() => {
-    if (serie.length < 2) return null
-    const ult = serie[serie.length - 1].gasto_sin_iva
-    const prev = serie.slice(0, -1)
-    const avgPrev = prev.reduce((a, b) => a + (b.gasto_sin_iva || 0), 0) / prev.length
-    if (avgPrev === 0) return null
-    return ((ult - avgPrev) / avgPrev) * 100
-  }, [serie])
 
   const centroDominante = centros[0]
   const alertaConcentracion = centroDominante && centroDominante.porcentaje >= 40
@@ -149,21 +141,21 @@ export default function GastosOperativos() {
         </div>
 
         <div className="kpi-card card-hover">
-          <span className="kpi-label flex items-center gap-1">Tendencia mes actual <Leyenda k="tendencia_mes" /></span>
-          {tendenciaMensual === null ? (
+          <span className="kpi-label flex items-center gap-1">vs año anterior <Leyenda k="vs_anio_anterior" /></span>
+          {resumen.variacion_pct == null ? (
             <p className="kpi-value text-[var(--text-muted)]">—</p>
           ) : (
-            <p className={`kpi-value ${tendenciaMensual >= 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>
-              {tendenciaMensual >= 0 ? '+' : ''}{tendenciaMensual.toFixed(1)}%
+            <p className={`kpi-value ${resumen.variacion_pct >= 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>
+              {resumen.variacion_pct >= 0 ? '+' : ''}{resumen.variacion_pct.toFixed(1)}%
             </p>
           )}
           <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1">
-            {tendenciaMensual === null ? 'sin base comparable' : (
+            {resumen.variacion_pct == null ? 'sin datos del año anterior' : (
               <>
-                {tendenciaMensual >= 0
+                {resumen.variacion_pct >= 0
                   ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
                   : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
-                vs promedio de meses previos
+                vs {fmtQ(resumen.gasto_prev_sin_iva)} del mismo período
               </>
             )}
           </p>

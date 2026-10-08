@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../../database/connection');
 const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
+const { cicloPeriodo } = require('../services/cicloCaja');
 
 // GET /api/dashboard
 // Executive briefing CEO-grade: KPIs, aging, YoY, márgenes, inventario, concentración, insights.
@@ -308,13 +309,15 @@ router.get('/', async (req, res) => {
     const posicionNetaWC = cxcTotal - cxpTotal;
     const coberturaCxCCxP = cxpTotal > 0 ? cxcTotal / cxpTotal : null;
 
-    // Cash Conversion Cycle proxy
-    // Los flujos son del período seleccionado → se diarizan con sus días reales.
-    const dso = ventas12m > 0 ? (cxcTotal / (ventas12m / P.dias)) : null;
-    const dpo = compras12m > 0 ? (cxpTotal / (compras12m / P.dias)) : null;
+    // Ciclo de conversión de efectivo: mismo cálculo que Salud financiera
+    // (services/cicloCaja.js): saldos operativos al corte ÷ flujo diario del período.
+    const ciclo = await cicloPeriodo(db, P);
+    const numOrNull = (v) => (v === null || v === undefined ? null : Number(v));
+    const dso = numOrNull(ciclo?.dso);
+    const dio = numOrNull(ciclo?.dio);
+    const dpo = numOrNull(ciclo?.dpo);
+    const ccc = numOrNull(ciclo?.ciclo_caja);
     const valorInventario = parseFloat(inventario.valor_total) || 0;
-    const dio = costoVentas12m > 0 ? (valorInventario / (costoVentas12m / P.dias)) : null;
-    const ccc = (dso !== null && dpo !== null && dio !== null) ? (dso + dio - dpo) : null;
 
     // Tendencia mes anterior
     // Solo los meses que caen dentro del período; los del año previo quedan para el overlay.

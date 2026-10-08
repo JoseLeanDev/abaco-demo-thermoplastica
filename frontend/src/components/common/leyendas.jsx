@@ -227,22 +227,25 @@ export const LEYENDAS = {
   },
   dso_panel: {
     titulo: 'DSO · días cobrando',
-    texto: <>Saldo por cobrar de documentos del período ÷ ventas diarias del período (ventas sin IVA ÷ días del período).</>,
+    texto: <>
+      Cartera operativa por cobrar ÷ ventas diarias con IVA del período.
+      <Nota>“Operativa” excluye lo vencido hace más de 90 días (cobro dudoso). Mismo cálculo que Salud financiera.</Nota>
+    </>,
   },
   dio_panel: {
     titulo: 'DIO · días de inventario',
-    texto: <>Inventario a costo hoy ÷ costo de ventas diario del período.</>,
+    texto: <>Inventario a costo hoy ÷ costo de venta diario del período. Mismo cálculo que Salud financiera.</>,
   },
   dpo_panel: {
     titulo: 'DPO · días pagando',
-    texto: <>Saldo por pagar de facturas del período ÷ compras diarias de materia prima del período.</>,
+    texto: <>
+      Saldo operativo por pagar a proveedores ÷ compras diarias con IVA del período.
+      <Nota>“Operativo” excluye facturas vencidas hace más de 90 días, que suelen estar sin depurar en el ERP. Mismo cálculo que Salud financiera.</Nota>
+    </>,
   },
   ccc_panel: {
     titulo: 'Ciclo de conversión de efectivo',
-    texto: <>
-      DSO + DIO − DPO: días que el efectivo queda atrapado entre pagar a proveedores y cobrar a clientes.
-      <Nota>En Salud financiera se calcula con cartera operativa y montos con IVA, por eso puede diferir un poco de este.</Nota>
-    </>,
+    texto: <>DSO + DIO − DPO: días que el efectivo queda atrapado entre pagar a proveedores y cobrar a clientes. Es el mismo número que en Salud financiera.</>,
   },
   cascada_pl: {
     titulo: 'Cascada P&L',
@@ -304,13 +307,6 @@ export const LEYENDAS = {
   devoluciones_compras: {
     titulo: 'Devoluciones',
     texto: <>Devoluciones a proveedores registradas en las líneas de compra, sin IVA. Gasto neto = compras − devoluciones.</>,
-  },
-  tendencia_mes: {
-    titulo: 'Tendencia del mes',
-    texto: <>
-      (Último mes del período − promedio de los meses anteriores) ÷ ese promedio.
-      <Nota>Si el período termina hoy, el último mes está incompleto y la tendencia sale más baja de lo real.</Nota>
-    </>,
   },
   top_categorias_compras: {
     titulo: 'Categorías de compra',

@@ -13,7 +13,8 @@ const FILTRO_GASTO = 'AND COALESCE(a.es_gasto_operativo, FALSE) = TRUE';
 // GET /api/gastos   Resumen: KPIs + serie mensual
 router.get('/', async (req, res) => {
   try {
-    const { desde, hasta } = parseWindow(req);
+    const P = parseWindow(req);
+    const { desde, hasta } = P;
 
     const kpis = await db.getAsync(`
       SELECT
@@ -44,12 +45,26 @@ router.get('/', async (req, res) => {
       ORDER BY 1
     `, [desde, hasta]);
 
+    // Mismo período del año anterior (misma regla que el resto de la plataforma)
+    const prev = await db.getAsync(`
+      SELECT COALESCE(SUM(f.total_sin_iva), 0) AS gasto_sin_iva
+      FROM thermoplastica.fact_compras_linea f
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+      WHERE f.fecha_emision BETWEEN ? AND ?
+        ${FILTRO_GASTO}
+    `, [P.prevDesde, P.prevHasta]);
+    const gastoActual = parseFloat(kpis.gasto_sin_iva) || 0;
+    const gastoPrev = parseFloat(prev.gasto_sin_iva) || 0;
+
     res.json({
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
         ventana: { desde, hasta },
-        gasto_sin_iva: parseFloat(kpis.gasto_sin_iva) || 0,
+        gasto_sin_iva: gastoActual,
+        gasto_prev_sin_iva: gastoPrev,
+        variacion_pct: gastoPrev > 0 ? Math.round((gastoActual - gastoPrev) / gastoPrev * 1000) / 10 : null,
+        comparacion: { desde: P.prevDesde, hasta: P.prevHasta },
         gasto_con_iva: parseFloat(kpis.gasto_con_iva) || 0,
         iva_acreditable: parseFloat(kpis.iva_acreditable) || 0,
         facturas: parseInt(kpis.facturas) || 0,
