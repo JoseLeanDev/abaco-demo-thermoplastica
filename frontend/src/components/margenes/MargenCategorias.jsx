@@ -39,7 +39,7 @@ export default function MargenCategorias() {
   const { data, isLoading } = useQuery(
     ['margen-categorias', nivel.dim, desde, hasta, JSON.stringify(filtros)],
     () => endpoints.ventas.desglose({ desde, hasta, ...filtros, dim: nivel.dim, limit: 500 }),
-    { keepPreviousData: true }
+    { staleTime: 60 * 1000 }
   )
 
   const items = useMemo(() => {
@@ -132,7 +132,7 @@ export default function MargenCategorias() {
                   {filas.map(it => (
                     <tr
                       key={it.clave}
-                      onClick={() => !esHoja && setPath([...path, { dim: nivel.dim, clave: it.clave, nombre: it.nombre }])}
+                      onClick={() => !esHoja && !isLoading && setPath([...path, { dim: nivel.dim, clave: it.clave, nombre: it.nombre }])}
                       className={`text-sm hover:bg-[var(--bg-secondary)] ${esHoja ? '' : 'cursor-pointer'}`}
                     >
                       <td className="py-2 pr-2 max-w-[18rem]">

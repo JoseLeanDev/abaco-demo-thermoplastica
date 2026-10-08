@@ -47,6 +47,16 @@ async function setupDatabase() {
       console.log('✅ Schema completo');
     }
     
+    // Índices de lectura para el análisis de ventas (filtros por artículo/categoría).
+    // Sin índice por articulo_id, los filtros de producto recorrían el índice único
+    // completo una vez por artículo (~7 s por consulta).
+    try {
+      await db.runAsync(`CREATE INDEX IF NOT EXISTS ix_fact_ventas_articulo_fecha
+        ON thermoplastica.fact_ventas_linea (articulo_id, fecha_emision)`, []);
+    } catch (e) {
+      console.error('No se pudo crear índice de ventas por artículo:', e.message);
+    }
+
     // Verificar si hay datos
     const empresaCount = await db.getAsync('SELECT COUNT(*) as count FROM empresas');
     

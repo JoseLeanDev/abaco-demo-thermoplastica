@@ -95,25 +95,27 @@ export default function TabCategorias() {
   const { data: dRes, isLoading } = useQuery(
     ['ventas-desglose', nivel.dim, ...qKey],
     () => endpoints.ventas.desglose({ ...params, dim: nivel.dim, limit: 500 }),
-    { keepPreviousData: true }
+    { staleTime: 60 * 1000 }
   )
-  const { data: sRes } = useQuery(
+  const { data: sRes, isLoading: sLoading } = useQuery(
     ['ventas-desglose-serie', nivel.dim, ...qKey],
     () => endpoints.ventas.desgloseSerie({ ...params, dim: nivel.dim, top: 6 }),
-    { keepPreviousData: true }
+    { staleTime: 60 * 1000 }
   )
-  const { data: cRes } = useQuery(
+  const { data: cRes, isLoading: cLoading } = useQuery(
     ['ventas-desglose-clientes', ...qKey],
     () => endpoints.ventas.desglose({ ...params, dim: 'cliente', limit: 10 }),
-    { keepPreviousData: true }
+    { staleTime: 60 * 1000 }
   )
-  const { data: vRes } = useQuery(
+  const { data: vRes, isLoading: vLoading } = useQuery(
     ['ventas-desglose-vendedores', ...qKey],
     () => endpoints.ventas.desglose({ ...params, dim: 'vendedor', limit: 10 }),
-    { keepPreviousData: true }
+    { staleTime: 60 * 1000 }
   )
 
-  const d = dRes?.data || {}
+  // Solo se usan datos del nivel actual: con datos de otro nivel, un clic metería
+  // como filtro un valor que no corresponde (p. ej. una subcategoría como sublínea).
+  const d = (dRes?.data?.dim === nivel.dim && dRes.data) || {}
   const items = d.items || []
   const serie = sRes?.data
   const clientes = cRes?.data
@@ -147,7 +149,7 @@ export default function TabCategorias() {
   })), [items])
 
   const drill = (it) => {
-    if (esHoja) return
+    if (esHoja || isLoading || d.dim !== nivel.dim) return
     setPath([...path, { dim: nivel.dim, clave: it.clave, nombre: it.nombre }])
     setBusqueda('')
     setVerPerdidos(false)
@@ -206,7 +208,7 @@ export default function TabCategorias() {
           </div>
           <div className="p-5 pt-0">
             {!serie?.serie?.length ? (
-              <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+              <p className="py-10 text-center text-sm text-[var(--text-muted)]">{sLoading ? 'Cargando…' : 'Sin datos.'}</p>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={serie.serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
@@ -231,7 +233,7 @@ export default function TabCategorias() {
           </div>
           <div className="p-5 pt-0">
             {comparativo.length === 0 ? (
-              <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+              <p className="py-10 text-center text-sm text-[var(--text-muted)]">{isLoading ? 'Cargando…' : 'Sin datos.'}</p>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={comparativo} layout="vertical" margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
@@ -432,11 +434,13 @@ export default function TabCategorias() {
           icon={UserGroupIcon}
           titulo={`Top clientes · ${titulo}`}
           data={clientes}
+          loading={cLoading}
         />
         <RankingCruzado
           icon={UsersIcon}
           titulo={`Vendedores · ${titulo}`}
           data={vendedores}
+          loading={vLoading}
         />
       </div>
     </div>
@@ -453,7 +457,7 @@ function MiniKpi({ label, value, sub }) {
   )
 }
 
-function RankingCruzado({ icon: Icon, titulo, data }) {
+function RankingCruzado({ icon: Icon, titulo, data, loading }) {
   const items = data?.items || []
   return (
     <div className="card">
@@ -463,7 +467,7 @@ function RankingCruzado({ icon: Icon, titulo, data }) {
       </div>
       <div className="p-5 pt-0 overflow-x-auto">
         {items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+          <p className="py-6 text-center text-sm text-[var(--text-muted)]">{loading ? 'Cargando…' : 'Sin datos.'}</p>
         ) : (
           <table className="w-full">
             <thead>
