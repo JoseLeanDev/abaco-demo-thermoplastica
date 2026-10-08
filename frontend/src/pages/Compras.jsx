@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { usePeriodo } from '../context/PeriodoContext'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
@@ -26,6 +27,7 @@ import {
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 // -------------------------------------------------------------------
 // Helpers
@@ -41,26 +43,13 @@ const fmtPeriod = (p) => {
   return `${meses[+m - 1]} ${y.slice(2)}`
 }
 
-const rangoDesde = (rango) => {
-  const hoy = new Date()
-  const d = new Date(hoy)
-  if (rango === '3m')  d.setMonth(hoy.getMonth() - 2, 1)
-  if (rango === '6m')  d.setMonth(hoy.getMonth() - 5, 1)
-  if (rango === '12m') d.setMonth(hoy.getMonth() - 11, 1)
-  if (rango === '24m') d.setMonth(hoy.getMonth() - 23, 1)
-  if (rango === 'ytd') { d.setMonth(0, 1) }
-  return d.toISOString().slice(0, 10)
-}
-
 export default function Compras() {
-  const [rango, setRango]                 = useState('12m')
+  const { desde, hasta } = usePeriodo()
   const [incluirGastos, setIncluirGastos] = useState(false)
   const [busqueda, setBusqueda]           = useState('')
   const [proveedorSel, setProveedorSel]   = useState('')
   const [categoriaSel, setCategoriaSel]   = useState('')
 
-  const desde = useMemo(() => rangoDesde(rango), [rango])
-  const hasta = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const commonParams = { desde, hasta, incluir_gastos: incluirGastos }
 
   const { data: resumenRes, isLoading: loadingResumen } = useQuery(
@@ -138,18 +127,12 @@ export default function Compras() {
                   ? 'Cargando…'
                   : `${fmtNum(resumen.facturas)} facturas · ${fmtNum(resumen.proveedores)} proveedores · ${fmtNum(resumen.lineas)} líneas`}
               </p>
+              <PeriodoActivo className="mt-1" />
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <select value={rango} onChange={(e) => setRango(e.target.value)} className="input">
-            <option value="3m">Últimos 3 meses</option>
-            <option value="6m">Últimos 6 meses</option>
-            <option value="12m">Últimos 12 meses</option>
-            <option value="24m">Últimos 24 meses</option>
-            <option value="ytd">Año en curso</option>
-          </select>
           <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none px-3 py-2 rounded-lg bg-[var(--bg-secondary)]">
             <input
               type="checkbox"

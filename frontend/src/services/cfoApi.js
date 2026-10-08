@@ -34,13 +34,13 @@ cfoApi.interceptors.response.use(
 
 // Endpoints específicos
 export const endpoints = {
-  dashboard: () => cfoApi.get('/dashboard'),
+  dashboard: (params = {}) => cfoApi.get('/dashboard', { params }),
   tesoreria: {
     proyeccion: (semanas = 13) => cfoApi.get('/tesoreria/proyeccion', { params: { semanas } }),
-    posicion: () => cfoApi.get('/tesoreria/posicion'),
-    cxc: () => cfoApi.get('/tesoreria/cxc'),
+    posicion: (params = {}) => cfoApi.get('/tesoreria/posicion', { params }),
+    cxc: (params = {}) => cfoApi.get('/tesoreria/cxc', { params }),
     cxcDetalle: (params = {}) => cfoApi.get('/tesoreria/cxc/detalle', { params }),
-    cxp: () => cfoApi.get('/tesoreria/cxp'),
+    cxp: (params = {}) => cfoApi.get('/tesoreria/cxp', { params }),
     cxpDetalle: (params = {}) => cfoApi.get('/tesoreria/cxp/detalle', { params })
   },
   compras: {
@@ -57,7 +57,7 @@ export const endpoints = {
     detalle: (params = {}) => cfoApi.get('/gastos/detalle', { params })
   },
   inventario: {
-    resumen: () => cfoApi.get('/inventario'),
+    resumen: (params = {}) => cfoApi.get('/inventario', { params }),
     detalle: (params = {}) => cfoApi.get('/inventario/detalle', { params }),
   },
   ventas: {
@@ -80,7 +80,7 @@ export const endpoints = {
     insights: (context = 'all') => cfoApi.get('/analisis/insights', { params: { context } }),
     insightsHistorico: (params) => cfoApi.get('/analisis/insights/historico', { params }),
     dismissInsight: (id) => cfoApi.patch(`/analisis/insights/${id}/dismiss`, {}),
-    salud: () => cfoApi.get('/analisis/salud'),
+    salud: (params = {}) => cfoApi.get('/analisis/salud', { params }),
     proyeccionVentas: (meses = 6) => cfoApi.get('/analisis/proyeccion-ventas', { params: { meses } }),
     flujoCaja: (semanas = 13) => cfoApi.get('/analisis/flujo-caja', { params: { semanas } })
   },
@@ -97,8 +97,8 @@ export const endpoints = {
     chat: (message) => cfoApi.post('/agents/chat', { message }),
     // El agente SQL da varias vueltas al modelo: 10-25s es normal, por eso
     // lleva su propio timeout en vez del de 30s del cliente general.
-    chatAgente: (message, historial = []) =>
-      cfoApi.post('/agents/chat-agente', { message, historial }, { timeout: 120000 }),
+    chatAgente: (message, historial = [], periodo = {}) =>
+      cfoApi.post('/agents/chat-agente', { message, historial, ...periodo }, { timeout: 120000 }),
     saludAgente: () => cfoApi.get('/agents/chat-agente/salud'),
     status: () => cfoApi.get('/agents/status'),
     history: () => cfoApi.get('/agents/history'),
@@ -108,17 +108,17 @@ export const endpoints = {
   },
   // Márgenes
   margenes: {
-    resumen: () => cfoApi.get('/margenes'),
-    detalleProducto: (id) => cfoApi.get(`/margenes/producto/${id}/detalle`),
-    vendedores: () => cfoApi.get('/margenes/vendedores'),
-    clientes: () => cfoApi.get('/margenes/clientes'),
-    lineas: () => cfoApi.get('/margenes/lineas'),
+    resumen: (params = {}) => cfoApi.get('/margenes', { params }),
+    detalleProducto: (id, params = {}) => cfoApi.get(`/margenes/producto/${id}/detalle`, { params }),
+    vendedores: (params = {}) => cfoApi.get('/margenes/vendedores', { params }),
+    clientes: (params = {}) => cfoApi.get('/margenes/clientes', { params }),
+    lineas: (params = {}) => cfoApi.get('/margenes/lineas', { params }),
   }
 }
 
 // Helper para chat de agentes
 export const chatWithAgents = (message) => endpoints.agents.chat(message)
-export const chatConAgenteSQL = (message, historial) => endpoints.agents.chatAgente(message, historial)
+export const chatConAgenteSQL = (message, historial, periodo) => endpoints.agents.chatAgente(message, historial, periodo)
 export const saludAgenteSQL = () => endpoints.agents.saludAgente()
 
 export default cfoApi

@@ -14,6 +14,7 @@ import {
   ChartBarIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 const fmtQ  = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtM  = (n) => {
@@ -55,6 +56,7 @@ export default function Tesoreria() {
             <p className="text-sm text-[var(--text-muted)]">
               Working capital al {pos.fecha_corte || '—'} · CxC + CxP del ERP en tiempo real
             </p>
+            <PeriodoActivo nota="CxC y CxP de documentos emitidos en el período" className="mt-1" />
           </div>
         </div>
       </div>

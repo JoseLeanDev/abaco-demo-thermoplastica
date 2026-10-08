@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useDashboard } from '../hooks/useCfoData'
+import { usePeriodo } from '../context/PeriodoContext'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
   ComposedChart, Line, Area, ReferenceLine, Cell,
@@ -232,8 +233,9 @@ export default function Dashboard() {
         <p>
           <SparklesIcon className="w-4 h-4 inline mr-1 -mt-0.5" />
           <strong>Notas metodológicas.</strong> Ventas y márgenes reales al nivel línea × factura (<code>fact_ventas_linea</code>, costo_promedio_facturado del ERP).
-          Compras y gastos operativos separados por <code>es_gasto_operativo</code>. CxC = snapshot vivo por buckets (por vencer / 1-30 / 31-60 / 61-90 / 90+).
-          CxP = saldo pendiente × factura con fecha de vencimiento real del ERP. Health Score compone 7 dimensiones con pesos (crecimiento 20%, margen 20%, EBITDA 15%, cobertura CxC/CxP 15%, cobros 10%, concentración 10%, disciplina crédito 10%).
+          Compras y gastos operativos separados por <code>es_gasto_operativo</code>. Flujos (ventas, compras, gastos, márgenes) = período del filtro vs mismo período del año anterior.
+          CxC = snapshot vivo por buckets (por vencer / 1-30 / 31-60 / 61-90 / 90+); CxC y CxP incluyen solo documentos emitidos en el período.
+          CxP = saldo pendiente × factura con fecha de vencimiento real del ERP. DSO/DPO/DIO se diarizan con los días del período. Health Score compone 7 dimensiones con pesos (crecimiento 20%, margen 20%, EBITDA 15%, cobertura CxC/CxP 15%, cobros 10%, concentración 10%, disciplina crédito 10%).
           Sincronización diaria via n8n · Datos al {d.fecha_corte}.
         </p>
       </div>
@@ -245,6 +247,7 @@ export default function Dashboard() {
 // 1. HERO EJECUTIVO
 // ============================================================
 function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
+  const { etiqueta } = usePeriodo()
   const color = healthColor(h.grade)
   const scoreData = [{ name: 'score', value: h.score || 0, fill: color.fill }]
 
@@ -260,6 +263,9 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
           <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 font-medium">Briefing ejecutivo</p>
           <h1 className="text-3xl font-bold mt-1 tracking-tight text-white">{empresa || 'Thermoplástica, S.A.'}</h1>
           <p className="text-sm text-white/60 mt-1">
+            Período: {etiqueta} · comparado con el mismo período del año anterior
+          </p>
+          <p className="text-xs text-white/40 mt-0.5">
             Datos actualizados: {actualizado}
           </p>
 
@@ -299,9 +305,9 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
         {/* Números north-star a la derecha */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-5 text-right">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Ventas 12m</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Ventas del período</p>
             <p className="text-2xl font-bold tabular-nums mt-1">{fmtM(k.ventas_12m)}</p>
-            <DeltaBadge value={k.delta_ventas_pct} suffix="vs 12m prev" size="xs" />
+            <DeltaBadge value={k.delta_ventas_pct} suffix="vs año ant." size="xs" />
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">Margen bruto</p>
@@ -517,7 +523,7 @@ function PnlWaterfall({ kpis: k }) {
       <div className="section-header">
         <div className="flex items-center gap-2">
           <ChartPieIcon className="w-5 h-5 text-[var(--accent-blue)]" />
-          <h2 className="font-semibold">Cascada P&amp;L · 12 meses</h2>
+          <h2 className="font-semibold">Cascada P&amp;L · período</h2>
         </div>
         <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">de ventas a EBITDA</span>
       </div>
@@ -642,12 +648,12 @@ function AgingCard({ titulo, tono, total, docCount, buckets, link, linkLabel }) 
 function ComprasKpiCard({ kpis: k }) {
   return (
     <MiniKpiCard
-      titulo="Compras materia prima 12m"
+      titulo="Compras materia prima"
       icon={ShoppingCartIcon}
       color="sky"
       valor={fmtM(k.compras_12m)}
       delta={k.delta_compras_pct}
-      deltaLabel="vs 12m previo"
+      deltaLabel="vs mismo período año ant."
       pctVentas={k.ventas_12m > 0 ? (k.compras_12m / k.ventas_12m * 100) : null}
       pctVentasLabel="del total de ventas"
       to="/compras"
@@ -658,12 +664,12 @@ function ComprasKpiCard({ kpis: k }) {
 function GastosKpiCard({ kpis: k }) {
   return (
     <MiniKpiCard
-      titulo="Gastos operativos 12m"
+      titulo="Gastos operativos"
       icon={BuildingOfficeIcon}
       color="amber"
       valor={fmtM(k.gastos_operativos_12m)}
       delta={k.delta_gastos_pct}
-      deltaLabel="vs 12m previo"
+      deltaLabel="vs mismo período año ant."
       pctVentas={k.ventas_12m > 0 ? (k.gastos_operativos_12m / k.ventas_12m * 100) : null}
       pctVentasLabel="del total de ventas"
       to="/gastos-operativos"
@@ -753,7 +759,7 @@ function MixLineasCard({ lineas }) {
       <div className="section-header">
         <div className="flex items-center gap-2">
           <CubeIcon className="w-5 h-5 text-indigo-500" />
-          <h2 className="font-semibold">Mix de líneas · ventas y margen 12m</h2>
+          <h2 className="font-semibold">Mix de líneas · ventas y margen del período</h2>
         </div>
         <Link to="/ventas" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
           Ver ventas <ArrowRightIcon className="w-3 h-3" />

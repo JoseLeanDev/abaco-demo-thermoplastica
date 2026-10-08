@@ -14,6 +14,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://cfo-ai-backend-4n29.onrender.com/api'
 
@@ -212,6 +213,7 @@ export default function Usuarios() {
           <p className="text-sm text-[var(--text-muted)] mt-1">
             Administración de usuarios del sistema
           </p>
+          <PeriodoActivo nota="la lista de usuarios no depende de fechas" className="mt-1" />
         </div>
         <button
           onClick={() => setShowCreate(true)}

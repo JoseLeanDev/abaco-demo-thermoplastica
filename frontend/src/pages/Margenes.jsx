@@ -31,6 +31,7 @@ import {
   useMargenClientes,
   useMargenLineas,
 } from '../hooks/useCfoData'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 const formatGTQ = (value) => {
   if (!value && value !== 0) return 'Q 0'
@@ -148,6 +149,7 @@ export default function Margenes() {
         <p className="text-sm text-[var(--text-muted)] mt-1">
           Precio contra costo real: productos, vendedores, clientes y líneas
         </p>
+        <PeriodoActivo nota="margen vs mismo período del año anterior" className="mt-1" />
       </div>
 
       {/* KPIs globales */}
@@ -158,7 +160,7 @@ export default function Margenes() {
           <p className="text-xs text-[var(--text-muted)]">{formatNum(resumen?.margen_global_pct)}% sobre ventas</p>
         </div>
         <div className="card p-5">
-          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Dejaste de ganar (12 meses)</p>
+          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Dejaste de ganar (período)</p>
           <p className="text-2xl font-bold text-red-400">{formatGTQ(resumen?.total_margen_perdido_12m || 0)}</p>
           <p className="text-xs text-[var(--text-muted)]">Productos que no ajustaron precio</p>
         </div>
@@ -173,7 +175,7 @@ export default function Margenes() {
         <div className="card p-5">
           <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Total Ventas</p>
           <p className="text-2xl font-bold text-[var(--accent-primary)]">{formatGTQ(resumen?.total_ventas_q || 0)}</p>
-          <p className="text-xs text-[var(--text-muted)]">Últimos 12 meses</p>
+          <p className="text-xs text-[var(--text-muted)]">Período seleccionado</p>
         </div>
       </div>
 
@@ -229,7 +231,7 @@ export default function Margenes() {
                   { key: 'precio_actual', label: 'Precio', className: 'text-right', render: r => `Q ${formatNum(r.precio_actual, 2)}` },
                   { key: 'costo_actual', label: 'Costo', className: 'text-right', render: r => `Q ${formatNum(r.costo_actual, 2)}` },
                   { key: 'margen_pct_actual', label: 'Margen Hoy', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
-                  { key: 'margen_pct_historico', label: 'Hace 12m', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
+                  { key: 'margen_pct_historico', label: 'Año anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
                   { key: 'delta_puntos', label: 'Puntos perdidos', className: 'text-right', render: r => (
                     <span className={r.delta_puntos < 0 ? 'text-red-400' : 'text-emerald-400'}>
                       {r.delta_puntos > 0 ? '+' : ''}{formatNum(r.delta_puntos)}
@@ -299,7 +301,7 @@ export default function Margenes() {
                     </p>
                   </div>
                   <div className="p-4 bg-[var(--bg-secondary)] rounded-lg">
-                    <p className="text-xs text-[var(--text-muted)]">Margen Hace 12m</p>
+                    <p className="text-xs text-[var(--text-muted)]">Margen año anterior</p>
                     <p className="text-lg font-bold text-[var(--text-primary)]">{formatNum(productoSeleccionado.margen_pct_historico)}%</p>
                   </div>
                   <div className="p-4 bg-[var(--bg-secondary)] rounded-lg">
@@ -346,9 +348,9 @@ export default function Margenes() {
                 <SortableTable
                   columns={[
                     { key: 'nombre', label: 'Vendedor', sortable: false },
-                    { key: 'ventas_12m', label: 'Ventas 12m', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
+                    { key: 'ventas_12m', label: 'Ventas período', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
                     { key: 'margen_pct_actual', label: 'Margen Actual', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
-                    { key: 'margen_pct_historico', label: 'Hace 12m', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
+                    { key: 'margen_pct_historico', label: 'Año anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
                     { key: 'delta_puntos', label: 'Puntos perdidos', className: 'text-right', render: r => (
                       <span className={r.delta_puntos < 0 ? 'text-red-400' : 'text-emerald-400'}>
                         {r.delta_puntos > 0 ? '+' : ''}{formatNum(r.delta_puntos)}
@@ -422,9 +424,9 @@ export default function Margenes() {
                 <SortableTable
                   columns={[
                     { key: 'nombre', label: 'Cliente', sortable: false },
-                    { key: 'ventas_12m', label: 'Comprado 12m', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
+                    { key: 'ventas_12m', label: 'Comprado período', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
                     { key: 'margen_pct_actual', label: 'Margen Actual', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
-                    { key: 'margen_pct_historico', label: 'Hace 12m', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
+                    { key: 'margen_pct_historico', label: 'Año anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
                     { key: 'delta_puntos', label: 'Puntos perdidos', className: 'text-right', render: r => (
                       <span className={r.delta_puntos < 0 ? 'text-red-400' : 'text-emerald-400'}>
                         {r.delta_puntos > 0 ? '+' : ''}{formatNum(r.delta_puntos)}
@@ -499,9 +501,9 @@ export default function Margenes() {
                   columns={[
                     { key: 'nombre', label: 'Línea', sortable: false },
                     { key: 'unidades_12m', label: 'Unidades', className: 'text-right', render: r => Math.round(r.unidades_12m).toLocaleString() },
-                    { key: 'ventas_12m', label: 'Ventas 12m', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
+                    { key: 'ventas_12m', label: 'Ventas período', className: 'text-right', render: r => formatGTQ(r.ventas_12m) },
                     { key: 'margen_pct_actual', label: 'Margen Actual', className: 'text-right', render: r => `${formatNum(r.margen_pct_actual)}%` },
-                    { key: 'margen_pct_historico', label: 'Hace 12m', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
+                    { key: 'margen_pct_historico', label: 'Año anterior', className: 'text-right', render: r => `${formatNum(r.margen_pct_historico)}%` },
                     { key: 'delta_puntos', label: 'Puntos perdidos', className: 'text-right', render: r => (
                       <span className={r.delta_puntos < 0 ? 'text-red-400' : 'text-emerald-400'}>
                         {r.delta_puntos > 0 ? '+' : ''}{formatNum(r.delta_puntos)}

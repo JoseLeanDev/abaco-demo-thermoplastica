@@ -5,6 +5,7 @@ const { ejecutarTareasPendientesWakeUp } = require('../services/wakeUpScheduler'
 const aiService = require('../services/aiService');
 const agenteSQL = require('../services/agenteSQL');
 const config = require('../config/financiera');
+const { parsePeriodo } = require('../services/periodo');
 
 // GET /api/agents/version - Versión del código desplegado
 router.get('/version', (req, res) => {
@@ -117,7 +118,10 @@ router.get('/logs', async (req, res) => {
     // Detectar si es PostgreSQL
     const isPostgres = !!db.pool;
     
-    const dateFilter = `created_at >= NOW() - INTERVAL '${dias} days'`
+    // Con ?desde/&hasta (filtro global de fechas) manda la ventana; si no, los últimos N días.
+    const dateFilter = (req.query.desde || req.query.hasta)
+      ? (({ D, H }) => `created_at >= ${D} AND created_at < ${H} + 1`)(parsePeriodo(req))
+      : `created_at >= NOW() - INTERVAL '${dias} days'`
     
     let query = `
       SELECT 
@@ -609,7 +613,7 @@ router.post('/chat', async (req, res) => {
  */
 router.post('/chat-agente', async (req, res) => {
   const t0 = Date.now();
-  const { message, historial } = req.body || {};
+  const { message, historial, desde, hasta } = req.body || {};
 
   if (!message || !String(message).trim()) {
     return res.status(400).json({ success: false, error: 'Se requiere un mensaje' });
@@ -617,7 +621,9 @@ router.post('/chat-agente', async (req, res) => {
 
   try {
     const r = await agenteSQL.correr(String(message).trim(), {
-      historial: Array.isArray(historial) ? historial.slice(-6) : []
+      historial: Array.isArray(historial) ? historial.slice(-6) : [],
+      // Período del filtro global; parsePeriodo valida formato y ordena las fechas.
+      periodo: (desde || hasta) ? parsePeriodo({ query: { desde, hasta } }) : null
     });
 
     // Traza: cada respuesta queda con el SQL que la produjo.

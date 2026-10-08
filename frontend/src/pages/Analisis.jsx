@@ -14,6 +14,7 @@ import ProyeccionVentas, { CardCargando } from '../components/analisis/Proyeccio
 import FlujoCajaProyectado from '../components/analisis/FlujoCajaProyectado'
 import { fmtM, fmtQ, fmtPct, fmtDias, fmtMes, tooltipStyle } from '../components/analisis/formato'
 import { useSaludFinanciera, useProyeccionVentas, useFlujoCaja } from '../hooks/useCfoData'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 /**
  * Salud financiera: la única vista que cruza cartera, inventario y proveedores.
@@ -39,6 +40,7 @@ export default function Analisis() {
             Ciclo de caja, capital de trabajo y proyecciones
             {salud?.ciclo?.fecha_corte && <> · datos al {String(salud.ciclo.fecha_corte).slice(0, 10)}</>}
           </p>
+          <PeriodoActivo nota="flujos del período; saldos al corte" className="mt-1" />
         </div>
       </div>
 
@@ -97,7 +99,7 @@ function Kpis({ salud }) {
         <span className="kpi-label">Capital de trabajo</span>
         <p className="kpi-value">{fmtM(ct.capital_trabajo)}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
-          {fmtPct(ct.capital_trabajo_pct_ventas)} de las ventas anuales
+          {fmtPct(ct.capital_trabajo_pct_ventas)} de las ventas anualizadas del período
         </p>
       </div>
       <div className="kpi-card card-hover">
@@ -109,7 +111,7 @@ function Kpis({ salud }) {
         <span className="kpi-label">Caja que pide el crecimiento</span>
         <p className="kpi-value">{fmtM(ct.caja_requerida_crecimiento)}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
-          Si las ventas vuelven a crecer {fmtPct(ct.crecimiento_pct)} en 12 meses
+          Si las ventas crecen {fmtPct(ct.crecimiento_pct)} (lo mismo que este período vs el año anterior)
         </p>
       </div>
     </div>
@@ -132,7 +134,7 @@ function CicloCaja({ ciclo, mensual }) {
       <div className="section-header">
         <ArrowPathIcon className="w-5 h-5 text-[var(--text-muted)]" />
         <h2 className="font-semibold">Ciclo de conversión de efectivo</h2>
-        <span className="text-xs text-[var(--text-muted)] ml-auto">Últimos 12 meses</span>
+        <span className="text-xs text-[var(--text-muted)] ml-auto">Período seleccionado</span>
       </div>
 
       <div className="px-5 pb-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -179,7 +181,7 @@ function CicloCaja({ ciclo, mensual }) {
             </LineChart>
           </ResponsiveContainer>
           <p className="text-xs text-[var(--text-muted)] mt-2">
-            Promedio 12 meses: cobro {fmtDias(ciclo.dias_cobro_real)}, pago {fmtDias(ciclo.dias_pago_real)}.
+            Promedio del período: cobro {fmtDias(ciclo.dias_cobro_real)}, pago {fmtDias(ciclo.dias_pago_real)}.
           </p>
         </div>
       </div>

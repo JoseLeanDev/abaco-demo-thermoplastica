@@ -1,10 +1,12 @@
 import ChatConversacion from '../components/agents/ChatConversacion'
+import { usePeriodo } from '../context/PeriodoContext'
 
 /**
  * Pagina completa del asistente. Ocupa todo el alto disponible del area de
  * contenido y usa la misma conversacion que el widget flotante, en modo fullPage.
  */
 export default function AsistenteIA() {
+  const { etiqueta } = usePeriodo()
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] min-h-[520px] -m-6">
       {/* Encabezado */}
@@ -19,6 +21,9 @@ export default function AsistenteIA() {
           <p className="text-xs text-blue-200 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             Conectado a tu base de datos en tiempo real
+          </p>
+          <p className="text-xs text-blue-200/80 mt-0.5">
+            Período: {etiqueta} · se usa cuando la pregunta no indica fechas
           </p>
         </div>
       </div>

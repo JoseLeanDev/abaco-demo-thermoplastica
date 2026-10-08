@@ -3,6 +3,7 @@ import { SparklesIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useInsightsHistorico } from '../hooks/useCfoData'
 import { endpoints } from '../services/cfoApi'
 import InsightCard from '../components/agents/InsightCard'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 /**
  * InsightsIA — Página dedicada al analista diario (playbooks).
@@ -28,7 +29,7 @@ function slugDeSource(agentSource) {
 }
 
 export default function InsightsIA() {
-  const { data, isLoading, error, refetch, isFetching } = useInsightsHistorico({ limit: 100, days: 30 })
+  const { data, isLoading, error, refetch, isFetching } = useInsightsHistorico({ limit: 200, usarPeriodo: true })
 
   const insights = data?.data?.insights || []
 
@@ -72,6 +73,7 @@ export default function InsightsIA() {
               Análisis diario automático del negocio, por vertical.
               {fechaTexto && <> Última corrida: <span className="font-medium text-slate-600">{fechaTexto}</span>.</>}
             </p>
+            <PeriodoActivo nota="insights generados en el período" className="mt-1" />
           </div>
         </div>
         <button

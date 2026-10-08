@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { chatConAgenteSQL } from '../../services/cfoApi'
+import { usePeriodo } from '../../context/PeriodoContext'
 import BloqueVisual from './BloqueVisual'
 
 export const BIENVENIDA = {
@@ -72,6 +73,8 @@ function cargarHistorial() {
 }
 
 export default function ChatConversacion({ fullPage = false }) {
+  // Período del filtro global: el agente lo usa cuando la pregunta no trae fechas.
+  const { params: periodo } = usePeriodo()
   const [messages, setMessages] = useState(cargarHistorial)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -111,7 +114,7 @@ export default function ChatConversacion({ fullPage = false }) {
 
     try {
       // El interceptor de cfoApi ya devuelve response.data.
-      const data = await chatConAgenteSQL(pregunta, historial)
+      const data = await chatConAgenteSQL(pregunta, historial, periodo)
       if (!data.success) throw new Error(data.error || 'Error del servidor')
 
       const r = data.response

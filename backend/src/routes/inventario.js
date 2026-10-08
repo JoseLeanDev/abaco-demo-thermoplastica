@@ -1,10 +1,37 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
+const { parsePeriodo } = require('../services/periodo');
+
+// El stock es la foto más reciente del ERP (no hay historia de snapshots). El filtro
+// de fechas aplica al MOVIMIENTO: ventas y compras del período, rotación y artículos
+// con stock que no se vendieron en la ventana.
 
 // GET /api/inventario   Resumen: KPIs + top artículos + distribución por línea
 router.get('/', async (req, res) => {
   try {
+    const P = parsePeriodo(req);
+
+    const mov = await db.getAsync(`
+      WITH vend AS (
+        SELECT articulo_id, SUM(unidades) AS unidades, SUM(costo_total_facturado) AS costo
+        FROM thermoplastica.fact_ventas_linea
+        WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+        GROUP BY articulo_id
+      )
+      SELECT
+        (SELECT COALESCE(SUM(costo), 0) FROM vend)                                        AS costo_vendido,
+        (SELECT COALESCE(SUM(f.total_sin_iva), 0)
+           FROM thermoplastica.fact_compras_linea f
+           JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+          WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}
+            AND COALESCE(a.es_gasto_operativo, FALSE) = FALSE)                             AS compras,
+        COUNT(*) FILTER (WHERE i.stock_actual > 0 AND v.articulo_id IS NULL)                AS sin_venta_articulos,
+        COALESCE(SUM(i.valor_inventario) FILTER (WHERE i.stock_actual > 0 AND v.articulo_id IS NULL), 0) AS sin_venta_valor
+      FROM thermoplastica.fact_inventario_snapshot i
+      LEFT JOIN vend v ON v.articulo_id = i.articulo_id
+    `);
+
     // KPIs generales
     const kpis = await db.getAsync(`
       SELECT
@@ -61,11 +88,22 @@ router.get('/', async (req, res) => {
     `);
 
     const total = parseFloat(kpis.valor_total) || 0;
+    const costoVendido = parseFloat(mov.costo_vendido) || 0;
 
     res.json({
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
+        periodo: P.ventana(),
+        movimiento: {
+          costo_vendido: costoVendido,
+          compras: parseFloat(mov.compras) || 0,
+          // Veces que el inventario actual "gira" en un año al ritmo de venta del período.
+          rotacion_anual: total > 0 ? Math.round(costoVendido * 365 / P.dias / total * 10) / 10 : null,
+          dias_inventario: costoVendido > 0 ? Math.round(total / (costoVendido / P.dias)) : null,
+          sin_venta_articulos: parseInt(mov.sin_venta_articulos) || 0,
+          sin_venta_valor: parseFloat(mov.sin_venta_valor) || 0,
+        },
         kpis: {
           total_articulos: parseInt(kpis.total_articulos) || 0,
           articulos_con_stock: parseInt(kpis.articulos_con_stock) || 0,
@@ -114,7 +152,16 @@ router.get('/detalle', async (req, res) => {
     const offset   = parseInt(req.query.offset) || 0;
     const busqueda = (req.query.busqueda || '').trim();
     const linea    = (req.query.linea || '').trim();
-    const filtro   = (req.query.filtro || 'todos').trim();   // 'todos' | 'con_stock' | 'sin_stock' | 'sin_precio' | 'con_transito'
+    const filtro   = (req.query.filtro || 'todos').trim();   // 'todos' | 'con_stock' | 'sin_stock' | 'sin_precio' | 'con_transito' | 'sin_venta_periodo'
+    const P = parsePeriodo(req);
+    // Ventas por artículo en el período del filtro global
+    const vendCte = `
+      WITH vend AS (
+        SELECT articulo_id, SUM(unidades) AS unidades, SUM(total_sin_iva) AS ventas
+        FROM thermoplastica.fact_ventas_linea
+        WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+        GROUP BY articulo_id
+      )`;
 
     const where = ['1=1'];
     const params = [];
@@ -132,10 +179,11 @@ router.get('/detalle', async (req, res) => {
     else if (filtro === 'sin_stock')   where.push(`(i.stock_actual IS NULL OR i.stock_actual = 0)`);
     else if (filtro === 'sin_precio')  where.push(`(i.precio_venta_1 IS NULL OR i.precio_venta_1 = 0)`);
     else if (filtro === 'con_transito') where.push(`i.stock_en_transito > 0`);
+    else if (filtro === 'sin_venta_periodo') where.push(`i.stock_actual > 0 AND v.articulo_id IS NULL`);
 
     const whereSql = where.join(' AND ');
 
-    const rows = await db.allAsync(`
+    const rows = await db.allAsync(`${vendCte}
       SELECT
         i.inv_id                       AS id,
         a.codigo_articulo              AS codigo,
@@ -146,20 +194,24 @@ router.get('/detalle', async (req, res) => {
         i.stock_actual, i.stock_en_transito,
         i.costo_promedio, i.costo_ultimo,
         i.precio_venta_1, i.precio_venta_2, i.precio_venta_3, i.precio_venta_4, i.precio_venta_5,
-        i.valor_inventario, i.margen_bruto_pct
+        i.valor_inventario, i.margen_bruto_pct,
+        COALESCE(v.unidades, 0) AS unidades_vendidas_periodo,
+        COALESCE(v.ventas, 0)   AS ventas_periodo
       FROM thermoplastica.fact_inventario_snapshot i
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = i.articulo_id
       LEFT JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = i.proveedor_id
+      LEFT JOIN vend v ON v.articulo_id = i.articulo_id
       WHERE ${whereSql}
       ORDER BY i.valor_inventario DESC NULLS LAST, a.codigo_articulo ASC
       LIMIT ${limit} OFFSET ${offset}
     `, params);
 
-    const totalRow = await db.getAsync(`
+    const totalRow = await db.getAsync(`${vendCte}
       SELECT COUNT(*) AS total, COALESCE(SUM(i.valor_inventario), 0) AS suma_valor
       FROM thermoplastica.fact_inventario_snapshot i
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = i.articulo_id
       LEFT JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = i.proveedor_id
+      LEFT JOIN vend v ON v.articulo_id = i.articulo_id
       WHERE ${whereSql}
     `, params);
 
@@ -167,6 +219,7 @@ router.get('/detalle', async (req, res) => {
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
+        periodo: P.ventana(),
         total_filas: parseInt(totalRow.total) || 0,
         suma_valor: parseFloat(totalRow.suma_valor) || 0,
         filas: rows.map(r => ({
@@ -189,6 +242,8 @@ router.get('/detalle', async (req, res) => {
           precio_venta_5: parseFloat(r.precio_venta_5) || 0,
           valor_inventario: parseFloat(r.valor_inventario) || 0,
           margen_bruto_pct: r.margen_bruto_pct !== null ? parseFloat(r.margen_bruto_pct) : null,
+          unidades_vendidas_periodo: parseFloat(r.unidades_vendidas_periodo) || 0,
+          ventas_periodo: parseFloat(r.ventas_periodo) || 0,
         })),
       },
     });

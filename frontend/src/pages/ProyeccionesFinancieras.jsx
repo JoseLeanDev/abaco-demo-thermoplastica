@@ -4,6 +4,7 @@ import { ArrowLeftIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import { useTesoreriaProyeccion, useProyeccionVentas } from '../hooks/useCfoData'
 import FlujoCajaProyectado from '../components/analisis/FlujoCajaProyectado'
 import ProyeccionVentas from '../components/analisis/ProyeccionVentas'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 /**
  * Proyecciones desde Tesorería. Usa los mismos componentes y el mismo cálculo
@@ -31,6 +32,7 @@ export default function ProyeccionesFinancieras() {
             <div>
               <h1 className="text-2xl font-semibold">Proyecciones Financieras</h1>
               <p className="text-sm text-[var(--text-muted)]">Flujo de caja operativo a {semanas} semanas y ventas a 6 meses</p>
+              <PeriodoActivo nota="las proyecciones miran hacia adelante desde hoy" className="mt-1" />
             </div>
           </div>
         </div>

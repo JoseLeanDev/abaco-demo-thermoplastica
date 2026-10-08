@@ -21,6 +21,7 @@ import {
   ScaleIcon,
   ShoppingCartIcon
 } from '@heroicons/react/24/outline'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 // NUEVO: 4 Agentes Especializados v2.0
 const agenteConfig = {
@@ -68,14 +69,12 @@ export default function LogActividades() {
   const [filtroStatus, setFiltroStatus] = useState('')
   const [expandedLog, setExpandedLog] = useState(null)
   
-  const [filtroDias, setFiltroDias] = useState(30)
   
   const { data, isLoading, refetch } = useAgentesLogs({ 
     limit: 100,
     agente: filtroAgente || undefined,
     categoria: filtroCategoria || undefined,
-    status: filtroStatus || undefined,
-    dias: filtroDias
+    status: filtroStatus || undefined
   })
 
   // Debug: log de respuesta del API
@@ -112,6 +111,7 @@ export default function LogActividades() {
           <div>
             <h1 className="text-2xl font-semibold">Agentes de IA</h1>
             <p className="text-sm text-[var(--text-muted)]">Monitoreo del sistema multi-agente</p>
+            <PeriodoActivo nota="actividad registrada en el período" className="mt-1" />
           </div>
         </div>
 
@@ -201,7 +201,7 @@ export default function LogActividades() {
           <span className="text-sm font-medium">Filtros</span>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs text-[var(--text-muted)] mb-1.5">Agente</label>
             <select value={filtroAgente} onChange={(e) => setFiltroAgente(e.target.value)} className="input">
@@ -235,15 +235,6 @@ export default function LogActividades() {
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1.5">Período</label>
-            <select value={filtroDias} onChange={(e) => setFiltroDias(Number(e.target.value))} className="input">
-              <option value={7}>Últimos 7 días</option>
-              <option value={30}>Últimos 30 días</option>
-              <option value={90}>Últimos 90 días</option>
-              <option value={365}>Último año</option>
-            </select>
-          </div>
         </div>
       </div>
 

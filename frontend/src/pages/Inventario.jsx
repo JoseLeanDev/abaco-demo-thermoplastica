@@ -15,6 +15,8 @@ import {
   ChartBarIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/outline'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { usePeriodo } from '../context/PeriodoContext'
 
 const fmtQ  = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtQfull = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
@@ -32,18 +34,21 @@ export default function Inventario() {
   const [lineaSel, setLinea]    = useState('')
   const [filtro, setFiltro]     = useState('con_stock')
 
+  const { params: periodo } = usePeriodo()
   const { data: resumenRes, isLoading: loadingResumen } = useQuery(
-    'inventario-resumen',
-    endpoints.inventario.resumen,
+    ['inventario-resumen', periodo],
+    () => endpoints.inventario.resumen(periodo),
+    { keepPreviousData: true }
   )
   const { data: detalleRes, isFetching: fetchingDetalle } = useQuery(
-    ['inventario-detalle', busqueda, lineaSel, filtro],
-    () => endpoints.inventario.detalle({ busqueda, linea: lineaSel, filtro, limit: 400 }),
+    ['inventario-detalle', busqueda, lineaSel, filtro, periodo],
+    () => endpoints.inventario.detalle({ busqueda, linea: lineaSel, filtro, limit: 400, ...periodo }),
     { keepPreviousData: true }
   )
 
   const r      = resumenRes?.data || {}
   const kpis   = r.kpis || {}
+  const mov    = r.movimiento || {}
   const lineas = r.por_linea || []
   const topVal = r.top_valor || []
   const topProv = r.top_proveedores || []
@@ -72,6 +77,7 @@ export default function Inventario() {
                 {loadingResumen ? 'Cargando…' :
                   `${fmtInt(kpis.total_articulos)} artículos en catálogo · ${fmtInt(kpis.articulos_con_stock)} con stock`}
               </p>
+              <PeriodoActivo nota="stock a hoy; ventas, compras y rotación del período" className="mt-1" />
             </div>
           </div>
         </div>
@@ -129,6 +135,36 @@ export default function Inventario() {
             Ordenado, aún no recibido
           </p>
         </div>
+      </div>
+
+      {/* Movimiento del período (filtro global) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="kpi-card">
+          <span className="kpi-label">Costo vendido en el período</span>
+          <p className="kpi-value mt-2">{fmtM(mov.costo_vendido)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Costo de las facturas de venta</p>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Compras en el período</span>
+          <p className="kpi-value mt-2">{fmtM(mov.compras)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Materia prima y mercadería, sin gastos operativos</p>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Rotación anual</span>
+          <p className="kpi-value mt-2">{mov.rotacion_anual != null ? `${mov.rotacion_anual}x` : '—'}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            {mov.dias_inventario != null ? `${fmtInt(mov.dias_inventario)} días de inventario al ritmo del período` : 'Sin ventas en el período'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setFiltro('sin_venta_periodo')}
+          className="kpi-card card-hover text-left"
+        >
+          <span className="kpi-label">Con stock y sin venta en el período</span>
+          <p className="kpi-value mt-2 text-[var(--warning)]">{fmtM(mov.sin_venta_valor)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(mov.sin_venta_articulos)} artículos · ver listado</p>
+        </button>
       </div>
 
       {/* Alerta si hay muchos sin precio */}
@@ -309,6 +345,7 @@ export default function Inventario() {
           <option value="sin_stock">Sin stock</option>
           <option value="sin_precio">Sin precio de venta</option>
           <option value="con_transito">Con stock en tránsito</option>
+          <option value="sin_venta_periodo">Con stock, sin venta en el período</option>
         </select>
       </div>
 
@@ -341,13 +378,14 @@ export default function Inventario() {
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Costo prom</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Precio 1</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Margen</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Vendido<br /><span className="normal-case font-normal">en el período</span></th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Valor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
               {filas.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
                     {fetchingDetalle ? 'Cargando…' : 'Sin artículos que coincidan con el filtro.'}
                   </td>
                 </tr>
@@ -392,6 +430,14 @@ export default function Inventario() {
                     'text-[var(--danger)]'
                   }`}>
                     {a.margen_bruto_pct !== null && a.margen_bruto_pct > 0 ? `${a.margen_bruto_pct.toFixed(1)}%` : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right text-sm tabular-nums">
+                    {a.unidades_vendidas_periodo > 0 ? (
+                      <>
+                        {fmtNum(a.unidades_vendidas_periodo)}
+                        <p className="text-xs text-[var(--text-muted)]">{fmtM(a.ventas_periodo)}</p>
+                      </>
+                    ) : <span className="text-xs text-[var(--text-muted)]">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right text-sm tabular-nums font-bold">{fmtM(a.valor_inventario)}</td>
                 </tr>

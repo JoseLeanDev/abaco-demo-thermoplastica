@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { usePeriodo } from '../context/PeriodoContext'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
@@ -23,6 +24,7 @@ import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
   CartesianGrid, Legend, PieChart, Pie, Cell,
 } from 'recharts'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 // -------------------------------------------------------------------
 // Helpers
@@ -45,17 +47,6 @@ const fmtPeriod = (p) => {
   return `${meses[+m - 1]} ${y.slice(2)}`
 }
 
-const rangoDesde = (rango) => {
-  const hoy = new Date()
-  const d = new Date(hoy)
-  if (rango === '3m')  d.setMonth(hoy.getMonth() - 2, 1)
-  if (rango === '6m')  d.setMonth(hoy.getMonth() - 5, 1)
-  if (rango === '12m') d.setMonth(hoy.getMonth() - 11, 1)
-  if (rango === '24m') d.setMonth(hoy.getMonth() - 23, 1)
-  if (rango === 'ytd') d.setMonth(0, 1)
-  return d.toISOString().slice(0, 10)
-}
-
 const margenTone = (pct) => {
   if (pct === null || pct === undefined) return 'text-[var(--text-muted)]'
   if (pct >= 40) return 'text-[var(--success)]'
@@ -69,14 +60,12 @@ const PIE_COLORS = ['#001639', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b
 // Página
 // -------------------------------------------------------------------
 export default function Ventas() {
-  const [rango, setRango]         = useState('12m')
+  const { desde, hasta } = usePeriodo()
   const [tab, setTab]             = useState('resumen')
   const [busqueda, setBusqueda]   = useState('')
   const [clienteSel, setCliente]  = useState('')
   const [vendedorSel, setVendedor] = useState('')
 
-  const desde = useMemo(() => rangoDesde(rango), [rango])
-  const hasta = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const commonParams = { desde, hasta }
 
   const { data: rRes, isLoading: loadingR } = useQuery(
@@ -161,17 +150,11 @@ export default function Ventas() {
                 {loadingR ? 'Cargando…' :
                   `${fmtInt(r.facturas)} facturas · ${fmtInt(r.clientes)} clientes · ${fmtInt(r.vendedores)} vendedores activos`}
               </p>
+              <PeriodoActivo className="mt-1" />
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <select value={rango} onChange={(e) => setRango(e.target.value)} className="input">
-            <option value="3m">Últimos 3 meses</option>
-            <option value="6m">Últimos 6 meses</option>
-            <option value="12m">Últimos 12 meses</option>
-            <option value="24m">Últimos 24 meses</option>
-            <option value="ytd">Año en curso</option>
-          </select>
           <button className="btn-secondary flex items-center gap-2">
             <ArrowDownTrayIcon className="w-4 h-4" />
             Exportar

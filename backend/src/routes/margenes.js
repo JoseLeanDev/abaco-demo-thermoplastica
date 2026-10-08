@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
+const { parsePeriodo } = require('../services/periodo');
 
 // -------------------------------------------------------------------
-// Semáforo: comparación actual vs histórico (mismo período 12 meses atrás).
+// Semáforo: margen del período del filtro global vs el mismo período un año antes.
 // Verde  => delta_puntos >= -1  (estable o mejor)
 // Ámbar  => delta_puntos entre -5 y -1
 // Rojo   => delta_puntos < -5
@@ -26,7 +27,8 @@ function qPerdidos(ventasActuales, deltaPuntos) {
 // GET /api/margenes   Resumen + top productos con margen comparado YoY
 router.get('/', async (req, res) => {
   try {
-    // Producto: margen actual (últ 12m) vs histórico (12m anteriores)
+    const P = parsePeriodo(req);
+    // Producto: margen del período vs el mismo período del año anterior
     // Solo artículos con ventas materiales en el período actual (>= Q1000).
     const rows = await db.allAsync(`
       WITH actual AS (
@@ -37,7 +39,7 @@ router.get('/', async (req, res) => {
                SUM(f.margen_bruto)          AS margen
         FROM thermoplastica.fact_ventas_linea f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
-        WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND f.tipo_doc = 'FACT'
+        WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
           -- Excluir "articulo generico" y similares placeholders sin costo real
           AND UPPER(a.codigo_articulo) NOT IN ('GENARTICULO','GENARTICULOEXENTO','GENSERV','GENSERVICIO')
         GROUP BY f.articulo_id
@@ -49,8 +51,7 @@ router.get('/', async (req, res) => {
                SUM(total_sin_iva)         AS ventas,
                SUM(margen_bruto)          AS margen
         FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-          AND fecha_emision <  CURRENT_DATE - INTERVAL '12 months'
+        WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND tipo_doc = 'FACT'
         GROUP BY articulo_id
       )
@@ -114,7 +115,7 @@ router.get('/', async (req, res) => {
       SELECT COALESCE(SUM(total_sin_iva), 0)         AS ventas,
              COALESCE(SUM(margen_bruto), 0)          AS margen
       FROM thermoplastica.fact_ventas_linea
-      WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND tipo_doc = 'FACT'
+      WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
     `);
     const totalVentas = parseFloat(totalRow.ventas) || 0;
     const totalMargen = parseFloat(totalRow.margen) || 0;
@@ -146,6 +147,7 @@ router.get('/', async (req, res) => {
 // GET /api/margenes/producto/:id/detalle   Historial mensual precio/costo/margen
 router.get('/producto/:id/detalle', async (req, res) => {
   try {
+    const P = parsePeriodo(req);
     const articuloId = parseInt(req.params.id);
     if (!articuloId) return res.status(400).json({ status: 'error', message: 'id inválido' });
 
@@ -157,7 +159,7 @@ router.get('/producto/:id/detalle', async (req, res) => {
                SUM(margen_bruto)          AS margen
         FROM thermoplastica.fact_ventas_linea
         WHERE articulo_id = ? AND tipo_doc = 'FACT'
-          AND fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
+          AND fecha_emision BETWEEN ${P.D} AND ${P.H}
       )
       SELECT a.articulo_id AS id, a.codigo_articulo AS sku, a.descripcion AS nombre,
              agg.unidades AS unidades_12m, agg.ventas AS ventas_12m,
@@ -171,7 +173,7 @@ router.get('/producto/:id/detalle', async (req, res) => {
 
     if (!producto) return res.status(404).json({ status: 'error', message: 'Artículo no encontrado' });
 
-    // Historial: precio promedio, costo unitario y margen % por mes últimos 24 meses
+    // Historial: precio promedio, costo unitario y margen % por mes (período + el año previo)
     const historial = await db.allAsync(`
       SELECT TO_CHAR(DATE_TRUNC('month', fecha_emision), 'YYYY-MM-DD') AS fecha,
              CASE WHEN SUM(unidades) > 0 THEN SUM(total_sin_iva) / SUM(unidades) ELSE NULL END      AS precio_promedio_realizado,
@@ -181,7 +183,7 @@ router.get('/producto/:id/detalle', async (req, res) => {
              SUM(total_sin_iva) AS ventas
       FROM thermoplastica.fact_ventas_linea
       WHERE articulo_id = ? AND tipo_doc = 'FACT'
-        AND fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
+        AND fecha_emision BETWEEN (${P.D} - INTERVAL '1 year') AND ${P.H}
       GROUP BY 1 ORDER BY 1
     `, [articuloId]);
 
@@ -216,13 +218,14 @@ router.get('/producto/:id/detalle', async (req, res) => {
 // GET /api/margenes/vendedores   Ranking vendedores con comparación YoY
 router.get('/vendedores', async (req, res) => {
   try {
+    const P = parsePeriodo(req);
     const rows = await db.allAsync(`
       WITH actual AS (
         SELECT vendedor_id,
                SUM(total_sin_iva)         AS ventas,
                SUM(margen_bruto)          AS margen
         FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
+        WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}
           AND tipo_doc = 'FACT' AND vendedor_id IS NOT NULL
         GROUP BY vendedor_id
       ),
@@ -231,8 +234,7 @@ router.get('/vendedores', async (req, res) => {
                SUM(total_sin_iva) AS ventas,
                SUM(margen_bruto)  AS margen
         FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-          AND fecha_emision <  CURRENT_DATE - INTERVAL '12 months'
+        WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND tipo_doc = 'FACT' AND vendedor_id IS NOT NULL
         GROUP BY vendedor_id
       )
@@ -271,13 +273,14 @@ router.get('/vendedores', async (req, res) => {
 // GET /api/margenes/clientes   Top clientes con comparación YoY
 router.get('/clientes', async (req, res) => {
   try {
+    const P = parsePeriodo(req);
     const rows = await db.allAsync(`
       WITH actual AS (
         SELECT cliente_id,
                SUM(total_sin_iva) AS ventas,
                SUM(margen_bruto)  AS margen
         FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND tipo_doc = 'FACT'
+        WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
         GROUP BY cliente_id
       ),
       historico AS (
@@ -285,8 +288,7 @@ router.get('/clientes', async (req, res) => {
                SUM(total_sin_iva) AS ventas,
                SUM(margen_bruto)  AS margen
         FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-          AND fecha_emision <  CURRENT_DATE - INTERVAL '12 months'
+        WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND tipo_doc = 'FACT'
         GROUP BY cliente_id
       )
@@ -327,6 +329,7 @@ router.get('/clientes', async (req, res) => {
 // GET /api/margenes/lineas   Ranking por línea de producto con YoY
 router.get('/lineas', async (req, res) => {
   try {
+    const P = parsePeriodo(req);
     const rows = await db.allAsync(`
       WITH actual AS (
         SELECT a.linea       AS linea,
@@ -335,7 +338,7 @@ router.get('/lineas', async (req, res) => {
                SUM(f.margen_bruto)  AS margen
         FROM thermoplastica.fact_ventas_linea f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
-        WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND f.tipo_doc = 'FACT'
+        WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
           AND a.linea IS NOT NULL
         GROUP BY a.linea
       ),
@@ -345,8 +348,7 @@ router.get('/lineas', async (req, res) => {
                SUM(f.margen_bruto)  AS margen
         FROM thermoplastica.fact_ventas_linea f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
-        WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-          AND f.fecha_emision <  CURRENT_DATE - INTERVAL '12 months'
+        WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND f.tipo_doc = 'FACT' AND a.linea IS NOT NULL
         GROUP BY a.linea
       )

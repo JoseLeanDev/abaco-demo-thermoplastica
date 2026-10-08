@@ -22,6 +22,7 @@ import {
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import AgentChat from '../agents/AgentChat'
+import FiltroPeriodo from '../common/FiltroPeriodo'
 
 const navigation = [
   { name: 'Panel', href: '/', icon: HomeIcon },
@@ -194,6 +195,9 @@ export default function DashboardLayout({ children }) {
             </div>
 
             <div className="flex items-center gap-4">
+              {/* Filtro de fechas global: siempre visible, aplica a todos los módulos */}
+              <FiltroPeriodo />
+
               {/* User badge */}
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
                 <UserCircleIcon className="w-4 h-4 text-[var(--text-muted)]" />
@@ -203,7 +207,7 @@ export default function DashboardLayout({ children }) {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--success-bg)]">
+              <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--success-bg)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
                 <span className="text-xs font-medium text-[var(--success)]">Sistema operativo</span>
               </div>

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
+import { usePeriodo } from '../context/PeriodoContext'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import {
   ArrowTrendingDownIcon,
   ArrowLeftIcon,
@@ -40,11 +42,14 @@ export default function CuentasPorPagar() {
   const [bucket, setBucket]         = useState('todos')
   const [proveedorSel, setProveedor] = useState('')
 
-  const { data: cxpData, isLoading: loadingResumen } = useQuery('cxp', endpoints.tesoreria.cxp)
+  const { params: periodo } = usePeriodo()
+  const { data: cxpData, isLoading: loadingResumen } = useQuery(
+    ['cxp', periodo], () => endpoints.tesoreria.cxp(periodo), { keepPreviousData: true }
+  )
 
-  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, proveedor: proveedorSel }
+  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, proveedor: proveedorSel, ...periodo }
   const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
-    ['cxp-detalle', busqueda, bucket, proveedorSel],
+    ['cxp-detalle', busqueda, bucket, proveedorSel, periodo],
     () => endpoints.tesoreria.cxpDetalle(detalleParams),
     { keepPreviousData: true }
   )
@@ -81,6 +86,7 @@ export default function CuentasPorPagar() {
                   ? 'Cargando…'
                   : `${totalFacturas.toLocaleString()} facturas abiertas · DPO promedio vencido ${resumen.promedio_dias_pago || 0} días · Crédito promedio pactado ${resumen.dias_credito_promedio || 0} días`}
               </p>
+              <PeriodoActivo nota="saldos de facturas emitidas en el período" className="mt-1" />
             </div>
           </div>
         </div>

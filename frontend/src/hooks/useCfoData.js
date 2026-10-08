@@ -1,22 +1,31 @@
 import { useQuery } from 'react-query'
 import { endpoints } from '../services/cfoApi'
+import { usePeriodo } from '../context/PeriodoContext'
+
+// Los hooks de datos con ventana temporal leen el filtro de fechas global
+// (default: año en curso) y lo incluyen en la query key.
 
 export const useDashboard = () => {
-  return useQuery('dashboard', endpoints.dashboard, {
+  const { params } = usePeriodo()
+  return useQuery(['dashboard', params], () => endpoints.dashboard(params), {
+    keepPreviousData: true,
     refetchInterval: 5 * 60 * 1000, // Refetch cada 5 minutos
   })
 }
 
 export const useTesoreriaPosicion = () => {
-  return useQuery('tesoreria-posicion', endpoints.tesoreria.posicion)
+  const { params } = usePeriodo()
+  return useQuery(['tesoreria-posicion', params], () => endpoints.tesoreria.posicion(params), { keepPreviousData: true })
 }
 
 export const useTesoreriaCxC = () => {
-  return useQuery('tesoreria-cxc', endpoints.tesoreria.cxc)
+  const { params } = usePeriodo()
+  return useQuery(['tesoreria-cxc', params], () => endpoints.tesoreria.cxc(params), { keepPreviousData: true })
 }
 
 export const useTesoreriaCxP = () => {
-  return useQuery('tesoreria-cxp', endpoints.tesoreria.cxp)
+  const { params } = usePeriodo()
+  return useQuery(['tesoreria-cxp', params], () => endpoints.tesoreria.cxp(params), { keepPreviousData: true })
 }
 
 export const useTesoreriaProyeccion = (semanas = 13) => {
@@ -38,11 +47,15 @@ export const useInsights = (context = 'all') => {
   })
 }
 
+// usarPeriodo=true: filtra por el período global (página Insights de IA).
+// Sin él: últimos `days` días (banners de insights recientes dentro de cada módulo).
 export const useInsightsHistorico = (options = {}) => {
-  const { limit = 50, type, severity, days = 30 } = options
+  const { limit = 50, type, severity, days = 30, usarPeriodo = false } = options
+  const { params } = usePeriodo()
+  const ventana = usarPeriodo ? params : { days }
   return useQuery(
-    ['insights-historico', limit, type, severity, days],
-    () => endpoints.analisis.insightsHistorico({ limit, type, severity, days }),
+    ['insights-historico', limit, type, severity, ventana],
+    () => endpoints.analisis.insightsHistorico({ limit, type, severity, ...ventana }),
     {
       refetchInterval: 10 * 60 * 1000,
     }
@@ -50,10 +63,11 @@ export const useInsightsHistorico = (options = {}) => {
 }
 
 export const useAgentesLogs = (options = {}) => {
-  const { limit = 50, agente, categoria, status, dias = 7 } = options
+  const { limit = 50, agente, categoria, status } = options
+  const { params } = usePeriodo()
   return useQuery(
-    ['agentes-logs', limit, agente, categoria, status, dias],
-    () => endpoints.agents.logs({ limit, agente, categoria, status, dias }),
+    ['agentes-logs', limit, agente, categoria, status, params],
+    () => endpoints.agents.logs({ limit, agente, categoria, status, ...params }),
     {
       refetchInterval: 30 * 1000, // Refrescar cada 30 segundos
     }
@@ -61,7 +75,9 @@ export const useAgentesLogs = (options = {}) => {
 }
 
 export const useSaludFinanciera = () => {
-  return useQuery('salud-financiera', endpoints.analisis.salud, {
+  const { params } = usePeriodo()
+  return useQuery(['salud-financiera', params], () => endpoints.analisis.salud(params), {
+    keepPreviousData: true,
     staleTime: 10 * 60 * 1000,
   })
 }
@@ -79,35 +95,44 @@ export const useFlujoCaja = (semanas = 13) => {
 }
 
 export const useMargenes = () => {
-  return useQuery('margenes', endpoints.margenes.resumen, {
+  const { params } = usePeriodo()
+  return useQuery(['margenes', params], () => endpoints.margenes.resumen(params), {
+    keepPreviousData: true,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
   })
 }
 
 export const useMargenProductoDetalle = (id) => {
-  return useQuery(['margen-producto-detalle', id], () => 
-    endpoints.margenes.detalleProducto(id),
+  const { params } = usePeriodo()
+  return useQuery(['margen-producto-detalle', id, params], () =>
+    endpoints.margenes.detalleProducto(id, params),
     { enabled: !!id }
   )
 }
 
 export const useMargenVendedores = () => {
-  return useQuery('margen-vendedores', endpoints.margenes.vendedores, {
+  const { params } = usePeriodo()
+  return useQuery(['margen-vendedores', params], () => endpoints.margenes.vendedores(params), {
+    keepPreviousData: true,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
   })
 }
 
 export const useMargenClientes = () => {
-  return useQuery('margen-clientes', endpoints.margenes.clientes, {
+  const { params } = usePeriodo()
+  return useQuery(['margen-clientes', params], () => endpoints.margenes.clientes(params), {
+    keepPreviousData: true,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
   })
 }
 
 export const useMargenLineas = () => {
-  return useQuery('margen-lineas', endpoints.margenes.lineas, {
+  const { params } = usePeriodo()
+  return useQuery(['margen-lineas', params], () => endpoints.margenes.lineas(params), {
+    keepPreviousData: true,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
   })

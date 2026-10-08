@@ -194,9 +194,10 @@ async function llamarModelo(messages, apiKey) {
  * @param {object} opts
  * @param {function} opts.onPaso  callback por paso, para streaming
  * @param {Array}   opts.historial mensajes previos [{role, content}]
+ * @param {object}  opts.periodo   filtro de fechas activo en la app {desde, hasta}
  */
 async function correr(pregunta, opts = {}) {
-  const { onPaso = () => {}, historial = [] } = opts;
+  const { onPaso = () => {}, historial = [], periodo = null } = opts;
   const t0 = Date.now();
 
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -210,6 +211,12 @@ async function correr(pregunta, opts = {}) {
     // cache_control: el system prompt es identico en todas las vueltas y en
     // todas las preguntas. Cachearlo baja el costo de las lecturas a ~10%.
     { role: 'system', content: [{ type: 'text', text: cacheSystem, cache_control: { type: 'ephemeral' } }] },
+    // Va aparte del system cacheado: cambia con cada selección del filtro.
+    ...(periodo ? [{
+      role: 'system',
+      content: `Filtro de fechas activo en la app: desde ${periodo.desde} hasta ${periodo.hasta} (inclusive). ` +
+               'Si la pregunta no indica fechas, limita las consultas a ese rango y menciónalo en la respuesta.'
+    }] : []),
     ...historial,
     { role: 'user', content: pregunta }
   ];

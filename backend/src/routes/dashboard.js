@@ -1,13 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
+const { parsePeriodo } = require('../services/periodo');
 
 // GET /api/dashboard
 // Executive briefing CEO-grade: KPIs, aging, YoY, márgenes, inventario, concentración, insights.
 router.get('/', async (req, res) => {
   try {
+    // Ventana del filtro global (default: año en curso) y su comparable un año antes.
+    const P = parsePeriodo(req);
+
     // ==============================================================
-    // 1) SERIE MENSUAL 24 MESES (ventas + margen) — para YoY overlay
+    // 1) SERIE MENSUAL del período + mismo período año previo — para YoY overlay
     // ==============================================================
     const serie24m = await db.allAsync(`
       SELECT EXTRACT(YEAR FROM fecha_emision)::int  AS anio,
@@ -18,45 +22,40 @@ router.get('/', async (req, res) => {
              COUNT(DISTINCT fact_num)               AS facturas
       FROM thermoplastica.fact_ventas_linea
       WHERE tipo_doc = 'FACT'
-        AND fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
+        AND fecha_emision BETWEEN (${P.D} - INTERVAL '1 year') AND ${P.H}
       GROUP BY 1, 2
       ORDER BY 1, 2
     `);
 
     // ==============================================================
-    // 2) VENTAS 12m vs 12m previo (YoY comparison)
+    // 2) VENTAS período vs período de comparación (YoY)
     // ==============================================================
     const yoy = await db.getAsync(`
       SELECT
-        COALESCE(SUM(total_sin_iva)         FILTER (WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months'), 0) AS ventas_actual,
-        COALESCE(SUM(total_sin_iva)         FILTER (WHERE fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-                                                     AND fecha_emision <  CURRENT_DATE - INTERVAL '12 months'), 0) AS ventas_previo,
-        COALESCE(SUM(margen_bruto)          FILTER (WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months'), 0) AS margen_actual,
-        COALESCE(SUM(margen_bruto)          FILTER (WHERE fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-                                                     AND fecha_emision <  CURRENT_DATE - INTERVAL '12 months'), 0) AS margen_previo,
-        COALESCE(SUM(costo_total_facturado) FILTER (WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months'), 0) AS costo_actual,
-        COUNT(DISTINCT fact_num)            FILTER (WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months')    AS facturas_actual,
-        COUNT(DISTINCT cliente_id)          FILTER (WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months')    AS clientes_actual,
-        COUNT(DISTINCT cliente_id)          FILTER (WHERE fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-                                                     AND fecha_emision <  CURRENT_DATE - INTERVAL '12 months')    AS clientes_previo
+        COALESCE(SUM(total_sin_iva)         FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS ventas_actual,
+        COALESCE(SUM(total_sin_iva)         FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS ventas_previo,
+        COALESCE(SUM(margen_bruto)          FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS margen_actual,
+        COALESCE(SUM(margen_bruto)          FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS margen_previo,
+        COALESCE(SUM(costo_total_facturado) FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS costo_actual,
+        COUNT(DISTINCT fact_num)            FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H})    AS facturas_actual,
+        COUNT(DISTINCT cliente_id)          FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H})    AS clientes_actual,
+        COUNT(DISTINCT cliente_id)          FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH})    AS clientes_previo
       FROM thermoplastica.fact_ventas_linea
       WHERE tipo_doc = 'FACT'
     `);
 
     // ==============================================================
-    // 3) Compras materia prima y gastos operativos (12m + 12m previo)
+    // 3) Compras materia prima y gastos operativos (período + comparación)
     // ==============================================================
     const comprasGastos = await db.getAsync(`
       SELECT
-        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
+        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}
                                                 AND COALESCE(a.es_gasto_operativo, FALSE) = FALSE), 0) AS compras_actual,
-        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-                                                AND f.fecha_emision <  CURRENT_DATE - INTERVAL '12 months'
+        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
                                                 AND COALESCE(a.es_gasto_operativo, FALSE) = FALSE), 0) AS compras_previo,
-        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
+        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}
                                                 AND COALESCE(a.es_gasto_operativo, FALSE) = TRUE), 0) AS gastos_actual,
-        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '24 months'
-                                                AND f.fecha_emision <  CURRENT_DATE - INTERVAL '12 months'
+        COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
                                                 AND COALESCE(a.es_gasto_operativo, FALSE) = TRUE), 0) AS gastos_previo
       FROM thermoplastica.fact_compras_linea f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
@@ -77,6 +76,7 @@ router.get('/', async (req, res) => {
         COUNT(*)                             AS documentos
       FROM thermoplastica.fact_cxc_snapshot_diario
       WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     // ==============================================================
@@ -94,6 +94,7 @@ router.get('/', async (req, res) => {
         COUNT(DISTINCT proveedor_id)                                                                         AS proveedores
       FROM thermoplastica.fact_cxp_factura
       WHERE saldo > 0
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     // ==============================================================
@@ -119,6 +120,7 @@ router.get('/', async (req, res) => {
       FROM thermoplastica.fact_cxc_snapshot_diario f
       JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
       WHERE f.fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
       GROUP BY c.codigo_cliente, c.nombre
       ORDER BY monto DESC
       LIMIT 5
@@ -133,6 +135,7 @@ router.get('/', async (req, res) => {
       FROM thermoplastica.fact_cxp_factura f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE f.saldo > 0
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
       GROUP BY p.codigo_proveedor, p.nombre
       ORDER BY monto DESC
       LIMIT 5
@@ -146,6 +149,7 @@ router.get('/', async (req, res) => {
       FROM thermoplastica.fact_cxp_factura f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE f.saldo > 0
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
       GROUP BY p.nombre, p.codigo_proveedor
       HAVING BOOL_AND(f.dias_credito_ficha = 0)
          AND BOOL_AND(f.fecha_vencimiento < CURRENT_DATE)
@@ -163,7 +167,7 @@ router.get('/', async (req, res) => {
       FROM thermoplastica.fact_cxc_factura
       WHERE dias_credito_ficha IS NOT NULL
         AND dias_segun_facturas IS NOT NULL
-        AND fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     // Concentración de compras (top 3 proveedores)
@@ -172,7 +176,7 @@ router.get('/', async (req, res) => {
         SELECT COALESCE(SUM(f.total_sin_iva), 0) AS total
         FROM thermoplastica.fact_compras_linea f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
-        WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
+        WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}
           AND COALESCE(a.es_gasto_operativo, FALSE) = FALSE
       )
       SELECT p.nombre AS proveedor, p.codigo_proveedor AS codigo,
@@ -181,7 +185,7 @@ router.get('/', async (req, res) => {
       FROM thermoplastica.fact_compras_linea f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       JOIN thermoplastica.dim_articulo  a ON a.articulo_id  = f.articulo_id
-      WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months'
+      WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}
         AND COALESCE(a.es_gasto_operativo, FALSE) = FALSE
       GROUP BY p.nombre, p.codigo_proveedor
       ORDER BY gasto DESC
@@ -189,13 +193,13 @@ router.get('/', async (req, res) => {
     `);
 
     // ==============================================================
-    // 8) Top líneas de producto por ventas 12m (para inventario/mix)
+    // 8) Top líneas de producto por ventas del período (para inventario/mix)
     // ==============================================================
     const topLineas = await db.allAsync(`
       WITH tot AS (
         SELECT COALESCE(SUM(f.total_sin_iva), 0) AS total
         FROM thermoplastica.fact_ventas_linea f
-        WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND f.tipo_doc = 'FACT'
+        WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
       )
       SELECT COALESCE(a.linea, 'Sin línea') AS linea,
              COALESCE(SUM(f.total_sin_iva), 0)  AS ventas,
@@ -206,7 +210,7 @@ router.get('/', async (req, res) => {
              ROUND(100 * SUM(f.total_sin_iva) / NULLIF((SELECT total FROM tot), 0), 1) AS porcentaje
       FROM thermoplastica.fact_ventas_linea f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
-      WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND f.tipo_doc = 'FACT'
+      WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
         AND a.codigo_articulo NOT IN ('GENARTICULO','GENARTICULOEXENTO','GENSERV','GENSERVICIO')
       GROUP BY 1
       ORDER BY ventas DESC
@@ -224,6 +228,7 @@ router.get('/', async (req, res) => {
       FROM thermoplastica.fact_cxc_snapshot_diario f
       JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
       WHERE f.fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
         AND (CURRENT_DATE - f.fecha_vencimiento) > 60
         AND f.saldo_total > 0
       ORDER BY f.saldo_total DESC
@@ -234,7 +239,7 @@ router.get('/', async (req, res) => {
       WITH tot AS (
         SELECT COALESCE(SUM(total_sin_iva), 0) AS total
         FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND tipo_doc = 'FACT'
+        WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
       )
       SELECT c.codigo_cliente AS codigo, c.nombre AS cliente,
              COALESCE(SUM(f.total_sin_iva), 0) AS ventas,
@@ -243,7 +248,7 @@ router.get('/', async (req, res) => {
                   ELSE 0 END AS porcentaje
       FROM thermoplastica.fact_ventas_linea f
       JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
-      WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND f.tipo_doc = 'FACT'
+      WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
       GROUP BY c.codigo_cliente, c.nombre
       ORDER BY ventas DESC LIMIT 1
     `);
@@ -252,7 +257,7 @@ router.get('/', async (req, res) => {
       WITH tot AS (
         SELECT COALESCE(SUM(total_sin_iva), 0) AS total
         FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND tipo_doc = 'FACT'
+        WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
       )
       SELECT v.nombre AS vendedor, v.codigo_vendedor AS codigo,
              COUNT(DISTINCT f.cliente_id) AS clientes,
@@ -265,7 +270,7 @@ router.get('/', async (req, res) => {
                   ELSE 0 END AS porcentaje
       FROM thermoplastica.fact_ventas_linea f
       JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
-      WHERE f.fecha_emision >= CURRENT_DATE - INTERVAL '12 months' AND f.tipo_doc = 'FACT'
+      WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
       GROUP BY v.nombre, v.codigo_vendedor
       ORDER BY ventas DESC LIMIT 1
     `);
@@ -302,14 +307,18 @@ router.get('/', async (req, res) => {
     const coberturaCxCCxP = cxpTotal > 0 ? cxcTotal / cxpTotal : null;
 
     // Cash Conversion Cycle proxy
-    const dso = ventas12m > 0 ? (cxcTotal / (ventas12m / 365)) : null;
-    const dpo = compras12m > 0 ? (cxpTotal / (compras12m / 365)) : null;
+    // Los flujos son del período seleccionado → se diarizan con sus días reales.
+    const dso = ventas12m > 0 ? (cxcTotal / (ventas12m / P.dias)) : null;
+    const dpo = compras12m > 0 ? (cxpTotal / (compras12m / P.dias)) : null;
     const valorInventario = parseFloat(inventario.valor_total) || 0;
-    const dio = costoVentas12m > 0 ? (valorInventario / (costoVentas12m / 365)) : null;
+    const dio = costoVentas12m > 0 ? (valorInventario / (costoVentas12m / P.dias)) : null;
     const ccc = (dso !== null && dpo !== null && dio !== null) ? (dso + dio - dpo) : null;
 
     // Tendencia mes anterior
-    const serieOrdenada = serie24m.slice(-13); // hasta 12 meses + curso
+    // Solo los meses que caen dentro del período; los del año previo quedan para el overlay.
+    const mesDesde = P.desde.slice(0, 7);
+    const enPeriodo = (r) => `${r.anio}-${String(r.mes).padStart(2, '0')}` >= mesDesde;
+    const serieOrdenada = serie24m.filter(enPeriodo);
     const mesAnterior = serieOrdenada.length >= 2 ? parseFloat(serieOrdenada[serieOrdenada.length - 2].ventas) : 0;
     const promedioPrevios = serieOrdenada.length >= 3
       ? serieOrdenada.slice(0, -2).reduce((s, r) => s + parseFloat(r.ventas), 0) / (serieOrdenada.length - 2)
@@ -319,7 +328,7 @@ router.get('/', async (req, res) => {
     // Serie mensual con overlay YoY (ventas mismo mes año previo)
     const serieMap = {};
     serie24m.forEach(r => { serieMap[`${r.anio}-${r.mes}`] = r; });
-    const serieYoY = serie24m.slice(-13).map(r => {
+    const serieYoY = serieOrdenada.map(r => {
       const prev = serieMap[`${parseInt(r.anio) - 1}-${r.mes}`];
       return {
         anio: r.anio,
@@ -371,8 +380,8 @@ router.get('/', async (req, res) => {
       const buenaTend = deltaVentasPct >= 5 && deltaMargenPp >= 2;
       insights.push({
         tipo: buenaTend ? 'positivo' : (deltaVentasPct < -5 ? 'riesgo' : 'atencion'),
-        titulo: `Ventas ${deltaVentasPct >= 0 ? '+' : ''}${deltaVentasPct.toFixed(1)}% vs 12m previo · margen ${deltaMargenPp >= 0 ? '+' : ''}${deltaMargenPp.toFixed(1)}pp`,
-        detalle: `Facturación ${(ventas12m/1e6).toFixed(1)}M vs ${(ventas12mPrev/1e6).toFixed(1)}M el período anterior. Margen bruto real pasó de ${margenPrevPct.toFixed(1)}% a ${margenRealPct.toFixed(1)}%.`,
+        titulo: `Ventas ${deltaVentasPct >= 0 ? '+' : ''}${deltaVentasPct.toFixed(1)}% vs mismo período año anterior · margen ${deltaMargenPp >= 0 ? '+' : ''}${deltaMargenPp.toFixed(1)}pp`,
+        detalle: `Facturación ${(ventas12m/1e6).toFixed(1)}M vs ${(ventas12mPrev/1e6).toFixed(1)}M el período de comparación. Margen bruto real pasó de ${margenPrevPct.toFixed(1)}% a ${margenRealPct.toFixed(1)}%.`,
         link: '/ventas',
       });
     }
@@ -408,7 +417,7 @@ router.get('/', async (req, res) => {
       insights.push({
         tipo: 'riesgo',
         titulo: `Concentración cliente: ${topClienteVentas.cliente}`,
-        detalle: `Representa el ${topClienteVentas.porcentaje}% de las ventas 12m (Q${(parseFloat(topClienteVentas.ventas)/1e6).toFixed(1)}M).`,
+        detalle: `Representa el ${topClienteVentas.porcentaje}% de las ventas del período (Q${(parseFloat(topClienteVentas.ventas)/1e6).toFixed(1)}M).`,
         link: '/ventas',
       });
     }
@@ -441,7 +450,7 @@ router.get('/', async (req, res) => {
         insights.push({
           tipo: 'atencion',
           titulo: `${pct}% de facturas CxC dieron más plazo del acordado`,
-          detalle: `${cxcDesviacion.facturas_extendidas} de ${cxcDesviacion.total_facturas} facturas (12m) con más días que la ficha. Revisar disciplina comercial.`,
+          detalle: `${cxcDesviacion.facturas_extendidas} de ${cxcDesviacion.total_facturas} facturas del período con más días que la ficha. Revisar disciplina comercial.`,
           link: '/tesoreria/cuentas-por-cobrar',
         });
       }
@@ -467,6 +476,7 @@ router.get('/', async (req, res) => {
       data: {
         empresa: 'Thermoplástica, S.A.',
         fecha_corte: new Date().toISOString().split('T')[0],
+        periodo: P.ventana(),
         health: {
           score: healthScore,
           grade: healthGrade,

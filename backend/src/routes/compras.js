@@ -4,16 +4,8 @@ const db = require('../../database/connection');
 
 // Helpers ------------------------------------------------------------------
 
-// Ventana default: 12 meses hacia atrás terminando en el mes actual.
-function parseWindow(req) {
-  const hasta = req.query.hasta ? new Date(req.query.hasta) : new Date();
-  const desde = req.query.desde ? new Date(req.query.desde)
-                                : new Date(new Date().setMonth(hasta.getMonth() - 11, 1));
-  return {
-    desde: desde.toISOString().slice(0, 10),
-    hasta: hasta.toISOString().slice(0, 10),
-  };
-}
+// Ventana default: año en curso (ver services/periodo.js).
+const { parsePeriodo: parseWindow } = require('../services/periodo');
 
 // El toggle "incluir gastos" define si mezclamos compras de materia prima
 // con la categoría "Gastos de Operación" (que en el ERP son gastos contables

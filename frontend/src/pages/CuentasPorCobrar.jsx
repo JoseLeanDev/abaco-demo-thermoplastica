@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useQuery } from 'react-query'
 import { Link } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
+import { usePeriodo } from '../context/PeriodoContext'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import {
   ArrowTrendingUpIcon,
   ArrowLeftIcon,
@@ -33,11 +35,14 @@ export default function CuentasPorCobrar() {
   const [busqueda, setBusqueda] = useState('')
   const [bucket, setBucket]     = useState('todos')
 
-  const { data: cxcData, isLoading: loadingResumen } = useQuery('cxc', endpoints.tesoreria.cxc)
+  const { params: periodo } = usePeriodo()
+  const { data: cxcData, isLoading: loadingResumen } = useQuery(
+    ['cxc', periodo], () => endpoints.tesoreria.cxc(periodo), { keepPreviousData: true }
+  )
 
-  const detalleParams = { limit: 500, offset: 0, busqueda, bucket }
+  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, ...periodo }
   const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
-    ['cxc-detalle', busqueda, bucket],
+    ['cxc-detalle', busqueda, bucket, periodo],
     () => endpoints.tesoreria.cxcDetalle(detalleParams),
     { keepPreviousData: true }
   )
@@ -70,6 +75,7 @@ export default function CuentasPorCobrar() {
               <p className="text-sm text-[var(--text-muted)]">
                 {loadingResumen ? 'Cargando…' : `${totalFacturas.toLocaleString()} documentos abiertos • DSO promedio ${resumen.promedio_dias_cobro || 0} días`}
               </p>
+              <PeriodoActivo nota="saldos de documentos emitidos en el período" className="mt-1" />
             </div>
           </div>
         </div>

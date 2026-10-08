@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
 const proyecciones = require('../services/proyecciones');
+const { parsePeriodo } = require('../services/periodo');
 
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
@@ -10,6 +11,8 @@ const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes
 // Bancos no están disponibles en el ERP TP_A actual — se reportan como N/D.
 router.get('/posicion', async (req, res) => {
   try {
+    // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
+    const P = parsePeriodo(req);
     // 1. Cuentas por cobrar (snapshot vivo)
     const cxc = await db.getAsync(`
       SELECT
@@ -20,6 +23,7 @@ router.get('/posicion', async (req, res) => {
         AVG(GREATEST((CURRENT_DATE - fecha_vencimiento)::int, 0)) AS dias_promedio_vencido
       FROM thermoplastica.fact_cxc_snapshot_diario
       WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     // 2. Cuentas por pagar (fuente real: thermoplastica.fact_cxp_factura,
@@ -35,6 +39,7 @@ router.get('/posicion', async (req, res) => {
         AVG(dias_credito_ficha) FILTER (WHERE dias_credito_ficha > 0)             AS dias_credito_promedio
       FROM thermoplastica.fact_cxp_factura
       WHERE saldo > 0
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     const cxcTotal = parseFloat(cxc.total) || 0;
@@ -46,6 +51,7 @@ router.get('/posicion', async (req, res) => {
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
+        periodo: P.ventana(),
         fecha_corte: new Date().toISOString().split('T')[0],
         bancos: {
           disponible: false,
@@ -81,6 +87,8 @@ router.get('/posicion', async (req, res) => {
 // Fuente: thermoplastica.fact_cxc_snapshot_diario (snapshot del día más reciente).
 router.get('/cxc', async (req, res) => {
   try {
+    // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
+    const P = parsePeriodo(req);
     const distribucion = await db.getAsync(`
       SELECT
         COALESCE(SUM(porvencer), 0)                                       AS al_corriente,
@@ -93,6 +101,7 @@ router.get('/cxc', async (req, res) => {
       WHERE fecha_snapshot = (
         SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario
       )
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     const topDeudores = await db.allAsync(`
@@ -107,6 +116,7 @@ router.get('/cxc', async (req, res) => {
       WHERE f.fecha_snapshot = (
         SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario
       )
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
       GROUP BY c.codigo_cliente, c.nombre
       ORDER BY monto DESC
       LIMIT 5
@@ -118,6 +128,7 @@ router.get('/cxc', async (req, res) => {
       WHERE fecha_snapshot = (
         SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario
       )
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     const total = parseFloat(distribucion.total) || 1;
@@ -127,6 +138,7 @@ router.get('/cxc', async (req, res) => {
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
+        periodo: P.ventana(),
         total_cxc: parseFloat(distribucion.total) || 0,
         facturas: parseInt(distribucion.facturas) || 0,
         promedio_dias_cobro: Math.round(parseFloat(promedio.promedio) || 0),
@@ -156,12 +168,17 @@ router.get('/cxc', async (req, res) => {
 //   bucket ∈ 'al_corriente' | '_30_dias' | '_60_dias' | '_90_dias' | 'todos'
 router.get('/cxc/detalle', async (req, res) => {
   try {
+    // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
+    const P = parsePeriodo(req);
     const limit = Math.min(parseInt(req.query.limit)  || 200, 1000);
     const offset = parseInt(req.query.offset)         || 0;
     const busqueda = (req.query.busqueda || '').trim();
     const bucket = req.query.bucket || 'todos';
 
-    const where = [`f.fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)`];
+    const where = [
+      `f.fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)`,
+      `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`,
+    ];
     const params = [];
 
     if (busqueda) {
@@ -219,6 +236,7 @@ router.get('/cxc/detalle', async (req, res) => {
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
+        periodo: P.ventana(),
         total_filas: parseInt(totalRow.total) || 0,
         suma_saldo: parseFloat(totalRow.suma_saldo) || 0,
         filas: rows.map(r => ({
@@ -258,6 +276,8 @@ router.get('/cxc/detalle', async (req, res) => {
 // Aging por fecha_vencimiento REAL (no estimada). Buckets alineados con CxC.
 router.get('/cxp', async (req, res) => {
   try {
+    // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
+    const P = parsePeriodo(req);
     const dias = parseInt(req.query.proximos_dias) || 30;
 
     const resumen = await db.getAsync(`
@@ -269,6 +289,7 @@ router.get('/cxp', async (req, res) => {
         AVG(dias_credito_ficha) FILTER (WHERE dias_credito_ficha > 0)        AS dias_credito_promedio
       FROM thermoplastica.fact_cxp_factura
       WHERE saldo > 0
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     // Aging real por fecha_vencimiento (buckets iguales a los de CxC)
@@ -281,6 +302,7 @@ router.get('/cxp', async (req, res) => {
         COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) > 90), 0)                            AS v_90_mas
       FROM thermoplastica.fact_cxp_factura
       WHERE saldo > 0
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
     // Próximos pagos por fecha_vencimiento real en los próximos N días
@@ -298,6 +320,7 @@ router.get('/cxp', async (req, res) => {
       FROM thermoplastica.fact_cxp_factura f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE f.saldo > 0
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
         AND f.fecha_vencimiento <= CURRENT_DATE + (? || ' days')::interval
         AND f.fecha_vencimiento >= CURRENT_DATE
       ORDER BY f.fecha_vencimiento ASC
@@ -316,6 +339,7 @@ router.get('/cxp', async (req, res) => {
       FROM thermoplastica.fact_cxp_factura f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE f.saldo > 0
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
       GROUP BY p.nombre, p.codigo_proveedor
       ORDER BY monto DESC
       LIMIT 10
@@ -328,6 +352,7 @@ router.get('/cxp', async (req, res) => {
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
+        periodo: P.ventana(),
         total_cxp: total,
         facturas: parseInt(resumen.facturas) || 0,
         proveedores: parseInt(resumen.proveedores) || 0,
@@ -372,13 +397,15 @@ router.get('/cxp', async (req, res) => {
 //   bucket ∈ 'por_vencer' | 'v_1_30' | 'v_31_60' | 'v_61_90' | 'v_90_mas' | 'todos'
 router.get('/cxp/detalle', async (req, res) => {
   try {
+    // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
+    const P = parsePeriodo(req);
     const limit    = Math.min(parseInt(req.query.limit) || 200, 1000);
     const offset   = parseInt(req.query.offset) || 0;
     const busqueda = (req.query.busqueda || '').trim();
     const bucket   = req.query.bucket || 'todos';
     const codigoProv = (req.query.proveedor || '').trim();
 
-    const where = ['f.saldo > 0'];
+    const where = ['f.saldo > 0', `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`];
     const params = [];
 
     if (busqueda) {
@@ -437,6 +464,7 @@ router.get('/cxp/detalle', async (req, res) => {
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
+        periodo: P.ventana(),
         total_filas: parseInt(totalRow.total) || 0,
         suma_saldo: parseFloat(totalRow.suma_saldo) || 0,
         filas: rows.map(r => ({

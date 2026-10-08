@@ -2,16 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
 
-// Ventana default: 12 meses hacia atrás
-function parseWindow(req) {
-  const hasta = req.query.hasta ? new Date(req.query.hasta) : new Date();
-  const desde = req.query.desde ? new Date(req.query.desde)
-                                : new Date(new Date().setMonth(hasta.getMonth() - 11, 1));
-  return {
-    desde: desde.toISOString().slice(0, 10),
-    hasta: hasta.toISOString().slice(0, 10),
-  };
-}
+// Ventana default: año en curso (ver services/periodo.js).
+const { parsePeriodo: parseWindow } = require('../services/periodo');
 
 // Todas las queries filtran es_gasto_operativo = TRUE.
 // La agrupación primaria es por SUBLINEA (centro de costo) — en el ERP

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { PeriodoProvider } from './context/PeriodoContext'
 import DashboardLayout from './components/dashboard/DashboardLayout'
 import Dashboard from './pages/Dashboard'
 import Tesoreria from './pages/Tesoreria'
@@ -53,6 +54,7 @@ function AppRoutes() {
         path="/*"
         element={
           <ProtectedRoute>
+            <PeriodoProvider>
             <DashboardLayout>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
@@ -83,6 +85,7 @@ function AppRoutes() {
                 {/* <Route path="/contabilidad/conciliacion/:cuentaId/:anio/:mes" element={<ConciliacionBancaria />} /> */}
               </Routes>
             </DashboardLayout>
+            </PeriodoProvider>
           </ProtectedRoute>
         }
       />

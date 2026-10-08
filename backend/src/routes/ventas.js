@@ -2,15 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
 
-function parseWindow(req) {
-  const hasta = req.query.hasta ? new Date(req.query.hasta) : new Date();
-  const desde = req.query.desde ? new Date(req.query.desde)
-                                : new Date(new Date().setMonth(hasta.getMonth() - 11, 1));
-  return {
-    desde: desde.toISOString().slice(0, 10),
-    hasta: hasta.toISOString().slice(0, 10),
-  };
-}
+// Ventana default: año en curso (ver services/periodo.js).
+const { parsePeriodo: parseWindow } = require('../services/periodo');
 
 // GET /api/ventas   Resumen: KPIs + serie mensual
 router.get('/', async (req, res) => {
