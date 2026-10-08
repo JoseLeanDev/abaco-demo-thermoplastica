@@ -45,8 +45,10 @@ const navigation = [
 ]
 
 // Los subitems se muestran cuando se está en la sección (la página o una de sus hijas)
+// Una sección queda activa también en sus subpáginas (p. ej. /tesoreria/cuentas-por-cobrar)
+const dentroDe = (pathname, href) => pathname === href || (href !== '/' && pathname.startsWith(href + '/'))
 const enSeccionDe = (pathname) => (item) =>
-  pathname === item.href || (item.children || []).some(c => pathname === c.href)
+  dentroDe(pathname, item.href) || (item.children || []).some(c => dentroDe(pathname, c.href))
 
 export default function DashboardLayout({ children }) {
   const location = useLocation()
@@ -88,7 +90,7 @@ export default function DashboardLayout({ children }) {
               {navigation
                 .filter(item => !item.adminOnly || isAdmin)
                 .map((item) => {
-                const isActive = location.pathname === item.href
+                const isActive = dentroDe(location.pathname, item.href) && !(item.children || []).some(c => dentroDe(location.pathname, c.href))
                 return (
                   <div key={item.name} className="space-y-1">
                   <Link
@@ -104,7 +106,7 @@ export default function DashboardLayout({ children }) {
                       key={c.href}
                       to={c.href}
                       onClick={() => setSidebarOpen(false)}
-                      className={`${location.pathname === c.href ? 'nav-link-active' : 'nav-link'} ml-8 py-1.5 text-sm`}
+                      className={`${dentroDe(location.pathname, c.href) ? 'nav-link-active' : 'nav-link'} ml-8 py-1.5 text-sm`}
                     >
                       <span>{c.name}</span>
                     </Link>
@@ -152,7 +154,7 @@ export default function DashboardLayout({ children }) {
             {navigation
               .filter(item => !item.adminOnly || isAdmin)
               .map((item) => {
-              const isActive = location.pathname === item.href
+              const isActive = dentroDe(location.pathname, item.href) && !(item.children || []).some(c => dentroDe(location.pathname, c.href))
               return (
                 <div key={item.name} className="space-y-1">
                 <Link
@@ -169,7 +171,7 @@ export default function DashboardLayout({ children }) {
                   <Link
                     key={c.href}
                     to={c.href}
-                    className={`${location.pathname === c.href ? 'nav-link-active' : 'nav-link'} ml-8 py-1.5 text-sm`}
+                    className={`${dentroDe(location.pathname, c.href) ? 'nav-link-active' : 'nav-link'} ml-8 py-1.5 text-sm`}
                   >
                     <span>{c.name}</span>
                   </Link>

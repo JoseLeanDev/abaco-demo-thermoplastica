@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from 'react-query'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
@@ -15,7 +15,8 @@ import {
   ExclamationCircleIcon,
   CheckCircleIcon,
   UserGroupIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline'
 
 const fmtQ = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
@@ -35,6 +36,9 @@ const badgeForDias = (dias) => {
 export default function CuentasPorCobrar() {
   const [busqueda, setBusqueda] = useState('')
   const [bucket, setBucket]     = useState('todos')
+  const [vista, setVista]       = useState('clientes') // 'clientes' | 'documentos'
+  const navigate = useNavigate()
+  const irACliente = (id) => navigate(`/tesoreria/cuentas-por-cobrar/cliente/${id}`)
 
   const { params: periodo } = usePeriodo()
   const { data: cxcData, isLoading: loadingResumen } = useQuery(
@@ -45,8 +49,14 @@ export default function CuentasPorCobrar() {
   const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
     ['cxc-detalle', busqueda, bucket, periodo],
     () => endpoints.tesoreria.cxcDetalle(detalleParams),
-    { keepPreviousData: true }
+    { keepPreviousData: true, enabled: vista === 'documentos' }
   )
+  const { data: clientesData, isLoading: loadingClientes, isFetching: fetchingClientes } = useQuery(
+    ['cxc-clientes', busqueda, periodo],
+    () => endpoints.tesoreria.cxcClientes({ busqueda, ...periodo }),
+    { keepPreviousData: true, enabled: vista === 'clientes' }
+  )
+  const clientes = clientesData?.data?.filas || []
 
   const resumen       = cxcData?.data || {}
   const distribucion  = resumen.distribucion_aging || {}
@@ -147,6 +157,15 @@ export default function CuentasPorCobrar() {
 
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex rounded-lg border border-[var(--border-default)] overflow-hidden shrink-0 self-start sm:self-auto">
+          {[{ id: 'clientes', label: 'Por cliente' }, { id: 'documentos', label: 'Por documento' }].map(v => (
+            <button
+              key={v.id}
+              onClick={() => setVista(v.id)}
+              className={`px-4 py-2 text-sm font-medium ${vista === v.id ? 'bg-[#001639] text-white' : 'hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)]'}`}
+            >{v.label}</button>
+          ))}
+        </div>
         <div className="relative flex-1">
           <MagnifyingGlassIcon className="w-5 h-5 text-[var(--text-muted)] absolute left-4 top-1/2 -translate-y-1/2" />
           <input
@@ -157,7 +176,7 @@ export default function CuentasPorCobrar() {
             className="input w-full pl-12"
           />
         </div>
-        <select
+        {vista === 'documentos' && <select
           value={bucket}
           onChange={(e) => setBucket(e.target.value)}
           className="input min-w-[200px]"
@@ -167,11 +186,21 @@ export default function CuentasPorCobrar() {
           <option value="_30_dias">1-30 días vencido</option>
           <option value="_60_dias">31-60 días vencido</option>
           <option value="_90_dias">60+ días vencido</option>
-        </select>
+        </select>}
       </div>
 
+      {vista === 'clientes' && (
+        <TablaClientes
+          filas={clientes}
+          cargando={loadingClientes}
+          actualizando={fetchingClientes && !loadingClientes}
+          total={clientesData?.data?.suma_saldo || 0}
+          onClick={irACliente}
+        />
+      )}
+
       {/* Tabla */}
-      <div className="card overflow-hidden">
+      {vista === 'documentos' && <div className="card overflow-hidden">
         <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)]">
           <div className="flex items-center gap-2">
             <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
@@ -218,14 +247,14 @@ export default function CuentasPorCobrar() {
                 const badge = badgeForDias(row.dias_atraso)
                 const BadgeIcon = badge.icon
                 return (
-                  <tr key={row.id} className="hover:bg-[var(--bg-secondary)] transition-colors">
+                  <tr key={row.id} className="hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer" onClick={() => irACliente(row.cliente_id)} title="Ver ficha del cliente">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
                           <BuildingOfficeIcon className="w-4 h-4 text-[var(--text-muted)]" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-[var(--text-primary)] truncate max-w-[240px]">{row.cliente}</p>
+                          <p className="font-medium text-[var(--text-primary)] truncate max-w-[240px] hover:underline">{row.cliente}</p>
                           <p className="text-xs text-[var(--text-muted)]">
                             {row.codigo_cliente}{row.forma_pago ? ` · ${row.forma_pago}` : ''}
                           </p>
@@ -297,6 +326,94 @@ export default function CuentasPorCobrar() {
             </tbody>
           </table>
         </div>
+      </div>}
+    </div>
+  )
+}
+
+// Cartera agrupada por cliente; cada fila abre la ficha del cliente
+function TablaClientes({ filas, cargando, actualizando, total, onClick }) {
+  const [orden, setOrden] = useState({ k: 'saldo', dir: -1 })
+  const ordenadas = [...filas].sort((a, b) => {
+    const x = a[orden.k] ?? -Infinity, y = b[orden.k] ?? -Infinity
+    return (typeof x === 'string' ? x.localeCompare(y) : x - y) * orden.dir
+  })
+  const Th = ({ k, children, align = 'right', leyenda }) => (
+    <th
+      onClick={() => setOrden(o => ({ k, dir: o.k === k ? -o.dir : -1 }))}
+      className={`px-4 py-3 text-${align} text-xs font-semibold text-[var(--text-muted)] uppercase cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-secondary)]`}
+    >
+      {children}{orden.k === k ? (orden.dir < 0 ? ' ↓' : ' ↑') : ''} {leyenda && <Leyenda k={leyenda} />}
+    </th>
+  )
+  return (
+    <div className="card overflow-hidden">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-2 flex-wrap bg-[var(--bg-secondary)]">
+        <div className="flex items-center gap-2">
+          <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <span className="text-sm text-[var(--text-muted)]">
+            {cargando ? 'Cargando…' : `${filas.length.toLocaleString()} clientes con saldo · clic para ver su ficha`}
+            {actualizando && ' • actualizando…'}
+          </span>
+          <Leyenda k="cxc_por_cliente" />
+        </div>
+        <span className="text-sm font-semibold">Total: {fmtQ(total)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-[var(--bg-secondary)] border-b border-[var(--border-default)]">
+            <tr>
+              <Th k="cliente" align="left">Cliente</Th>
+              <Th k="saldo">Saldo</Th>
+              <Th k="por_vencer" leyenda="por_vencer">Por vencer</Th>
+              <Th k="vencido" leyenda="dias_vencido">Vencido</Th>
+              <Th k="atraso_max">Atraso máx.</Th>
+              <Th k="dias_credito" leyenda="dias_credito">Crédito</Th>
+              <Th k="dias_pago" leyenda="dias_pago_real">Paga en</Th>
+              <Th k="pct_a_tiempo" leyenda="pct_a_tiempo">A tiempo</Th>
+              <th className="w-8" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border-default)]">
+            {cargando && filas.length === 0 && (
+              <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Cargando cartera…</td></tr>
+            )}
+            {!cargando && filas.length === 0 && (
+              <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">No hay clientes que coincidan.</td></tr>
+            )}
+            {ordenadas.map(r => {
+              const lento = r.dias_pago !== null && r.dias_credito !== null && r.dias_pago > r.dias_credito + 5
+              return (
+                <tr key={r.cliente_id} onClick={() => onClick(r.cliente_id)} className="hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer group">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-[var(--text-primary)] truncate max-w-[280px] group-hover:underline">{r.cliente}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{r.codigo_cliente}{r.sector ? ` · ${r.sector}` : ''} · {r.documentos} doc{r.documentos === 1 ? '' : 's'}</p>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <p className="font-bold tabular-nums">{fmtQ(r.saldo)}</p>
+                    <p className="text-xs text-[var(--text-muted)] tabular-nums">{r.pct_saldo}% del total</p>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)]">{fmtQ(r.por_vencer)}</td>
+                  <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.vencido > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
+                    {r.vencido > 0 ? fmtQ(r.vencido) : '—'}
+                    {r.documentos_vencidos > 0 && <p className="text-xs font-normal">{r.documentos_vencidos} doc{r.documentos_vencidos === 1 ? '' : 's'}</p>}
+                  </td>
+                  <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.atraso_max > 60 ? 'text-[var(--danger)] font-semibold' : r.atraso_max > 0 ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}>
+                    {r.atraso_max > 0 ? `${r.atraso_max} d` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)]">{r.dias_credito !== null ? `${r.dias_credito} d` : '—'}</td>
+                  <td className={`px-4 py-3 text-right tabular-nums text-sm ${lento ? 'text-[var(--warning)] font-semibold' : 'text-[var(--text-secondary)]'}`}>
+                    {r.dias_pago !== null ? `${r.dias_pago} d` : '—'}
+                  </td>
+                  <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.pct_a_tiempo === null ? 'text-[var(--text-muted)]' : r.pct_a_tiempo >= 80 ? 'text-[var(--success)]' : r.pct_a_tiempo >= 50 ? 'text-[var(--warning)]' : 'text-[var(--danger)]'}`}>
+                    {r.pct_a_tiempo !== null ? `${r.pct_a_tiempo}%` : '—'}
+                  </td>
+                  <td className="pr-3"><ChevronRightIcon className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]" /></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )

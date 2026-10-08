@@ -449,6 +449,84 @@ export const LEYENDAS = {
     texto: <>Días de crédito pactados en la ficha del proveedor o cliente en el ERP.</>,
   },
 
+  // ======================= Ficha de cliente (CxC) =======================
+  cxc_por_cliente: {
+    titulo: 'Cartera por cliente',
+    texto: <>
+      Saldo del último corte de cartera del ERP sumado por cliente (documentos emitidos en el período).
+      <Nota>“Paga en” y “A tiempo” salen de las facturas que el cliente terminó de pagar en el período. Clic en un cliente para ver su ficha.</Nota>
+    </>,
+  },
+  saldo_cliente: {
+    titulo: 'Saldo del cliente',
+    texto: <>
+      Todo lo que el cliente debe al último corte del reporte de cartera, sin importar cuándo se emitió el documento.
+      <Nota>Por eso puede ser mayor que lo que suma en la lista de Cuentas por Cobrar, que solo cuenta documentos emitidos en el período.</Nota>
+    </>,
+  },
+  dias_pago_real: {
+    titulo: 'Días reales de pago',
+    texto: <>
+      Para cada factura ya pagada: fecha del último cobro − fecha de emisión. Promedio ponderado por el valor de la factura.
+      <Nota>Solo facturas que terminaron de pagarse en el período. Se compara con el mismo rango del año anterior y con los días de crédito de su ficha.</Nota>
+    </>,
+  },
+  atraso_pago: {
+    titulo: 'Atraso al pagar',
+    texto: <>
+      Fecha del último cobro − fecha de vencimiento, ponderado por monto. Negativo = paga antes de vencer.
+    </>,
+  },
+  pct_a_tiempo: {
+    titulo: 'Pagado a tiempo',
+    texto: <>% del monto de las facturas pagadas en el período cuyo último cobro fue en o antes de su vencimiento.</>,
+  },
+  plazo_facturado: {
+    titulo: 'Plazo en factura',
+    texto: <>
+      Días entre emisión y vencimiento con que se emitieron sus facturas, ponderado por monto.
+      <Nota>Si es mayor que los días de la ficha, se le está dando más crédito del pactado.</Nota>
+    </>,
+  },
+  peor_atraso: {
+    titulo: 'Peor atraso',
+    texto: <>El mayor número de días que una factura pagada en el período se cobró después de vencer.</>,
+  },
+  estado_cuenta: {
+    titulo: 'Estado de cuenta',
+    texto: <>
+      Documentos con saldo al último corte del reporte de cartera del ERP.
+      <L>
+        <li><strong>Valor:</strong> monto original de la factura (con IVA).</li>
+        <li><strong>Abonado:</strong> valor − saldo.</li>
+        <li><strong>Último abono:</strong> fecha del cobro más reciente aplicado a esa factura.</li>
+      </L>
+    </>,
+  },
+  facturado_cobrado: {
+    titulo: 'Facturado vs cobrado',
+    texto: <>
+      <strong>Facturado:</strong> valor con IVA de las facturas emitidas en el mes. <strong>Cobrado:</strong> valor de las facturas que terminaron de pagarse en el mes.
+      <Nota>Los abonos parciales cuentan hasta que la factura se liquida. El historial del ERP empieza en septiembre de 2024.</Nota>
+    </>,
+  },
+  distribucion_atraso: {
+    titulo: 'Cuándo paga',
+    texto: <>Las últimas facturas pagadas (hasta 200), agrupadas por días entre el vencimiento y el último cobro, ponderadas por monto.</>,
+  },
+  compras_cliente: {
+    titulo: 'Compras del cliente',
+    texto: <>Ventas sin IVA facturadas al cliente en el período, mismo criterio que el módulo de Ventas. Se compara con el mismo rango del año anterior.</>,
+  },
+  frecuencia_compra: {
+    titulo: 'Frecuencia de compra',
+    texto: <>Días promedio entre fechas con compra en los últimos 12 meses: (última compra − primera) ÷ (días con compra − 1).</>,
+  },
+  senales_cliente: {
+    titulo: 'Señales',
+    texto: <>Reglas fijas sobre los números de esta ficha (atraso de más de 5 días, cambio de 7+ días en el tiempo de pago, compras ±15%, días sin comprar más de 2.5× su frecuencia). No es IA.</>,
+  },
+
   // ======================= Salud financiera =======================
   ciclo_caja: {
     titulo: 'Ciclo de caja',

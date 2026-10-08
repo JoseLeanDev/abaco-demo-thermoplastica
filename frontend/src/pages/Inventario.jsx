@@ -159,15 +159,18 @@ export default function Inventario() {
             {mov.dias_inventario != null ? `${fmtInt(mov.dias_inventario)} días de inventario al ritmo del período` : 'Sin ventas en el período'}
           </p>
         </div>
-        <button
-          type="button"
+        {/* div con rol de botón: un <button> no puede contener el ⓘ de la leyenda */}
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => setFiltro('sin_venta_periodo')}
-          className="kpi-card card-hover text-left"
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFiltro('sin_venta_periodo') } }}
+          className="kpi-card card-hover text-left cursor-pointer"
         >
           <span className="kpi-label flex items-center gap-1">Con stock y sin venta en el período <Leyenda k="sin_venta_periodo" /></span>
           <p className="kpi-value mt-2 text-[var(--warning)]">{fmtM(mov.sin_venta_valor)}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(mov.sin_venta_articulos)} artículos · ver listado</p>
-        </button>
+        </div>
       </div>
 
       {/* Alerta si hay muchos sin precio */}

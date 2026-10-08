@@ -40,6 +40,8 @@ export const endpoints = {
     posicion: (params = {}) => cfoApi.get('/tesoreria/posicion', { params }),
     cxc: (params = {}) => cfoApi.get('/tesoreria/cxc', { params }),
     cxcDetalle: (params = {}) => cfoApi.get('/tesoreria/cxc/detalle', { params }),
+    cxcClientes: (params = {}) => cfoApi.get('/tesoreria/cxc/clientes', { params }),
+    cxcCliente: (id, params = {}) => cfoApi.get(`/tesoreria/cxc/cliente/${id}`, { params }),
     cxp: (params = {}) => cfoApi.get('/tesoreria/cxp', { params }),
     cxpDetalle: (params = {}) => cfoApi.get('/tesoreria/cxp/detalle', { params })
   },
