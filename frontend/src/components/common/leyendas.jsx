@@ -426,7 +426,8 @@ export const LEYENDAS = {
       <L>
         <li><strong>Instalaciones:</strong> alquileres, agua y energía, mantenimiento.</li>
         <li><strong>Servicios y tecnología:</strong> otros servicios, teléfono, software, equipo electrónico, suscripciones, honorarios.</li>
-        <li><strong>Vehículos y viajes:</strong> gastos de vehículos, combustible, hospedaje, viáticos, pasajes.</li>
+        <li><strong>Fletes e importación:</strong> pasajes, fletes y acarreos, gastos de importación.</li>
+        <li><strong>Vehículos y viajes:</strong> gastos de vehículos, combustible, hospedaje, viáticos.</li>
         <li><strong>Personal:</strong> atención al personal, capacitación, uniformes y equipo SSO, gastos médicos.</li>
         <li><strong>Seguros y fianzas</strong> · <strong>Oficina y suministros</strong> · <strong>Otros</strong> (diversos, no deducibles, impuestos, multas, representación, publicidad).</li>
       </L>
@@ -461,11 +462,25 @@ export const LEYENDAS = {
   },
   gasto_operativo: {
     titulo: 'Gasto operativo',
-    texto: <>Compras sin IVA del período de artículos con categoría “Gastos de Operación” en el ERP.</>,
+    texto: <>
+      Suma sin IVA de las facturas de compra del período con artículos de “Gastos de Operación” en el ERP
+      (con los filtros de centro, rubro y proveedor). Se compara con el mismo rango del año anterior; rojo = se gastó más.
+    </>,
   },
   centros_costo: {
     titulo: 'Centros de costo',
-    texto: <>El ERP registra el centro de costo en la sublínea del artículo de gasto. Se cuentan las sublíneas distintas con gasto en el período.</>,
+    texto: <>
+      El ERP registra el centro de costo en la sublínea del artículo de gasto (Administración, Laminados, Impresión…).
+      La barra de cada centro está dividida por rubro; debajo, sus conceptos más grandes.
+    </>,
+  },
+  gasto_vs_ventas: {
+    titulo: 'Gasto contra ventas',
+    texto: <>
+      Gasto operativo ÷ ventas sin IVA del mismo período (o del mismo mes). “Por cada Q100 vendidos” = cuántos quetzales
+      se fueron en gasto operativo. La comparación es en puntos contra el mismo período del año anterior.
+      <Nota>Un mes alto puede ser un mes de ventas bajas, no necesariamente de más gasto.</Nota>
+    </>,
   },
   reposicion: {
     titulo: 'Recomendación de reposición',

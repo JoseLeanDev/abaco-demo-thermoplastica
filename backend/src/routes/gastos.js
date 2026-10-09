@@ -203,6 +203,8 @@ router.get('/detalle', async (req, res) => {
     const proveedor = req.query.codigo_proveedor || '';
     const centroCosto = req.query.centro_costo || '';
     const concepto = req.query.concepto || '';
+    const cuenta = req.query.cuenta || '';
+    const rubro = req.query.rubro || '';
 
     const where = [`f.fecha_emision BETWEEN $1 AND $2`, `COALESCE(a.es_gasto_operativo, FALSE) = TRUE`];
     const params = [desde, hasta];
@@ -224,6 +226,15 @@ router.get('/detalle', async (req, res) => {
       params.push(concepto);
       where.push(`a.codigo_articulo = $${params.length}`);
     }
+    if (cuenta) {
+      // Cuenta contable = 5 dígitos finales del código del artículo de gasto
+      params.push(cuenta);
+      where.push(`COALESCE(SUBSTRING(a.codigo_articulo FROM '([0-9]{5})$'), a.codigo_articulo) = $${params.length}`);
+    }
+    if (rubro) {
+      params.push(rubro);
+      where.push(`${RUBRO_EXPR} = $${params.length}`);
+    }
 
     const whereSql = where.join(' AND ');
 
@@ -231,7 +242,7 @@ router.get('/detalle', async (req, res) => {
       SELECT
         f.compra_id                                 AS id,
         f.fact_num, f.tipo_doc, f.fecha_emision,
-        p.codigo_proveedor, p.nombre AS proveedor, p.rif,
+        p.codigo_proveedor, REGEXP_REPLACE(p.nombre, '^[A-Za-z]*[0-9][0-9A-Za-z]*-', '') AS proveedor, p.rif,
         s.codigo_sucursal, s.nombre AS sucursal,
         a.codigo_articulo, a.descripcion AS articulo,
         a.sublinea AS centro_costo,
@@ -286,24 +297,32 @@ router.get('/detalle', async (req, res) => {
   }
 });
 
+
 // =========================================================================
-// GASTOS DE ADMINISTRACIÓN (centro de costo "Administración" ≈ 74% del gasto operativo)
+// ANÁLISIS DE GASTOS (página Gastos Operativos y subpágina Administración)
 //
-// En el ERP cada gasto se registra con un artículo cuyo nombre ES el concepto
-// contable (Alquileres, Agua y Energía Eléctrica, Seguros y Fianzas…) y el código
-// trae la cuenta (02GOA51106 → 5.1.1.06). Aquí se agrupan esos conceptos en
-// rubros para leerlos más fácil, y se detectan los cargos recurrentes (contratos
-// que se facturan todos los meses: alquileres, energía, seguridad…).
+// En el ERP cada gasto se registra con un artículo de "Gastos de Operación" cuyo
+// nombre ES el concepto contable y cuyo código trae centro de costo + cuenta:
+//   02GO A  51106 → centro Administración, cuenta 5.1.1.06 Alquileres
+//   02GO M  51114 → centro Laminados,      cuenta 5.1.1.14 Pasajes, fletes y acarreos
+// El centro de costo está en la sublínea del artículo. El mismo concepto (cuenta)
+// existe con un código distinto en cada centro, así que los conceptos se agrupan
+// por CUENTA (los 5 dígitos finales) para sumarlos entre centros.
 //
-// ?centro= permite usar la misma vista con otro centro de costo (default Administración).
+// Los conceptos se agrupan en rubros (agrupación de la plataforma) y se detectan
+// los cargos recurrentes (mismo concepto y proveedor facturado casi todos los meses).
+//
+// ?centro=  limita a un centro de costo (la subpágina de Administración lo fija).
+// ?rubro=   ?proveedor=<código>  filtros adicionales.
 // =========================================================================
 const sinTilde = (e) => `TRANSLATE(LOWER(${e}), 'áéíóúñ', 'aeioun')`;
 const RUBRO_EXPR = (() => {
   const d = sinTilde('a.descripcion');
   return `(CASE
+    WHEN ${d} ~ 'flete|acarreo|importaci'                                    THEN 'logistica'
     WHEN ${d} ~ 'alquiler|agua y energ|instalacion|mantenimiento|reparacion'   THEN 'instalaciones'
     WHEN ${d} ~ 'personal|capacitacion|uniforme|medico|sueldo|bonific'        THEN 'personal'
-    WHEN ${d} ~ 'vehiculo|combustible|hospedaje|viatico|pasaje|flete'         THEN 'movilidad'
+    WHEN ${d} ~ 'vehiculo|combustible|hospedaje|viatico|pasaje'               THEN 'movilidad'
     WHEN ${d} ~ 'seguro|fianza'                                              THEN 'seguros'
     WHEN ${d} ~ 'servicio|telefono|software|electronico|cuota|suscripcion|honorario' THEN 'servicios'
     WHEN ${d} ~ 'suministro|papeleria|materiales'                            THEN 'oficina'
@@ -312,7 +331,8 @@ const RUBRO_EXPR = (() => {
 const RUBROS = [
   { id: 'instalaciones', label: 'Instalaciones',            desc: 'alquileres, energía y agua, mantenimiento de las instalaciones' },
   { id: 'servicios',     label: 'Servicios y tecnología',   desc: 'servicios contratados, teléfono, software, equipo electrónico, suscripciones' },
-  { id: 'movilidad',     label: 'Vehículos y viajes',       desc: 'vehículos, combustible, hospedaje, viáticos y pasajes' },
+  { id: 'logistica',     label: 'Fletes e importación',     desc: 'pasajes, fletes, acarreos y gastos de importación' },
+  { id: 'movilidad',     label: 'Vehículos y viajes',       desc: 'vehículos, combustible, hospedaje y viáticos' },
   { id: 'personal',      label: 'Personal',                 desc: 'atención al personal, capacitación, uniformes y equipo de seguridad' },
   { id: 'seguros',       label: 'Seguros y fianzas',        desc: 'pólizas y fianzas' },
   { id: 'oficina',       label: 'Oficina y suministros',    desc: 'suministros, papelería y materiales' },
@@ -320,6 +340,10 @@ const RUBROS = [
 ];
 const RUBRO_LABEL = Object.fromEntries(RUBROS.map(r => [r.id, r.label]));
 const NOMBRE_PROV = `REGEXP_REPLACE(p.nombre, '^[A-Za-z]*[0-9][0-9A-Za-z]*-', '')`;
+const CUENTA_EXPR = `COALESCE(SUBSTRING(a.codigo_articulo FROM '([0-9]{5})$'), a.codigo_articulo)`;
+// Nombre más usado de la cuenta (las variantes difieren en tildes y mayúsculas)
+const NOMBRE_CUENTA = `MODE() WITHIN GROUP (ORDER BY a.descripcion)`;
+const CENTRO_EXPR = `COALESCE(NULLIF(TRIM(a.sublinea), ''), 'Sin centro')`;
 const JOINS_G = `
   FROM thermoplastica.fact_compras_linea f
   JOIN thermoplastica.dim_articulo  a ON a.articulo_id  = f.articulo_id
@@ -340,10 +364,15 @@ const mesesDe = (desde, hasta) => {
   return out;
 };
 const restarAnio = (ym) => `${Number(ym.slice(0, 4)) - 1}${ym.slice(4)}`;
+const cuentaFmt = (c) => (/^\d{5}$/.test(c) ? `${c[0]}.${c[1]}.${c[2]}.${c.slice(3)}` : c);
 
-function filtrosAdmin(req, params) {
-  params.push(String(req.query.centro || 'Administración'));
-  const where = [`COALESCE(a.es_gasto_operativo, FALSE) = TRUE`, `a.sublinea = $${params.length}`];
+function filtrosGasto(req, params, centroDefault) {
+  const where = [`COALESCE(a.es_gasto_operativo, FALSE) = TRUE`];
+  const centro = req.query.centro !== undefined ? String(req.query.centro) : centroDefault;
+  if (centro) {
+    params.push(centro);
+    where.push(`${CENTRO_EXPR} = $${params.length}`);
+  }
   if (req.query.rubro && RUBRO_LABEL[req.query.rubro]) {
     params.push(req.query.rubro);
     where.push(`${RUBRO_EXPR} = $${params.length}`);
@@ -352,223 +381,298 @@ function filtrosAdmin(req, params) {
     params.push(String(req.query.proveedor));
     where.push(`p.codigo_proveedor = $${params.length}`);
   }
-  return where;
+  return { where, centro: centro || null };
 }
 
-// GET /api/gastos/administracion   Resumen completo de la sección
-router.get('/administracion', async (req, res) => {
+async function analisisGastos(req, centroDefault) {
+  const P = parseWindow(req);
+  const params = [];
+  const { where, centro } = filtrosGasto(req, params, centroDefault);
+  const w = where.join(' AND ');
+  const act  = `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`;
+  const prev = `f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}`;
+  const ambos = `((${act}) OR (${prev}))`;
+
+  const [conceptos, porMes, cargos, provs, porCentro, operativo, ventas, centrosLista] = await Promise.all([
+    // Conceptos (cuenta contable, sumada entre centros)
+    db.allAsync(`
+      SELECT ${CUENTA_EXPR} AS codigo, ${NOMBRE_CUENTA} AS concepto, MAX(${RUBRO_EXPR}) AS rubro,
+             COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${act}), 0)  AS gasto,
+             COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${prev}), 0) AS gasto_prev,
+             COUNT(DISTINCT f.fact_num)     FILTER (WHERE ${act})     AS facturas,
+             COUNT(DISTINCT f.proveedor_id) FILTER (WHERE ${act})     AS proveedores,
+             COUNT(DISTINCT ${CENTRO_EXPR}) FILTER (WHERE ${act})     AS centros,
+             MAX(f.fecha_emision) FILTER (WHERE ${act})               AS ultima
+      ${JOINS_G}
+      WHERE ${ambos} AND ${w}
+      GROUP BY 1
+      ORDER BY gasto DESC`, params),
+    // Serie mensual por rubro y centro
+    db.allAsync(`
+      SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM') AS mes, ${RUBRO_EXPR} AS rubro, ${CENTRO_EXPR} AS centro,
+             (${act}) AS actual, SUM(f.total_sin_iva) AS gasto
+      ${JOINS_G}
+      WHERE ${ambos} AND ${w}
+      GROUP BY 1, 2, 3, 4`, params),
+    // Cargos por concepto + proveedor + mes (proveedor principal y recurrentes)
+    db.allAsync(`
+      SELECT ${CUENTA_EXPR} AS codigo, p.codigo_proveedor AS prov, MAX(${NOMBRE_PROV}) AS proveedor,
+             TO_CHAR(f.fecha_emision, 'YYYY-MM') AS mes, SUM(f.total_sin_iva) AS gasto,
+             MAX(f.fecha_emision) AS ultima
+      ${JOINS_G}
+      WHERE ${act} AND ${w}
+      GROUP BY 1, 2, 4`, params),
+    // Proveedores
+    db.allAsync(`
+      SELECT p.codigo_proveedor AS codigo, MAX(${NOMBRE_PROV}) AS nombre,
+             COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${act}), 0)  AS gasto,
+             COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${prev}), 0) AS gasto_prev,
+             COUNT(DISTINCT f.fact_num) FILTER (WHERE ${act})         AS facturas,
+             STRING_AGG(DISTINCT a.descripcion, ' · ') FILTER (WHERE ${act}) AS conceptos,
+             MAX(f.fecha_emision) FILTER (WHERE ${act})               AS ultima
+      ${JOINS_G}
+      WHERE ${ambos} AND ${w}
+      GROUP BY 1
+      HAVING SUM(f.total_sin_iva) FILTER (WHERE ${act}) > 0
+      ORDER BY gasto DESC`, params),
+    // Centro de costo × concepto (para el desglose por centro)
+    db.allAsync(`
+      SELECT ${CENTRO_EXPR} AS centro, ${CUENTA_EXPR} AS codigo, ${NOMBRE_CUENTA} AS concepto, MAX(${RUBRO_EXPR}) AS rubro,
+             COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${act}), 0)  AS gasto,
+             COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${prev}), 0) AS gasto_prev,
+             COUNT(DISTINCT f.fact_num) FILTER (WHERE ${act})         AS facturas
+      ${JOINS_G}
+      WHERE ${ambos} AND ${w}
+      GROUP BY 1, 2`, params),
+    // Todo el gasto operativo del período (para el % que representa el filtro)
+    db.getAsync(`
+      SELECT COALESCE(SUM(f.total_sin_iva), 0) AS total
+      FROM thermoplastica.fact_compras_linea f
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+      WHERE ${act} AND COALESCE(a.es_gasto_operativo, FALSE) = TRUE`, []),
+    // Ventas del período, del año anterior y por mes (gasto como % de las ventas)
+    db.allAsync(`
+      SELECT TO_CHAR(fecha_emision, 'YYYY-MM') AS mes, (fecha_emision BETWEEN ${P.D} AND ${P.H}) AS actual,
+             SUM(total_sin_iva) AS ventas
+      FROM thermoplastica.fact_ventas_linea f
+      WHERE tipo_doc = 'FACT' AND ${ambos}
+      GROUP BY 1, 2`, []),
+    // Todos los centros con gasto en el período (para el selector, sin filtros)
+    db.allAsync(`
+      SELECT ${CENTRO_EXPR} AS centro, SUM(f.total_sin_iva) AS gasto
+      FROM thermoplastica.fact_compras_linea f
+      JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+      WHERE ${act} AND COALESCE(a.es_gasto_operativo, FALSE) = TRUE
+      GROUP BY 1 ORDER BY gasto DESC`, []),
+  ]);
+
+  const meses = mesesDe(P.desde, P.hasta);
+  // Meses completos del período (un mes cortado por el filtro o el mes en curso no
+  // cuentan para decidir si algo es recurrente)
+  const ultimoDia = (m) => { const [y, mm] = m.split('-').map(Number); return new Date(Date.UTC(y, mm, 0)).toISOString().slice(0, 10); };
+  const mesesCompletos = meses.filter(m => m < P.hasta.slice(0, 7) || P.hasta >= ultimoDia(m)).length;
+  const nMeses = Math.max(P.dias / 30.44, 1);
+
+  const total = conceptos.reduce((s, c) => s + num(c.gasto), 0);
+  const totalPrev = conceptos.reduce((s, c) => s + num(c.gasto_prev), 0);
+  const ventasAct = ventas.filter(v => v.actual).reduce((s, v) => s + num(v.ventas), 0);
+  const ventasPrev = ventas.filter(v => !v.actual).reduce((s, v) => s + num(v.ventas), 0);
+
+  // Proveedores por concepto
+  const porConcepto = {};
+  for (const c of cargos) {
+    porConcepto[c.codigo] = porConcepto[c.codigo] || {};
+    const pv = porConcepto[c.codigo][c.prov] = porConcepto[c.codigo][c.prov] || { codigo: c.prov, nombre: c.proveedor, gasto: 0, meses: {}, ultima: null };
+    pv.gasto += num(c.gasto);
+    pv.meses[c.mes] = (pv.meses[c.mes] || 0) + num(c.gasto);
+    if (!pv.ultima || c.ultima > pv.ultima) pv.ultima = c.ultima;
+  }
+
+  const listaConceptos = conceptos.map(c => {
+    const g = num(c.gasto), gp = num(c.gasto_prev);
+    const pvs = Object.values(porConcepto[c.codigo] || {}).sort((a, b) => b.gasto - a.gasto);
+    return {
+      codigo: c.codigo,
+      cuenta: cuentaFmt(c.codigo),
+      concepto: c.concepto,
+      rubro: c.rubro,
+      rubro_label: RUBRO_LABEL[c.rubro],
+      gasto: g,
+      gasto_prev: gp,
+      variacion: g - gp,
+      variacion_pct: varPct(g, gp),
+      participacion: total > 0 ? Math.round(g / total * 1000) / 10 : 0,
+      mensual: g / nMeses,
+      facturas: parseInt(c.facturas) || 0,
+      proveedores: parseInt(c.proveedores) || 0,
+      centros: parseInt(c.centros) || 0,
+      proveedor_principal: pvs[0] ? pvs[0].nombre : null,
+      pct_proveedor_principal: pvs[0] && g > 0 ? Math.round(pvs[0].gasto / g * 100) : null,
+      ultima: c.ultima,
+      nuevo: g > 0 && gp === 0,
+      dejado: g === 0 && gp > 0,
+    };
+  });
+
+  const rubros = RUBROS.map(r => {
+    const cs = listaConceptos.filter(c => c.rubro === r.id);
+    const g = cs.reduce((s, c) => s + c.gasto, 0), gp = cs.reduce((s, c) => s + c.gasto_prev, 0);
+    return {
+      rubro: r.id, label: r.label, desc: r.desc, gasto: g, gasto_prev: gp,
+      variacion_pct: varPct(g, gp), participacion: total > 0 ? Math.round(g / total * 1000) / 10 : 0,
+      mensual: g / nMeses,
+      conceptos: cs.filter(c => c.gasto > 0).map(c => c.concepto),
+    };
+  }).filter(r => r.gasto > 0 || r.gasto_prev > 0).sort((a, b) => b.gasto - a.gasto);
+
+  // Centros de costo (con su mezcla por rubro y sus conceptos principales)
+  const centrosMap = {};
+  for (const r of porCentro) {
+    const c = centrosMap[r.centro] = centrosMap[r.centro] || { centro: r.centro, gasto: 0, gasto_prev: 0, facturas: 0, rubros: {}, conceptos: [] };
+    const g = num(r.gasto);
+    c.gasto += g;
+    c.gasto_prev += num(r.gasto_prev);
+    c.facturas += parseInt(r.facturas) || 0;
+    c.rubros[r.rubro] = (c.rubros[r.rubro] || 0) + g;
+    if (g > 0) c.conceptos.push({ codigo: r.codigo, concepto: r.concepto, gasto: g });
+  }
+  const centros = Object.values(centrosMap).map(c => ({
+    ...c,
+    variacion: c.gasto - c.gasto_prev,
+    variacion_pct: varPct(c.gasto, c.gasto_prev),
+    participacion: total > 0 ? Math.round(c.gasto / total * 1000) / 10 : 0,
+    mensual: c.gasto / nMeses,
+    conceptos: c.conceptos.sort((a, b) => b.gasto - a.gasto).slice(0, 4),
+    concepto_principal_pct: c.gasto > 0 && c.conceptos[0] ? Math.round(c.conceptos[0].gasto / c.gasto * 100) : null,
+  })).filter(c => c.gasto > 0 || c.gasto_prev > 0).sort((a, b) => b.gasto - a.gasto || b.gasto_prev - a.gasto_prev);
+
+  // Serie mensual: por rubro, por centro (top 5 + otros), año anterior y % de ventas
+  const topCentros = centros.slice(0, 5).map(c => c.centro);
+  const vacio = () => ({ total: 0, total_prev: 0, ventas: 0, ventas_prev: 0, ...Object.fromEntries(RUBROS.map(r => [r.id, 0])), centros: Object.fromEntries([...topCentros, 'Otros'].map(c => [c, 0])) });
+  const serie = Object.fromEntries(meses.map(m => [m, { periodo: m, ...vacio() }]));
+  const alinear = P.dias <= 366;
+  const mesActual = (mes, actual) => (actual ? mes : alinear ? `${Number(mes.slice(0, 4)) + 1}${mes.slice(4)}` : null);
+  for (const r of porMes) {
+    const m = mesActual(r.mes, r.actual);
+    if (!m || !serie[m]) continue;
+    const g = num(r.gasto);
+    if (r.actual) {
+      serie[m].total += g;
+      serie[m][r.rubro] += g;
+      serie[m].centros[topCentros.includes(r.centro) ? r.centro : 'Otros'] += g;
+    } else serie[m].total_prev += g;
+  }
+  for (const v of ventas) {
+    const m = mesActual(v.mes, v.actual);
+    if (!m || !serie[m]) continue;
+    if (v.actual) serie[m].ventas += num(v.ventas); else serie[m].ventas_prev += num(v.ventas);
+  }
+  const serieMensual = Object.values(serie).map(s => ({
+    ...s,
+    pct_ventas: s.ventas > 0 ? Math.round(s.total / s.ventas * 1000) / 10 : null,
+    pct_ventas_prev: s.ventas_prev > 0 ? Math.round(s.total_prev / s.ventas_prev * 1000) / 10 : null,
+  }));
+
+  // Cargos recurrentes: mismo concepto y proveedor facturado en casi todos los meses completos
+  const mesesRef = meses.slice(0, mesesCompletos);
+  const recurrentes = [];
+  for (const c of listaConceptos) {
+    for (const pv of Object.values(porConcepto[c.codigo] || {})) {
+      // Proveedor genérico (GEN001 "El Portador": compras sin proveedor identificado, tipo caja chica)
+      if (/^GEN/i.test(pv.codigo)) continue;
+      const conCargo = mesesRef.filter(m => pv.meses[m] > 0);
+      if (mesesRef.length < 3 || conCargo.length < Math.max(3, Math.ceil(mesesRef.length * 0.75))) continue;
+      const montos = conCargo.map(m => pv.meses[m]).sort((a, b) => a - b);
+      const mediana = montos[Math.floor(montos.length / 2)];
+      const prom = montos.reduce((s, x) => s + x, 0) / montos.length;
+      const desv = Math.sqrt(montos.reduce((s, x) => s + (x - prom) ** 2, 0) / montos.length);
+      recurrentes.push({
+        codigo: c.codigo, concepto: c.concepto, rubro: c.rubro,
+        proveedor_codigo: pv.codigo, proveedor: pv.nombre,
+        mensual: mediana,
+        anual: mediana * 12,
+        meses_con_cargo: conCargo.length,
+        meses_periodo: mesesRef.length,
+        // Monto fijo (contrato) vs variable (consumo: energía, combustible…)
+        estable: prom > 0 && desv / prom < 0.15,
+        variacion_mensual_pct: prom > 0 ? Math.round(desv / prom * 100) : null,
+        gasto_periodo: pv.gasto,
+        ultima: pv.ultima,
+      });
+    }
+  }
+  recurrentes.sort((a, b) => b.mensual - a.mensual);
+  const recurrenteMensual = recurrentes.reduce((s, r) => s + r.mensual, 0);
+  const gastoMensual = total / nMeses;
+  const totalOperativo = num(operativo.total);
+
+  return {
+    ventana: P.ventana(),
+    centro,
+    gasto: total,
+    gasto_prev: totalPrev,
+    variacion_pct: varPct(total, totalPrev),
+    pct_del_operativo: totalOperativo > 0 ? Math.round(total / totalOperativo * 1000) / 10 : null,
+    gasto_operativo_total: totalOperativo,
+    ventas: ventasAct,
+    ventas_prev: ventasPrev,
+    pct_ventas: ventasAct > 0 ? Math.round(total / ventasAct * 1000) / 10 : null,
+    pct_ventas_prev: ventasPrev > 0 ? Math.round(totalPrev / ventasPrev * 1000) / 10 : null,
+    gasto_mensual: gastoMensual,
+    recurrente_mensual: recurrenteMensual,
+    pct_recurrente: gastoMensual > 0 ? Math.round(recurrenteMensual / gastoMensual * 1000) / 10 : null,
+    meses_completos: mesesRef.length,
+    n_conceptos: listaConceptos.filter(c => c.gasto > 0).length,
+    n_proveedores: provs.length,
+    n_centros: centros.filter(c => c.gasto > 0).length,
+    facturas: listaConceptos.reduce((s, c) => s + c.facturas, 0),
+    rubros,
+    rubros_def: RUBROS,
+    centros,
+    centros_serie: [...topCentros, 'Otros'],
+    centros_lista: centrosLista.map(c => c.centro),
+    conceptos: listaConceptos.filter(c => !c.dejado),
+    conceptos_dejados: listaConceptos.filter(c => c.dejado),
+    recurrentes,
+    proveedores: provs.map(p => ({
+      codigo: p.codigo, nombre: p.nombre, generico: /^GEN/i.test(p.codigo),
+      gasto: num(p.gasto), gasto_prev: num(p.gasto_prev), variacion_pct: varPct(num(p.gasto), num(p.gasto_prev)),
+      participacion: total > 0 ? Math.round(num(p.gasto) / total * 1000) / 10 : 0,
+      facturas: parseInt(p.facturas) || 0, conceptos: p.conceptos, ultima: p.ultima,
+    })),
+    serie_mensual: serieMensual,
+  };
+}
+
+const handlerAnalisis = (centroDefault) => async (req, res) => {
   try {
-    const P = parseWindow(req);
-    const params = [];
-    const w = filtrosAdmin(req, params).join(' AND ');
-    const act  = `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`;
-    const prev = `f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}`;
-    const ambos = `((${act}) OR (${prev}))`;
-
-    const [conceptos, porMes, cargos, provs, operativo] = await Promise.all([
-      // Conceptos (artículo de gasto = concepto contable)
-      db.allAsync(`
-        SELECT a.codigo_articulo AS codigo, MAX(a.descripcion) AS concepto, MAX(${RUBRO_EXPR}) AS rubro,
-               COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${act}), 0)  AS gasto,
-               COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${prev}), 0) AS gasto_prev,
-               COUNT(DISTINCT f.fact_num)     FILTER (WHERE ${act})     AS facturas,
-               COUNT(DISTINCT f.proveedor_id) FILTER (WHERE ${act})     AS proveedores,
-               COUNT(DISTINCT TO_CHAR(f.fecha_emision, 'YYYY-MM')) FILTER (WHERE ${act}) AS meses_con_gasto,
-               MAX(f.fecha_emision) FILTER (WHERE ${act})               AS ultima
-        ${JOINS_G}
-        WHERE ${ambos} AND ${w}
-        GROUP BY a.codigo_articulo
-        ORDER BY gasto DESC`, params),
-      // Serie mensual por rubro
-      db.allAsync(`
-        SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM') AS mes, ${RUBRO_EXPR} AS rubro, (${act}) AS actual,
-               SUM(f.total_sin_iva) AS gasto
-        ${JOINS_G}
-        WHERE ${ambos} AND ${w}
-        GROUP BY 1, 2, 3`, params),
-      // Cargos por concepto + proveedor + mes (para proveedor principal y recurrentes)
-      db.allAsync(`
-        SELECT a.codigo_articulo AS codigo, p.codigo_proveedor AS prov, MAX(${NOMBRE_PROV}) AS proveedor,
-               TO_CHAR(f.fecha_emision, 'YYYY-MM') AS mes, SUM(f.total_sin_iva) AS gasto,
-               MAX(f.fecha_emision) AS ultima
-        ${JOINS_G}
-        WHERE ${act} AND ${w}
-        GROUP BY 1, 2, 4`, params),
-      // Proveedores
-      db.allAsync(`
-        SELECT p.codigo_proveedor AS codigo, MAX(${NOMBRE_PROV}) AS nombre,
-               COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${act}), 0)  AS gasto,
-               COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${prev}), 0) AS gasto_prev,
-               COUNT(DISTINCT f.fact_num) FILTER (WHERE ${act})         AS facturas,
-               STRING_AGG(DISTINCT a.descripcion, ' · ') FILTER (WHERE ${act}) AS conceptos,
-               MAX(f.fecha_emision) FILTER (WHERE ${act})               AS ultima
-        ${JOINS_G}
-        WHERE ${ambos} AND ${w}
-        GROUP BY 1
-        HAVING SUM(f.total_sin_iva) FILTER (WHERE ${act}) > 0
-        ORDER BY gasto DESC`, params),
-      // Todo el gasto operativo del período (para el % que representa este centro)
-      db.getAsync(`
-        SELECT COALESCE(SUM(f.total_sin_iva), 0) AS total
-        FROM thermoplastica.fact_compras_linea f
-        JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
-        WHERE ${act} AND COALESCE(a.es_gasto_operativo, FALSE) = TRUE`, []),
-    ]);
-
-    const meses = mesesDe(P.desde, P.hasta);
-    // Meses completos del período (el mes en curso no cuenta para decidir si algo es recurrente)
-    const hoyMes = new Date().toISOString().slice(0, 7);
-    const mesesCompletos = meses.filter(m => m < hoyMes || m < P.hasta.slice(0, 7)).length || meses.length;
-    const nMeses = Math.max(P.dias / 30.44, 1);
-
-    const total = conceptos.reduce((s, c) => s + num(c.gasto), 0);
-    const totalPrev = conceptos.reduce((s, c) => s + num(c.gasto_prev), 0);
-
-    // Proveedor principal por concepto
-    const porConcepto = {};
-    for (const c of cargos) {
-      const k = c.codigo;
-      porConcepto[k] = porConcepto[k] || {};
-      const pv = porConcepto[k][c.prov] = porConcepto[k][c.prov] || { codigo: c.prov, nombre: c.proveedor, gasto: 0, meses: {}, ultima: null };
-      pv.gasto += num(c.gasto);
-      pv.meses[c.mes] = (pv.meses[c.mes] || 0) + num(c.gasto);
-      if (!pv.ultima || c.ultima > pv.ultima) pv.ultima = c.ultima;
-    }
-
-    const listaConceptos = conceptos.map(c => {
-      const g = num(c.gasto), gp = num(c.gasto_prev);
-      const pvs = Object.values(porConcepto[c.codigo] || {}).sort((a, b) => b.gasto - a.gasto);
-      return {
-        codigo: c.codigo,
-        concepto: c.concepto,
-        rubro: c.rubro,
-        rubro_label: RUBRO_LABEL[c.rubro],
-        gasto: g,
-        gasto_prev: gp,
-        variacion: g - gp,
-        variacion_pct: varPct(g, gp),
-        participacion: total > 0 ? Math.round(g / total * 1000) / 10 : 0,
-        mensual: g / nMeses,
-        facturas: parseInt(c.facturas) || 0,
-        proveedores: parseInt(c.proveedores) || 0,
-        meses_con_gasto: parseInt(c.meses_con_gasto) || 0,
-        proveedor_principal: pvs[0] ? pvs[0].nombre : null,
-        pct_proveedor_principal: pvs[0] && g > 0 ? Math.round(pvs[0].gasto / g * 100) : null,
-        ultima: c.ultima,
-        nuevo: g > 0 && gp === 0,
-        dejado: g === 0 && gp > 0,
-      };
-    });
-
-    // Rubros
-    const rubros = RUBROS.map(r => {
-      const cs = listaConceptos.filter(c => c.rubro === r.id);
-      const g = cs.reduce((s, c) => s + c.gasto, 0), gp = cs.reduce((s, c) => s + c.gasto_prev, 0);
-      return {
-        rubro: r.id, label: r.label, desc: r.desc, gasto: g, gasto_prev: gp,
-        variacion_pct: varPct(g, gp), participacion: total > 0 ? Math.round(g / total * 1000) / 10 : 0,
-        mensual: g / nMeses,
-        conceptos: cs.filter(c => c.gasto > 0).map(c => c.concepto),
-      };
-    }).filter(r => r.gasto > 0 || r.gasto_prev > 0).sort((a, b) => b.gasto - a.gasto);
-
-    // Serie mensual
-    const serie = Object.fromEntries(meses.map(m => [m, { periodo: m, total: 0, total_prev: 0, ...Object.fromEntries(RUBROS.map(r => [r.id, 0])) }]));
-    const alinear = P.dias <= 366;
-    for (const r of porMes) {
-      const g = num(r.gasto);
-      if (r.actual) {
-        if (serie[r.mes]) { serie[r.mes].total += g; serie[r.mes][r.rubro] += g; }
-      } else if (alinear) {
-        const m = `${Number(r.mes.slice(0, 4)) + 1}${r.mes.slice(4)}`;
-        if (serie[m]) serie[m].total_prev += g;
-      }
-    }
-
-    // Cargos recurrentes: mismo concepto y proveedor facturado en casi todos los meses completos
-    const mesesRef = meses.slice(0, mesesCompletos);
-    const recurrentes = [];
-    for (const c of listaConceptos) {
-      for (const pv of Object.values(porConcepto[c.codigo] || {})) {
-        // Proveedor genérico (GEN001 "El Portador": compras sin proveedor identificado, tipo caja chica)
-        if (/^GEN/i.test(pv.codigo)) continue;
-        const conCargo = mesesRef.filter(m => pv.meses[m] > 0);
-        if (mesesRef.length < 3 || conCargo.length < Math.max(3, Math.ceil(mesesRef.length * 0.75))) continue;
-        const montos = conCargo.map(m => pv.meses[m]).sort((a, b) => a - b);
-        const mediana = montos[Math.floor(montos.length / 2)];
-        const prom = montos.reduce((s, x) => s + x, 0) / montos.length;
-        const desv = Math.sqrt(montos.reduce((s, x) => s + (x - prom) ** 2, 0) / montos.length);
-        recurrentes.push({
-          codigo: c.codigo, concepto: c.concepto, rubro: c.rubro,
-          proveedor_codigo: pv.codigo, proveedor: pv.nombre,
-          mensual: mediana,
-          anual: mediana * 12,
-          meses_con_cargo: conCargo.length,
-          meses_periodo: mesesRef.length,
-          // Monto fijo (contrato) vs variable (consumo: energía, combustible…)
-          estable: prom > 0 && desv / prom < 0.15,
-          variacion_mensual_pct: prom > 0 ? Math.round(desv / prom * 100) : null,
-          gasto_periodo: pv.gasto,
-          ultima: pv.ultima,
-        });
-      }
-    }
-    recurrentes.sort((a, b) => b.mensual - a.mensual);
-    const recurrenteMensual = recurrentes.reduce((s, r) => s + r.mensual, 0);
-    const gastoMensual = total / nMeses;
-
-    const totalOperativo = num(operativo.total);
-    res.json({
-      status: 'success',
-      data: {
-        ventana: P.ventana(),
-        centro: String(req.query.centro || 'Administración'),
-        gasto: total,
-        gasto_prev: totalPrev,
-        variacion_pct: varPct(total, totalPrev),
-        pct_del_operativo: totalOperativo > 0 ? Math.round(total / totalOperativo * 1000) / 10 : null,
-        gasto_operativo_total: totalOperativo,
-        gasto_mensual: gastoMensual,
-        recurrente_mensual: recurrenteMensual,
-        pct_recurrente: gastoMensual > 0 ? Math.round(recurrenteMensual / gastoMensual * 1000) / 10 : null,
-        n_conceptos: listaConceptos.filter(c => c.gasto > 0).length,
-        n_proveedores: provs.length,
-        facturas: listaConceptos.reduce((s, c) => s + c.facturas, 0),
-        rubros,
-        rubros_def: RUBROS,
-        conceptos: listaConceptos.filter(c => !c.dejado),
-        conceptos_dejados: listaConceptos.filter(c => c.dejado),
-        recurrentes,
-        proveedores: provs.map(p => ({
-          codigo: p.codigo, nombre: p.nombre, generico: /^GEN/i.test(p.codigo),
-          gasto: num(p.gasto), gasto_prev: num(p.gasto_prev), variacion_pct: varPct(num(p.gasto), num(p.gasto_prev)),
-          participacion: total > 0 ? Math.round(num(p.gasto) / total * 1000) / 10 : 0,
-          facturas: parseInt(p.facturas) || 0, conceptos: p.conceptos, ultima: p.ultima,
-        })),
-        serie_mensual: Object.values(serie),
-      },
-    });
+    res.json({ status: 'success', data: await analisisGastos(req, centroDefault) });
   } catch (error) {
-    console.error('gastos administracion error:', error);
+    console.error('gastos analisis error:', error);
     res.status(500).json({ status: 'error', message: error.message });
   }
-});
+};
 
-// GET /api/gastos/administracion/concepto/:codigo   Detalle de un concepto:
-// últimos 24 meses (para ver estacionalidad y tendencia), proveedores y facturas del período.
-router.get('/administracion/concepto/:codigo', async (req, res) => {
+// GET /api/gastos/analisis               Todo el gasto operativo (o ?centro=)
+// GET /api/gastos/administracion         Igual, con centro = Administración por defecto
+router.get('/analisis', handlerAnalisis(null));
+router.get('/administracion', handlerAnalisis('Administración'));
+
+// GET /api/gastos/analisis/concepto/:cuenta   Detalle de un concepto (cuenta contable):
+// últimos 24 meses, proveedores, centros de costo y facturas del período.
+const handlerConcepto = (centroDefault) => async (req, res) => {
   try {
     const P = parseWindow(req);
     const params = [];
-    const w = filtrosAdmin(req, params);
-    params.push(String(req.params.codigo));
-    w.push(`a.codigo_articulo = $${params.length}`);
-    const ws = w.join(' AND ');
+    const { where } = filtrosGasto(req, params, centroDefault);
+    params.push(String(req.params.cuenta));
+    where.push(`${CUENTA_EXPR} = $${params.length}`);
+    const ws = where.join(' AND ');
     const act = `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`;
     const desde24 = `(date_trunc('month', ${P.H}) - INTERVAL '23 months')::date`;
 
-    const [info, serie, provs, lineas] = await Promise.all([
-      db.getAsync(`SELECT MAX(a.descripcion) AS concepto, MAX(${RUBRO_EXPR}) AS rubro ${JOINS_G} WHERE ${ws}`, params),
+    const [info, serie, provs, centros, lineas] = await Promise.all([
+      db.getAsync(`SELECT ${NOMBRE_CUENTA} AS concepto, MAX(${RUBRO_EXPR}) AS rubro ${JOINS_G} WHERE ${ws}`, params),
       db.allAsync(`
         SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM') AS mes, SUM(f.total_sin_iva) AS gasto, COUNT(DISTINCT f.fact_num) AS facturas
         ${JOINS_G}
@@ -582,8 +686,13 @@ router.get('/administracion/concepto/:codigo', async (req, res) => {
         WHERE ${act} AND ${ws}
         GROUP BY 1 ORDER BY gasto DESC`, params),
       db.allAsync(`
+        SELECT ${CENTRO_EXPR} AS centro, SUM(f.total_sin_iva) AS gasto
+        ${JOINS_G}
+        WHERE ${act} AND ${ws}
+        GROUP BY 1 ORDER BY gasto DESC`, params),
+      db.allAsync(`
         SELECT f.compra_id AS id, f.fact_num, f.fecha_emision, ${NOMBRE_PROV} AS proveedor, p.codigo_proveedor,
-               f.total_sin_iva, f.iva, f.total_con_iva, c.factura_proveedor
+               ${CENTRO_EXPR} AS centro, f.total_sin_iva, f.iva, f.total_con_iva, c.factura_proveedor
         ${JOINS_G}
         LEFT JOIN thermoplastica.fact_cxp_factura c
                ON c.numero_interno::text = f.fact_num::text AND c.proveedor_id = f.proveedor_id
@@ -594,15 +703,15 @@ router.get('/administracion/concepto/:codigo', async (req, res) => {
 
     // Últimos 24 meses hasta el fin del período, con cero en los meses sin gasto
     const fin = P.hasta.slice(0, 7);
-    const inicio = `${restarAnio(restarAnio(fin))}-01`;
-    const meses = mesesDe(inicio, P.hasta).slice(-24);
+    const meses = mesesDe(`${restarAnio(restarAnio(fin))}-01`, P.hasta).slice(-24);
     const porMes = Object.fromEntries(serie.map(s => [s.mes, s]));
     const total = provs.reduce((s, p) => s + num(p.gasto), 0);
     res.json({
       status: 'success',
       data: {
         ventana: P.ventana(),
-        codigo: req.params.codigo,
+        codigo: req.params.cuenta,
+        cuenta: cuentaFmt(req.params.cuenta),
         concepto: info?.concepto,
         rubro: info?.rubro,
         rubro_label: RUBRO_LABEL[info?.rubro],
@@ -613,9 +722,13 @@ router.get('/administracion/concepto/:codigo', async (req, res) => {
           meses: parseInt(p.meses) || 0, ultima: p.ultima,
           participacion: total > 0 ? Math.round(num(p.gasto) / total * 1000) / 10 : 0,
         })),
+        centros: centros.map(c => ({
+          centro: c.centro, gasto: num(c.gasto),
+          participacion: total > 0 ? Math.round(num(c.gasto) / total * 1000) / 10 : 0,
+        })),
         lineas: lineas.map(l => ({
           id: parseInt(l.id), fact_num: l.fact_num, factura_proveedor: l.factura_proveedor, fecha: l.fecha_emision,
-          proveedor: l.proveedor, codigo_proveedor: l.codigo_proveedor,
+          proveedor: l.proveedor, codigo_proveedor: l.codigo_proveedor, centro: l.centro,
           total_sin_iva: num(l.total_sin_iva), iva: num(l.iva), total_con_iva: num(l.total_con_iva),
         })),
       },
@@ -624,7 +737,8 @@ router.get('/administracion/concepto/:codigo', async (req, res) => {
     console.error('gastos concepto error:', error);
     res.status(500).json({ status: 'error', message: error.message });
   }
-});
+};
+router.get('/analisis/concepto/:cuenta', handlerConcepto(null));
+router.get('/administracion/concepto/:cuenta', handlerConcepto('Administración'));
 
 module.exports = router;
-

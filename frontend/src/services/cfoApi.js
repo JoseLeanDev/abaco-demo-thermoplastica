@@ -57,8 +57,8 @@ export const endpoints = {
     centrosCosto: (params = {}) => cfoApi.get('/gastos/centros-costo', { params }),
     proveedores: (params = {}) => cfoApi.get('/gastos/proveedores', { params }),
     detalle: (params = {}) => cfoApi.get('/gastos/detalle', { params }),
-    administracion: (params = {}) => cfoApi.get('/gastos/administracion', { params }),
-    conceptoAdmin: (codigo, params = {}) => cfoApi.get(`/gastos/administracion/concepto/${encodeURIComponent(codigo)}`, { params })
+    analisis: (params = {}) => cfoApi.get('/gastos/analisis', { params }),
+    concepto: (cuenta, params = {}) => cfoApi.get(`/gastos/analisis/concepto/${encodeURIComponent(cuenta)}`, { params })
   },
   inventario: {
     resumen: (params = {}) => cfoApi.get('/inventario', { params }),
