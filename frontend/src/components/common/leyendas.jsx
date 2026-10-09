@@ -297,24 +297,115 @@ export const LEYENDAS = {
 
   // ======================= Compras / Gastos =======================
   gasto_compras: {
-    titulo: 'Gasto en compras',
-    texto: <>Suma sin IVA de las facturas de proveedor del período. No incluye gastos operativos, salvo que actives “Incluir gastos operativos”.</>,
+    titulo: 'Compras (sin IVA)',
+    texto: <>
+      Suma sin IVA de las líneas de factura de proveedor emitidas en el período, con los filtros de arriba
+      (tipo de compra, producto y proveedor). Se compara con el mismo rango de fechas del año anterior.
+      <Nota>Incluye todo lo que se factura como compra en el ERP: materiales, servicios, gastos y activo fijo. Usá “Tipo de compra” para separarlos.</Nota>
+    </>,
+  },
+  tipo_compra: {
+    titulo: 'Tipo de compra',
+    texto: <>
+      Cada línea se clasifica por la jerarquía del artículo en el ERP:
+      <L>
+        <li><strong>Materiales e insumos:</strong> artículos que entran al inventario (laminados, liners, resinas, tapas…).</li>
+        <li><strong>Costos de producción:</strong> servicios, repuestos, mantenimiento y materiales cargados al costo (categoría contable “Costo de Producción”).</li>
+        <li><strong>Gastos de importación:</strong> fletes, aduana y demás costos de traer mercadería.</li>
+        <li><strong>Gastos de operación:</strong> categoría contable “Gastos de Operación” y costos administrativos.</li>
+        <li><strong>Activo fijo:</strong> mobiliario y equipo.</li>
+      </L>
+    </>,
+  },
+  compras_mensual: {
+    titulo: 'Compras por mes',
+    texto: <>Compras sin IVA de cada mes del período, apiladas por tipo de compra. La línea punteada es el mismo mes del año anterior (con los mismos filtros).</>,
+  },
+  inflacion_compras: {
+    titulo: 'Variación de precios',
+    texto: <>
+      Cuánto cambió el precio unitario de los <strong>mismos artículos</strong> comprados en ambos períodos.
+      <L>
+        <li>Precio de cada período = compras sin IVA ÷ unidades.</li>
+        <li>Promedio ponderado = Σ (precio actual − precio anterior) × unidades actuales ÷ Σ precio anterior × unidades actuales.</li>
+      </L>
+      <Nota>Solo materiales e insumos: los servicios y gastos no tienen un precio unitario comparable. Rojo = se paga más caro.</Nota>
+    </>,
+  },
+  sobrecosto_precio: {
+    titulo: 'Impacto del precio',
+    texto: <>(Precio actual − precio del año anterior) × unidades compradas en el período. Es lo que se pagó de más (o de menos) solo por el cambio de precio. Sobrecosto = suma de los artículos que subieron; ahorro = de los que bajaron.</>,
+  },
+  cobertura_precios: {
+    titulo: 'Cobertura de la comparación',
+    texto: <>Qué parte de las compras de materiales del período corresponde a artículos que también se compraron el año anterior (valorados a precio anterior). El resto son artículos nuevos y no tienen contra qué compararse.</>,
+  },
+  precio_unitario_compra: {
+    titulo: 'Precio unitario',
+    texto: <>Compras sin IVA ÷ unidades compradas en el período. El “último precio” es el de la factura más reciente; el rango es el mínimo y máximo pagado en el período.</>,
+  },
+  puente_compras: {
+    titulo: '¿Por qué cambió el gasto?',
+    texto: <>
+      Descompone la diferencia contra el año anterior, artículo por artículo:
+      <L>
+        <li><strong>Precio:</strong> (precio actual − anterior) × unidades actuales.</li>
+        <li><strong>Volumen:</strong> (unidades actuales − anteriores) × precio anterior.</li>
+        <li><strong>Nuevos / ya no se compraron:</strong> artículos comprados solo en uno de los dos períodos.</li>
+        <li><strong>Servicios y gastos:</strong> diferencia de todo lo que no es material de inventario.</li>
+      </L>
+    </>,
+  },
+  top_categorias_compras: {
+    titulo: 'Categorías de compra',
+    texto: <>Compras sin IVA agrupadas por la jerarquía de producto: categoría (marca en el ERP) › subcategoría (línea) › sublínea.</>,
+  },
+  categorias_compras: {
+    titulo: 'Compras por categoría',
+    texto: <>
+      Compras sin IVA agrupadas por el siguiente nivel de la jerarquía según el filtro de producto:
+      categoría (marca en el ERP) › subcategoría (línea) › sublínea › artículo.
+      <Nota>“Var. precio” es la variación de precios de los artículos de ese grupo comprados en ambos períodos.</Nota>
+    </>,
+  },
+  top_proveedores: {
+    titulo: 'Proveedores',
+    texto: <>Proveedores ordenados por compras sin IVA del período. % = compras al proveedor ÷ compras totales con los mismos filtros.</>,
+  },
+  concentracion_proveedores: {
+    titulo: 'Concentración de proveedores',
+    texto: <>Cuántos proveedores, de mayor a menor, suman el 80% de las compras del período, y qué % suman los 5 más grandes. Mucha concentración = más riesgo si uno falla o sube precios.</>,
+  },
+  acumulado_pct: {
+    titulo: '% acumulado',
+    texto: <>Suma del % de este proveedor y de todos los que están arriba de él en el ranking por compras (curva de Pareto).</>,
+  },
+  proveedores_nuevos: {
+    titulo: 'Proveedores nuevos',
+    texto: <>Proveedores con compras en el período a los que no se les compró nada en el mismo período del año anterior.</>,
+  },
+  proveedores_dejados: {
+    titulo: 'Ya no se les compró',
+    texto: <>Proveedores con compras en el mismo período del año anterior y ninguna en el período actual.</>,
+  },
+  dias_pago_proveedor: {
+    titulo: 'Días de pago',
+    texto: <>
+      Días reales entre la emisión de la factura y su último pago, promedio ponderado por monto, de las facturas
+      por pagar del período que ya están pagadas. Debajo, el crédito que tiene el proveedor en su ficha del ERP.
+    </>,
+  },
+  saldo_proveedor: {
+    titulo: 'Por pagar',
+    texto: <>Saldo pendiente hoy de todas las facturas por pagar del proveedor (sin importar la fecha de emisión).</>,
+  },
+  factura_promedio: {
+    titulo: 'Factura promedio',
+    texto: <>Compras sin IVA ÷ número de facturas del período. Debajo, el promedio mensual = compras ÷ meses del período.</>,
   },
   iva_acreditable: {
     titulo: 'IVA acreditable',
     texto: <>IVA de las facturas de compra del período. El % es IVA ÷ base sin IVA.</>,
-  },
-  devoluciones_compras: {
-    titulo: 'Devoluciones',
-    texto: <>Devoluciones a proveedores registradas en las líneas de compra, sin IVA. Gasto neto = compras − devoluciones.</>,
-  },
-  top_categorias_compras: {
-    titulo: 'Categorías de compra',
-    texto: <>Gasto sin IVA agrupado por el campo “categoría” del artículo en el ERP (en la práctica coincide con la subcategoría).</>,
-  },
-  top_proveedores: {
-    titulo: 'Top proveedores',
-    texto: <>Proveedores ordenados por gasto sin IVA del período. % = gasto del proveedor ÷ gasto total.</>,
   },
   gasto_operativo: {
     titulo: 'Gasto operativo',

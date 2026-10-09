@@ -9,6 +9,7 @@ import { Leyenda } from '../common/leyendas'
 // fuente = de dónde salen las opciones de cada nivel:
 //   'ventas'     → lo que tuvo ventas en el período (página de Ventas)
 //   'inventario' → lo que tiene stock hoy (Capital inmovilizado)
+//   'compras'    → lo que se compró en el período (página de Compras)
 export const NIVELES_PRODUCTO = [
   { dim: 'categoria',    singular: 'Categoría',    plural: 'Categorías',    todas: 'Todas las categorías' },
   { dim: 'subcategoria', singular: 'Subcategoría', plural: 'Subcategorías', todas: 'Todas las subcategorías' },
@@ -33,10 +34,12 @@ function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente }) {
   const { data } = useQuery(
     fuente === 'inventario'
       ? ['filtro-prod-inv', nivel.dim, JSON.stringify(filtrosArriba)]
-      : ['filtro-prod', nivel.dim, desde, hasta, JSON.stringify(filtrosArriba)],
+      : ['filtro-prod', fuente, nivel.dim, desde, hasta, JSON.stringify(filtrosArriba)],
     () => (fuente === 'inventario'
       ? endpoints.analisis.inventarioQuieto({ ...filtrosArriba, dim: nivel.dim })
-      : endpoints.ventas.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 })),
+      : fuente === 'compras'
+        ? endpoints.compras.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 })
+        : endpoints.ventas.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 })),
     { staleTime: 5 * 60 * 1000 }
   )
   const opciones = [...(data?.data?.items || [])].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
