@@ -87,6 +87,7 @@ export const endpoints = {
     dismissInsight: (id) => cfoApi.patch(`/analisis/insights/${id}/dismiss`, {}),
     salud: (params = {}) => cfoApi.get('/analisis/salud', { params }),
     inventarioQuieto: (params = {}) => cfoApi.get('/analisis/inventario-quieto', { params }),
+    rotacionInventario: (params = {}) => cfoApi.get('/analisis/rotacion-inventario', { params }),
     proyeccionVentas: (meses = 6) => cfoApi.get('/analisis/proyeccion-ventas', { params: { meses } }),
     flujoCaja: (semanas = 13) => cfoApi.get('/analisis/flujo-caja', { params: { semanas } })
   },

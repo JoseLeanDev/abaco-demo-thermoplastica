@@ -843,7 +843,7 @@ async function inventarioSalud(db) {
   const limpio = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;
   const [filas, corte] = await Promise.all([
     db.allAsync(`
-      SELECT s.codigo_articulo, s.articulo, s.clase, s.estado, s.stock_actual,
+      SELECT s.articulo_id, s.codigo_articulo, s.articulo, s.clase, s.estado, s.stock_actual,
              s.valor_inventario, s.dias_cobertura, s.ultima_venta, s.ultima_compra,
              s.dias_sin_venta, s.dias_sin_compra,
              ${limpio('a.marca', 'Sin categoría')}       AS categoria,
@@ -990,6 +990,304 @@ router.get('/inventario-quieto', async (req, res) => {
   } catch (error) {
     console.error('[GET /analisis/inventario-quieto] Error:', error);
     res.status(500).json({ status: 'error', message: 'Error al calcular el inventario inmovilizado' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Rotación de inventarios
+// ---------------------------------------------------------------------------
+// Rotación = costo de ventas anualizado ÷ inventario promedio (fórmula clásica).
+//
+// - Empresa, categoría, subcategoría y sublínea: COSTO DE VENTAS ÷ inventario. El
+//   costo de ventas ya incluye la materia prima consumida, así que no se le suman
+//   las compras de materia prima (sería contarla dos veces).
+// - Un artículo de materia prima no se vende: se consume en producción. Para
+//   él (y para un grupo que solo tiene materia prima) la salida es lo COMPRADO en
+//   el período, como aproximación del consumo (lo que se consume se repone).
+//   Sin esto, el ~60% del inventario saldría con rotación cero.
+// - Costo de ventas por artículo: mismo criterio que el resto del sitio (margen
+//   solo con líneas con costo); si el artículo no tiene ninguna línea con costo
+//   se usa el margen global del período.
+// - Inventario promedio: promedio de las fotos diarias de analitica.hist_inventario
+//   dentro del período. Si no hay fotos en el período (historial desde 2026-10-09),
+//   se usa el inventario de hoy y la respuesta lo indica.
+const TRAMOS_ROT = [
+  { id: 'd30',     hasta: 30 },
+  { id: 'd60',     hasta: 60 },
+  { id: 'd90',     hasta: 90 },
+  { id: 'd180',    hasta: 180 },
+  { id: 'd365',    hasta: 365 },
+  { id: 'mas_365', hasta: Infinity },
+];
+
+// Salida por artículo de un período (caché 5 min por rango: la consulta recorre
+// ventas y compras completas)
+const cacheSalida = new Map();
+async function salidaPorArticulo(db, P) {
+  const key = `${P.desde}|${P.hasta}`;
+  const hit = cacheSalida.get(key);
+  if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit;
+  const limpio = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;
+  const enP = `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`;
+  const enPrev = `f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}`;
+  const [filas, hist, serie] = await Promise.all([
+    db.allAsync(`
+      WITH g AS (
+        SELECT ${M.pct('f', enP)} AS pct, ${M.pct('f', enPrev)} AS pct_prev
+        FROM thermoplastica.fact_ventas_linea f WHERE f.tipo_doc = 'FACT'
+      ), v AS (
+        SELECT f.articulo_id,
+          COALESCE(${M.costo('f', enP)},
+                   SUM(f.total_sin_iva) FILTER (WHERE ${enP}) * (1 - (SELECT pct FROM g) / 100), 0)          AS cogs,
+          COALESCE(${M.costo('f', enPrev)},
+                   SUM(f.total_sin_iva) FILTER (WHERE ${enPrev}) * (1 - (SELECT pct_prev FROM g) / 100), 0)  AS cogs_prev,
+          COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${enP}), 0) AS ventas,
+          COUNT(*) > 0 AS alguna_venta
+        FROM thermoplastica.fact_ventas_linea f
+        WHERE f.tipo_doc = 'FACT'
+        GROUP BY f.articulo_id
+      ), c AS (
+        SELECT f.articulo_id,
+          COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${enP}), 0)    AS compras,
+          COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${enPrev}), 0) AS compras_prev
+        FROM thermoplastica.fact_compras_linea f
+        WHERE f.tipo_doc = 'FACT' AND NOT COALESCE(f.es_outlier_fecha, false)
+          AND NOT COALESCE(f.es_gasto_operativo, false) AND f.fecha_emision <= CURRENT_DATE
+        GROUP BY f.articulo_id
+      )
+      SELECT a.articulo_id, a.codigo_articulo, a.descripcion AS articulo,
+        ${limpio('a.marca', 'Sin categoría')}    AS categoria,
+        ${limpio('a.linea', 'Sin subcategoría')} AS subcategoria,
+        ${limpio('a.sublinea', 'Sin sublínea')}  AS sublinea,
+        COALESCE(v.cogs, 0) AS cogs, COALESCE(v.cogs_prev, 0) AS cogs_prev, COALESCE(v.ventas, 0) AS ventas,
+        COALESCE(v.alguna_venta, false) AS alguna_venta,
+        COALESCE(c.compras, 0) AS compras, COALESCE(c.compras_prev, 0) AS compras_prev
+      FROM thermoplastica.dim_articulo a
+      LEFT JOIN v ON v.articulo_id = a.articulo_id
+      LEFT JOIN c ON c.articulo_id = a.articulo_id
+      WHERE v.articulo_id IS NOT NULL OR c.articulo_id IS NOT NULL`),
+    // Inventario promedio del período según las fotos diarias
+    db.allAsync(`
+      WITH d AS (SELECT DISTINCT fecha FROM analitica.hist_inventario WHERE fecha BETWEEN ${P.D} AND ${P.H})
+      SELECT h.articulo_id, SUM(h.valor) / (SELECT count(*) FROM d) AS promedio,
+             (SELECT count(*) FROM d) AS fotos, (SELECT min(fecha) FROM d)::text AS primera, (SELECT max(fecha) FROM d)::text AS ultima
+      FROM analitica.hist_inventario h
+      WHERE h.fecha BETWEEN ${P.D} AND ${P.H}
+      GROUP BY h.articulo_id`).catch(() => []),
+    // Salida mensual por artículo, 12 meses hasta el fin del período
+    db.allAsync(`
+      WITH m AS (SELECT date_trunc('month', ${P.H}) - interval '11 months' AS desde)
+      SELECT articulo_id, mes, SUM(cogs) AS cogs, SUM(compras) AS compras FROM (
+        SELECT f.articulo_id, to_char(f.fecha_emision, 'YYYY-MM') AS mes,
+               COALESCE(${M.costo('f')}, SUM(f.costo_total_facturado), 0) AS cogs, 0 AS compras
+        FROM thermoplastica.fact_ventas_linea f, m
+        WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= m.desde AND f.fecha_emision <= ${P.H}
+        GROUP BY 1, 2
+        UNION ALL
+        SELECT f.articulo_id, to_char(f.fecha_emision, 'YYYY-MM'), 0, SUM(f.total_sin_iva)
+        FROM thermoplastica.fact_compras_linea f, m
+        WHERE f.tipo_doc = 'FACT' AND NOT COALESCE(f.es_outlier_fecha, false) AND NOT COALESCE(f.es_gasto_operativo, false)
+          AND f.fecha_emision >= m.desde AND f.fecha_emision <= LEAST(${P.H}, CURRENT_DATE)
+        GROUP BY 1, 2
+      ) x GROUP BY 1, 2`),
+  ]);
+  const r = { t: Date.now(), filas, hist, serie };
+  cacheSalida.set(key, r);
+  if (cacheSalida.size > 20) cacheSalida.delete(cacheSalida.keys().next().value);
+  return r;
+}
+
+// Métricas de un grupo de artículos. `anual` = factor para anualizar la salida.
+function resumirRot(rs, anual) {
+  const suma = (k) => rs.reduce((s, r) => s + r[k], 0);
+  const inventario = suma('inventario');
+  const salida = suma('salida');
+  const cogs = suma('cogs');
+  const sinSalida = rs.filter(r => r.inventario > 0 && r.salida <= 0);
+  const rot = (sal, inv) => (inv > 0 ? Math.round(sal * anual / inv * 100) / 100 : null);
+  const dias = (sal, inv) => (sal > 0 && inv > 0 ? Math.round(inv / (sal * anual / 365)) : null);
+  // Costo de ventas si el grupo vende algo; si solo tiene materia prima, su consumo (compras)
+  const consumo = suma('consumo_mp');
+  const base = cogs > 0 ? 'costo_ventas' : consumo > 0 ? 'consumo' : null;
+  const flujo = base === 'costo_ventas' ? cogs : base === 'consumo' ? consumo : 0;
+  return {
+    articulos: rs.filter(r => r.inventario > 0).length,
+    inventario: Math.round(inventario),
+    inventario_hoy: Math.round(suma('inventario_hoy')),
+    cogs: Math.round(cogs),
+    cogs_prev: Math.round(suma('cogs_prev')),
+    consumo_mp: Math.round(consumo),
+    base_rotacion: base,
+    rotacion: base ? rot(flujo, inventario) : (inventario > 0 ? 0 : null),
+    dias: dias(flujo, inventario),
+    // Salida artículo por artículo (costo de ventas o consumo de materia prima)
+    salida: Math.round(salida),
+    sin_salida_valor: Math.round(sinSalida.reduce((s, r) => s + r.inventario, 0)),
+    sin_salida_articulos: sinSalida.length,
+  };
+}
+
+// GET /api/analisis/rotacion-inventario?desde=&hasta=&dim=categoria&categoria=&subcategoria=&sublinea=&q=&tipo=
+router.get('/rotacion-inventario', async (req, res) => {
+  try {
+    const db = req.app.get('db');
+    const P = parsePeriodo(req);
+    const dim = ['categoria', 'subcategoria', 'sublinea', 'articulo'].includes(req.query.dim) ? req.query.dim : 'categoria';
+    const [{ filas: stock, corte }, sal] = await Promise.all([inventarioSalud(db), salidaPorArticulo(db, P)]);
+
+    // Inventario promedio por artículo (o el de hoy si no hay fotos en el período)
+    const fotos = sal.hist.length ? Number(sal.hist[0].fotos) : 0;
+    const promedio = new Map(sal.hist.map(h => [Number(h.articulo_id), Number(h.promedio)]));
+    const base = {
+      fotos,
+      primera_foto: sal.hist[0]?.primera || null,
+      ultima_foto: sal.hist[0]?.ultima || null,
+      usa_inventario_hoy: fotos === 0,
+    };
+
+    // Unir stock de hoy (con su clase) y salidas del período
+    const porCodigo = new Map();
+    for (const s of stock) {
+      porCodigo.set(s.codigo_articulo, {
+        articulo_id: Number(s.articulo_id), codigo_articulo: s.codigo_articulo, articulo: s.articulo, clase: s.clase,
+        categoria: s.categoria, subcategoria: s.subcategoria, sublinea: s.sublinea,
+        inventario_hoy: s.valor, stock_actual: s.stock_actual, ultima_venta: s.ultima_venta, ultima_compra: s.ultima_compra,
+        cogs: 0, cogs_prev: 0, compras: 0, compras_prev: 0, ventas: 0, alguna_venta: false,
+      });
+    }
+    for (const f of sal.filas) {
+      const r = porCodigo.get(f.codigo_articulo) || {
+        codigo_articulo: f.codigo_articulo, articulo: f.articulo, clase: null,
+        categoria: f.categoria, subcategoria: f.subcategoria, sublinea: f.sublinea,
+        inventario_hoy: 0, stock_actual: 0,
+      };
+      Object.assign(r, {
+        articulo_id: Number(f.articulo_id),
+        cogs: Number(f.cogs) || 0, cogs_prev: Number(f.cogs_prev) || 0,
+        compras: Number(f.compras) || 0, compras_prev: Number(f.compras_prev) || 0,
+        ventas: Number(f.ventas) || 0, alguna_venta: f.alguna_venta,
+      });
+      porCodigo.set(f.codigo_articulo, r);
+    }
+    let filas = [...porCodigo.values()].map(r => {
+      // Misma clasificación que capital inmovilizado; sin stock hoy, se deduce de la historia
+      const clase = r.clase || (r.alguna_venta ? 'producto' : r.compras > 0 || r.compras_prev > 0 ? 'materia_prima' : 'sin_movimiento');
+      const inventario = base.usa_inventario_hoy ? r.inventario_hoy : (promedio.get(r.articulo_id) || 0);
+      const salida = clase === 'producto' ? r.cogs : clase === 'materia_prima' ? r.compras : 0;
+      const salida_prev = clase === 'producto' ? r.cogs_prev : clase === 'materia_prima' ? r.compras_prev : 0;
+      return { ...r, clase, inventario, salida, salida_prev, consumo_mp: clase === 'materia_prima' ? r.compras : 0 };
+    }).filter(r => r.inventario > 0 || r.salida > 0);
+
+    // Filtros de producto, búsqueda y tipo
+    for (const k of ['categoria', 'subcategoria', 'sublinea']) {
+      if (req.query[k]) filas = filas.filter(r => r[k] === req.query[k]);
+    }
+    const palabras = normalizar(req.query.q).split(/\s+/).filter(Boolean);
+    if (palabras.length) {
+      filas = filas.filter(r => {
+        const texto = normalizar(`${r.codigo_articulo} ${r.articulo}`);
+        return palabras.every(p => texto.includes(p));
+      });
+    }
+    const tipo = ['producto', 'materia_prima', 'sin_movimiento'].includes(req.query.tipo) ? req.query.tipo : null;
+    if (tipo) filas = filas.filter(r => r.clase === tipo);
+
+    const anual = 365 / P.dias;
+    const totales = resumirRot(filas, anual);
+    totales.cogs_variacion_pct = totales.cogs_prev > 0 ? Math.round((totales.cogs / totales.cogs_prev - 1) * 1000) / 10 : null;
+
+    // Por tipo de artículo
+    const porTipo = ['producto', 'materia_prima', 'sin_movimiento']
+      .map(c => ({ clase: c, ...resumirRot(filas.filter(r => r.clase === c), anual) }))
+      .filter(t => t.inventario > 0 || t.salida > 0);
+
+    // Agrupación por el nivel pedido
+    const grupos = new Map();
+    for (const r of filas) {
+      const clave = dim === 'articulo' ? r.codigo_articulo : r[dim];
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(r);
+    }
+    const items = [...grupos.entries()].map(([clave, rs]) => {
+      const g = resumirRot(rs, anual);
+      const a = rs[0];
+      return {
+        clave,
+        nombre: dim === 'articulo' ? a.articulo : clave,
+        ...g,
+        pct_inventario: totales.inventario > 0 ? Math.round(g.inventario / totales.inventario * 1000) / 10 : 0,
+        // Participación en la salida que define la rotación de la selección
+        // (costo de ventas; o consumo si la selección es solo materia prima)
+        pct_cogs: totales.base_rotacion === 'consumo'
+          ? (totales.consumo_mp > 0 ? Math.round(g.consumo_mp / totales.consumo_mp * 1000) / 10 : 0)
+          : (totales.cogs > 0 ? Math.round(g.cogs / totales.cogs * 1000) / 10 : 0),
+        pct_materia_prima: g.inventario > 0 ? Math.round(rs.filter(r => r.clase === 'materia_prima').reduce((s, r) => s + r.inventario, 0) / g.inventario * 100) : 0,
+        ...(dim === 'articulo' ? { clase: a.clase, stock_actual: a.stock_actual, ultima_venta: a.ultima_venta, ultima_compra: a.ultima_compra } : {}),
+      };
+    }).sort((x, y) => y.inventario - x.inventario || y.salida - x.salida);
+    // Grupos sin inventario (servicios, maquila…): no rotan, pero su costo sí entra al total
+    const sinInv = items.filter(i => i.inventario <= 0);
+    const sinInventario = {
+      grupos: sinInv.map(i => i.nombre),
+      cogs: Math.round(sinInv.reduce((s, i) => s + i.cogs, 0)),
+      pct_cogs: totales.cogs > 0 ? Math.round(sinInv.reduce((s, i) => s + i.cogs, 0) / totales.cogs * 1000) / 10 : 0,
+    };
+
+    // Inventario según sus días de inventario (artículo por artículo)
+    const conStock = filas.filter(r => r.inventario > 0);
+    const diasArt = (r) => (r.salida > 0 ? r.inventario / (r.salida * anual / 365) : null);
+    const distribucion = [
+      ...TRAMOS_ROT.map((t, i) => {
+        const desde = i === 0 ? -Infinity : TRAMOS_ROT[i - 1].hasta;
+        const rs = conStock.filter(r => { const d = diasArt(r); return d !== null && d > desde && d <= t.hasta; });
+        return { tramo: t.id, articulos: rs.length, valor: Math.round(rs.reduce((s, r) => s + r.inventario, 0)) };
+      }),
+      (() => {
+        const rs = conStock.filter(r => diasArt(r) === null);
+        return { tramo: 'sin_salida', articulos: rs.length, valor: Math.round(rs.reduce((s, r) => s + r.inventario, 0)) };
+      })(),
+    ];
+
+    // Salida mensual (costo de ventas y compras) de la selección
+    const codigos = new Set(filas.map(r => r.articulo_id).filter(Boolean));
+    const meses = new Map();
+    for (const s of sal.serie) {
+      if (!codigos.has(Number(s.articulo_id))) continue;
+      const m = meses.get(s.mes) || { mes: s.mes, cogs: 0, compras: 0 };
+      m.cogs += Number(s.cogs) || 0;
+      m.compras += Number(s.compras) || 0;
+      meses.set(s.mes, m);
+    }
+    const serie = [...meses.values()].sort((a, b) => a.mes.localeCompare(b.mes))
+      .map(m => ({ mes: m.mes, cogs: Math.round(m.cogs), compras: Math.round(m.compras) }));
+
+    // Artículos de la selección: los de más inventario
+    const articulos = conStock
+      .sort((x, y) => y.inventario - x.inventario)
+      .slice(0, 100)
+      .map(r => {
+        const d = diasArt(r);
+        return {
+          codigo_articulo: r.codigo_articulo, articulo: r.articulo, clase: r.clase,
+          categoria: r.categoria, subcategoria: r.subcategoria, sublinea: r.sublinea,
+          stock_actual: r.stock_actual, inventario: Math.round(r.inventario), salida: Math.round(r.salida),
+          rotacion: r.inventario > 0 ? Math.round(r.salida * anual / r.inventario * 100) / 100 : null,
+          dias: d === null ? null : Math.round(d),
+          ultima_venta: r.ultima_venta, ultima_compra: r.ultima_compra,
+        };
+      });
+
+    res.json({
+      status: 'success',
+      data: {
+        periodo: P.ventana(), dim, q: palabras.join(' '), tipo, fecha_corte: corte,
+        base_inventario: base, totales, por_tipo: porTipo, items: items.filter(i => i.inventario > 0).slice(0, 500),
+        sin_inventario: sinInventario, distribucion, serie, articulos,
+      },
+    });
+  } catch (error) {
+    console.error('[GET /analisis/rotacion-inventario] Error:', error);
+    res.status(500).json({ status: 'error', message: 'Error al calcular la rotación de inventarios' });
   }
 });
 

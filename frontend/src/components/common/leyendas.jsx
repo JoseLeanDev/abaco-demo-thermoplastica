@@ -540,6 +540,73 @@ export const LEYENDAS = {
       <Nota>Los promedios diarios son del período seleccionado. No se cuentan saldos vencidos hace más de 90 días (cobros dudosos y facturas de proveedor sin depurar), que se muestran aparte al final de la página.</Nota>
     </>,
   },
+  // ======================= Rotación de inventarios =======================
+  rotacion_inventario: {
+    titulo: 'Rotación de inventarios',
+    texto: <>
+      Cuántas veces al año se vende y repone todo el inventario.
+      <L>
+        <li><strong>Fórmula:</strong> costo de ventas ÷ inventario promedio, ambos a costo.</li>
+        <li>El costo de ventas del período se lleva a un año (× 365 ÷ días del período) para comparar períodos de distinto largo.</li>
+      </L>
+      <Nota>Más alto es mejor: 4× significa que el inventario se renueva cada 3 meses. Un grupo que solo tiene materia prima se mide con lo que se compra para reponerla (ver “Rotación por tipo”).</Nota>
+    </>,
+  },
+  dias_inventario_rot: {
+    titulo: 'Días de inventario',
+    texto: <>
+      365 ÷ rotación: para cuántos días alcanza lo que hay en bodega al ritmo de salida del período.
+      <Nota>Para toda la empresa es el mismo número que “Días de inventario” en el ciclo de caja de Salud financiera; puede variar unos días porque aquí se usa el inventario promedio.</Nota>
+    </>,
+  },
+  costo_ventas_rot: {
+    titulo: 'Costo de ventas',
+    texto: <>
+      Lo que costó la mercadería vendida en el período (COGS). Mismo criterio que Márgenes: el margen se mide con las líneas que traen costo y se aplica a las que no; si un artículo no tiene ninguna línea con costo, se usa el margen global.
+      <Nota>Ya incluye la materia prima consumida para fabricar lo vendido.</Nota>
+    </>,
+  },
+  inventario_promedio: {
+    titulo: 'Inventario promedio',
+    texto: <>
+      Promedio del valor del inventario a costo en las fotos diarias del período.
+      <Nota>El ERP no guarda el inventario de días pasados. La plataforma guarda una foto diaria desde el 9 oct 2026; mientras se arma la historia, el promedio usa las fotos disponibles o, si no hay ninguna en el período, el inventario de hoy.</Nota>
+    </>,
+  },
+  rotacion_por_tipo: {
+    titulo: 'Rotación por tipo',
+    texto: <>
+      <L>
+        <li><strong>Producto terminado:</strong> costo de ventas ÷ su inventario.</li>
+        <li><strong>Materia prima:</strong> no se vende, se consume en producción. Se mide con lo comprado en el período (lo que se consume se repone) ÷ su inventario.</li>
+        <li><strong>Sin movimiento:</strong> sin ventas ni compras registradas; no rota.</li>
+      </L>
+      <Nota>Por eso la rotación total no es el promedio de las tres: el costo de ventas ya incluye la materia prima consumida.</Nota>
+    </>,
+  },
+  salida_articulo: {
+    titulo: 'Salida del período',
+    texto: <>Producto terminado: costo de lo vendido. Materia prima: lo comprado en el período, como aproximación de lo consumido. Ambos a costo, sin IVA.</>,
+  },
+  inventario_vs_costo: {
+    titulo: 'Peso en inventario vs en costo de ventas',
+    texto: <>
+      Qué parte del inventario total tiene cada grupo (azul) y qué parte del costo de ventas genera (verde).
+      <Nota>Si el azul es mucho mayor que el verde, ese grupo acumula más inventario del que su venta justifica y rota más lento que el promedio.</Nota>
+    </>,
+  },
+  sin_salida: {
+    titulo: 'Sin salida',
+    texto: <>Inventario de artículos que no tuvieron ninguna venta (producto) ni compra (materia prima) en el período.</>,
+  },
+  distribucion_rotacion: {
+    titulo: 'Para cuánto alcanza',
+    texto: <>Cada artículo con stock se ubica según sus días de inventario (su inventario ÷ su salida diaria del período) y se suma su valor. “Sin salida”: no se vendió ni se compró en el período.</>,
+  },
+  salida_mensual: {
+    titulo: 'Salida mensual',
+    texto: <>Costo de ventas y compras sin IVA de los artículos de la selección, por mes. Muestra si se está comprando más de lo que se vende (el inventario crece).</>,
+  },
   capital_trabajo: {
     titulo: 'Capital de trabajo',
     texto: <>

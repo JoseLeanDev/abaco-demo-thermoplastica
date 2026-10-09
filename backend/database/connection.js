@@ -5,7 +5,17 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  // Conexiones ociosas: mantenerlas vivas y soltarlas antes de que la red las corte
+  keepAlive: true,
+  idleTimeoutMillis: 30000,
+});
+
+// Si la red corta una conexión ociosa (ETIMEDOUT, ECONNRESET), el pool emite
+// 'error'. Sin este handler Node lo trata como excepción no capturada y tumba
+// el servidor. El pool descarta esa conexión y abre otra en la siguiente consulta.
+pool.on('error', (err) => {
+  console.error('[pg] conexión ociosa cerrada:', err.code || err.message);
 });
 
 console.log('✅ Conectado a base de datos PostgreSQL (Render)');

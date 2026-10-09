@@ -164,6 +164,11 @@ function CicloCaja({ ciclo, mensual }) {
               </div>
               <p className="text-xs text-[var(--text-muted)] mt-1">
                 Si se logra {c.accion}, se liberan <strong className="text-[var(--text-primary)]">{fmtM(c.valorDia * 10)}</strong> de caja. <Leyenda k="liberar_caja" />
+                {c.nombre === 'Días de inventario' && (
+                  <Link to="/analisis/rotacion-inventario" className="ml-2 inline-flex items-center gap-0.5 text-[var(--accent-blue)] hover:underline whitespace-nowrap">
+                    Ver rotación por categoría <ArrowRightIcon className="w-3 h-3" />
+                  </Link>
+                )}
               </p>
             </div>
           ))}

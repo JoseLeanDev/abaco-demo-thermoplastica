@@ -7,6 +7,7 @@ import Tesoreria from './pages/Tesoreria'
 // import Contabilidad from './pages/Contabilidad'
 import Analisis from './pages/Analisis'
 import InventarioQuieto from './pages/InventarioQuieto'
+import RotacionInventario from './pages/RotacionInventario'
 import GastosOperativos from './pages/GastosOperativos'
 import HistorialVentas from './pages/HistorialVentas'
 import Compras from './pages/Compras'
@@ -66,6 +67,7 @@ function AppRoutes() {
                 {/* <Route path="/contabilidad" element={<Contabilidad />} /> */}
                 <Route path="/analisis" element={<Analisis />} />
                 <Route path="/analisis/capital-inmovilizado" element={<InventarioQuieto />} />
+                <Route path="/analisis/rotacion-inventario" element={<RotacionInventario />} />
                 <Route path="/gastos-operativos" element={<GastosOperativos />} />
                 <Route path="/gastos-operativos/historial-servicios" element={<HistorialVentas />} />
                 <Route path="/compras" element={<Compras />} />

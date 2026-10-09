@@ -155,6 +155,15 @@ app.listen(PORT, () => {
       const { setupDatabase } = require('../database/setupAuto');
       await setupDatabase();
       console.log('Database setup complete');
+      // Foto diaria del inventario para la rotación con inventario promedio
+      const historial = require('./services/historialInventario');
+      try {
+        const r = await historial.capturar(db);
+        console.log(`[hist_inventario] foto inicial: ${r?.n} artículos`);
+      } catch (e) {
+        console.error('[hist_inventario] error:', e.message);
+      }
+      historial.programar(db);
     } catch (e) {
       console.error('DB setup error:', e.message);
     }

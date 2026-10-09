@@ -34,7 +34,10 @@ const navigation = [
   // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
   {
     name: 'Salud financiera', href: '/analisis', icon: ChartBarIcon,
-    children: [{ name: 'Capital inmovilizado', href: '/analisis/capital-inmovilizado' }],
+    children: [
+      { name: 'Capital inmovilizado', href: '/analisis/capital-inmovilizado' },
+      { name: 'Rotación de inventarios', href: '/analisis/rotacion-inventario' },
+    ],
   },
   { name: 'Márgenes', href: '/margenes', icon: TagIcon },
   // { name: 'SAT', href: '/sat', icon: DocumentCheckIcon },
