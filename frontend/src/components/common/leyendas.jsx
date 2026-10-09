@@ -403,6 +403,58 @@ export const LEYENDAS = {
     titulo: 'Factura promedio',
     texto: <>Compras sin IVA ÷ número de facturas del período. Debajo, el promedio mensual = compras ÷ meses del período.</>,
   },
+  gasto_admin: {
+    titulo: 'Gasto de administración',
+    texto: <>
+      Suma sin IVA de las facturas de compra con artículos de “Gastos de Operación” cuyo centro de costo
+      (sublínea en el ERP) es “Administración”, emitidas en el período. Se compara con el mismo rango del año anterior.
+      <Nota>Rojo = se gastó más que el año anterior.</Nota>
+    </>,
+  },
+  pct_operativo_admin: {
+    titulo: '% del gasto operativo',
+    texto: <>Gasto de administración ÷ todo el gasto operativo del período (todos los centros de costo: administración, laminados, impresión, etc.).</>,
+  },
+  gasto_mensual_admin: {
+    titulo: 'Gasto por mes',
+    texto: <>Promedio mensual = gasto del período ÷ meses del período (días ÷ 30.4). La proyección anual multiplica ese promedio por 12. En la gráfica, el mes en curso está incompleto.</>,
+  },
+  rubro_admin: {
+    titulo: 'Rubros',
+    texto: <>
+      Agrupación de la plataforma para leer los conceptos contables más fácil:
+      <L>
+        <li><strong>Instalaciones:</strong> alquileres, agua y energía, mantenimiento.</li>
+        <li><strong>Servicios y tecnología:</strong> otros servicios, teléfono, software, equipo electrónico, suscripciones, honorarios.</li>
+        <li><strong>Vehículos y viajes:</strong> gastos de vehículos, combustible, hospedaje, viáticos, pasajes.</li>
+        <li><strong>Personal:</strong> atención al personal, capacitación, uniformes y equipo SSO, gastos médicos.</li>
+        <li><strong>Seguros y fianzas</strong> · <strong>Oficina y suministros</strong> · <strong>Otros</strong> (diversos, no deducibles, impuestos, multas, representación, publicidad).</li>
+      </L>
+    </>,
+  },
+  concepto_gasto: {
+    titulo: 'Concepto de gasto',
+    texto: <>
+      En el ERP cada gasto se registra con un artículo cuyo nombre es el concepto contable; el código trae la cuenta
+      (02GOA51106 → 5.1.1.06 Alquileres). Por mes = gasto del concepto ÷ meses del período. Proveedor principal = al que
+      más se le pagó por ese concepto.
+    </>,
+  },
+  recurrentes_admin: {
+    titulo: 'Cargos que se repiten cada mes',
+    texto: <>
+      Mismo concepto y mismo proveedor facturado en al menos el 75% de los meses completos del período (mínimo 3).
+      <L>
+        <li><strong>Monto típico:</strong> la mediana de lo facturado en los meses con cargo.</li>
+        <li><strong>Fijo:</strong> varía menos de 15% entre meses (contratos: alquiler, servicios fijos). <strong>Variable:</strong> depende del consumo (energía, combustible).</li>
+      </L>
+      <Nota>No se cuenta “El Portador” (proveedor genérico para compras sin proveedor identificado).</Nota>
+    </>,
+  },
+  proveedores_admin: {
+    titulo: 'Proveedores de administración',
+    texto: <>Proveedores ordenados por gasto de administración del período. “Qué se le paga” lista los conceptos facturados por ese proveedor.</>,
+  },
   iva_acreditable: {
     titulo: 'IVA acreditable',
     texto: <>IVA de las facturas de compra del período. El % es IVA ÷ base sin IVA.</>,

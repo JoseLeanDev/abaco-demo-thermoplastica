@@ -11,6 +11,7 @@ import RotacionInventario from './pages/RotacionInventario'
 import GastosOperativos from './pages/GastosOperativos'
 import HistorialVentas from './pages/HistorialVentas'
 import Compras from './pages/Compras'
+import GastosAdministracion from './pages/GastosAdministracion'
 import Ventas from './pages/Ventas'
 import Inventario from './pages/Inventario'
 // import SAT from './pages/SAT'
@@ -69,6 +70,7 @@ function AppRoutes() {
                 <Route path="/analisis/capital-inmovilizado" element={<InventarioQuieto />} />
                 <Route path="/analisis/rotacion-inventario" element={<RotacionInventario />} />
                 <Route path="/gastos-operativos" element={<GastosOperativos />} />
+                <Route path="/gastos-operativos/administracion" element={<GastosAdministracion />} />
                 <Route path="/gastos-operativos/historial-servicios" element={<HistorialVentas />} />
                 <Route path="/compras" element={<Compras />} />
                 <Route path="/compras/historial-ventas" element={<HistorialVentas />} />

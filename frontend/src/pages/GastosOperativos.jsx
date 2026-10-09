@@ -172,6 +172,11 @@ export default function GastosOperativos() {
               <strong>{centroDominante.centro_costo}</strong> concentra el <strong>{centroDominante.porcentaje}%</strong> del gasto operativo del período
               ({fmtQ(centroDominante.gasto_sin_iva)}). Revisá si es correcto o si hay imputaciones mal categorizadas.
             </p>
+            {centroDominante.centro_costo === 'Administración' && (
+              <Link to="/gastos-operativos/administracion" className="inline-block mt-1 font-medium text-[var(--accent-blue)] hover:underline">
+                Ver en qué consisten los gastos de Administración →
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -212,6 +217,9 @@ export default function GastosOperativos() {
             <Squares2X2Icon className="w-5 h-5 text-[var(--text-muted)]" />
             <h2 className="font-semibold">Gasto por centro de costo</h2>
           <Leyenda k="centros_costo" />
+            <Link to="/gastos-operativos/administracion" className="ml-auto text-xs text-[var(--accent-blue)] hover:underline whitespace-nowrap">
+              Detalle de Administración →
+            </Link>
           </div>
           <div className="p-5 pt-0 space-y-3">
             {centros.length === 0 && <p className="text-sm text-[var(--text-muted)]">Sin datos.</p>}

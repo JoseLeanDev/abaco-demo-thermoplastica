@@ -27,7 +27,12 @@ import FiltroPeriodo from '../common/FiltroPeriodo'
 const navigation = [
   { name: 'Panel', href: '/', icon: HomeIcon },
   { name: 'Ventas', href: '/ventas', icon: ShoppingBagIcon },
-  { name: 'Gastos Operativos', href: '/gastos-operativos', icon: BanknotesIconNav },
+  {
+    name: 'Gastos Operativos', href: '/gastos-operativos', icon: BanknotesIconNav,
+    children: [
+      { name: 'Administración', href: '/gastos-operativos/administracion' },
+    ],
+  },
   { name: 'Compras', href: '/compras', icon: ShoppingCartIcon },
   { name: 'Inventario', href: '/inventario', icon: CubeIcon },
   { name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon },
