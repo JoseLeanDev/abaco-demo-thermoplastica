@@ -727,15 +727,15 @@ router.get('/recomendaciones', async (req, res) => {
     const coberturaProm = consumoDiarioTotal > 0 ? (totales.valor_inventario / consumoDiarioTotal) : null;
 
     // ---------- 5) Top urgentes ----------
+    // Todos los artículos ordenados por prioridad y valor sugerido; el front filtra
+    // (acción inmediata por default, búsqueda y línea sobre el universo completo).
     const orden = { urgente: 0, alta: 1, media: 2, ok: 3 };
-    const urgentes = items
-      .filter(it => it.prioridad !== 'ok')
-      .sort((a, b) => {
-        const p = orden[a.prioridad] - orden[b.prioridad];
-        if (p !== 0) return p;
-        return (b.valor_sugerido || 0) - (a.valor_sugerido || 0);
-      })
-      .slice(0, 30);
+    const todos = [...items].sort((a, b) => {
+      const p = orden[a.prioridad] - orden[b.prioridad];
+      if (p !== 0) return p;
+      return (b.valor_sugerido || 0) - (a.valor_sugerido || 0);
+    });
+    const urgentes = todos.filter(it => it.prioridad !== 'ok').slice(0, 30);
 
     res.json({
       status: 'success',
@@ -759,6 +759,7 @@ router.get('/recomendaciones', async (req, res) => {
         },
         lineas,
         urgentes,
+        items: todos,
         total_items: items.length,
       },
     });

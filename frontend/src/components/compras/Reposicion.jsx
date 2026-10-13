@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from 'react-query'
 import {
   ArrowUpRightIcon,
@@ -7,7 +7,9 @@ import {
   CubeIcon,
   ExclamationTriangleIcon,
   FireIcon,
+  MagnifyingGlassIcon,
   Squares2X2Icon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { endpoints } from '../../services/cfoApi'
 import { Leyenda } from '../common/leyendas'
@@ -36,16 +38,53 @@ const PRIORIDAD = {
   ok:      { label: 'OK',      bg: 'bg-emerald-500/10',text: 'text-emerald-600',ring: 'ring-emerald-500/40',dot: 'bg-emerald-500'},
 }
 
+// Filtros de prioridad de la tabla. "Acción inmediata" (urgente + alta) es el default;
+// al buscar o al elegir una línea se pasa a "Todas" para ver el universo completo.
+const FILTROS_PRIORIDAD = [
+  ['accion',  'Acción inmediata', it => it.prioridad === 'urgente' || it.prioridad === 'alta'],
+  ['todas',   'Todas',            () => true],
+  ['urgente', 'Urgente',          it => it.prioridad === 'urgente'],
+  ['alta',    'Alta',             it => it.prioridad === 'alta'],
+  ['media',   'Media',            it => it.prioridad === 'media'],
+  ['ok',      'OK',               it => it.prioridad === 'ok'],
+]
+
 function RecomendacionesSection({ reco, loading, params, setParams }) {
-  const [tab, setTab] = useState('urgentes') // 'urgentes' | 'lineas' | 'todos'
+  const [tab, setTab] = useState('articulos') // 'articulos' | 'lineas'
   const [filtroLinea, setFiltroLinea] = useState('')
+  const [filtroPrio, setFiltroPrio] = useState('accion')
+  const [busqueda, setBusqueda] = useState('')
   const kpis = reco?.kpis || {}
   const lineas = reco?.lineas || []
-  const urgentes = reco?.urgentes || []
+  const items = reco?.items || reco?.urgentes || []
 
-  const urgentesFiltrados = filtroLinea
-    ? urgentes.filter(u => u.linea === filtroLinea)
-    : urgentes
+  const lineasOrdenadas = useMemo(() => lineas.map(l => l.linea).sort((a, b) => a.localeCompare(b, 'es')), [lineas])
+
+  const conteoPrio = useMemo(() => {
+    const base = filtroLinea ? items.filter(it => it.linea === filtroLinea) : items
+    return Object.fromEntries(FILTROS_PRIORIDAD.map(([id, , fn]) => [id, base.filter(fn).length]))
+  }, [items, filtroLinea])
+
+  const filtrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    const fn = FILTROS_PRIORIDAD.find(([id]) => id === filtroPrio)?.[2] || (() => true)
+    return items.filter(it =>
+      fn(it) &&
+      (!filtroLinea || it.linea === filtroLinea) &&
+      (!q || `${it.descripcion} ${it.codigo} ${it.proveedor_sugerido} ${it.sublinea}`.toLowerCase().includes(q))
+    )
+  }, [items, filtroPrio, filtroLinea, busqueda])
+
+  const buscar = (v) => {
+    setBusqueda(v)
+    if (v.trim() && filtroPrio === 'accion') setFiltroPrio('todas')
+  }
+  const elegirLinea = (l) => {
+    setFiltroLinea(l)
+    if (l && filtroPrio === 'accion') setFiltroPrio('todas')
+  }
+  const limpiar = () => { setBusqueda(''); setFiltroLinea(''); setFiltroPrio('accion') }
+  const hayFiltros = busqueda || filtroLinea || filtroPrio !== 'accion'
 
   if (loading && !reco?.kpis) {
     return (
@@ -147,8 +186,8 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
 
       {/* Tabs */}
       <div className="border-b border-[var(--border-default)] flex items-center gap-1 px-4 bg-[var(--bg-secondary)]">
-        <TabBtn active={tab === 'urgentes'} onClick={() => setTab('urgentes')} icon={FireIcon} count={kpis.skus_urgentes + kpis.skus_alta}>
-          Acción inmediata
+        <TabBtn active={tab === 'articulos'} onClick={() => setTab('articulos')} icon={FireIcon} count={kpis.skus_activos}>
+          Artículos
         </TabBtn>
         <TabBtn active={tab === 'lineas'} onClick={() => setTab('lineas')} icon={Squares2X2Icon} count={lineas.length}>
           Por línea
@@ -166,7 +205,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
                 <LineaCard
                   key={l.linea}
                   linea={l}
-                  onFocus={() => { setFiltroLinea(l.linea); setTab('urgentes') }}
+                  onFocus={() => { setFiltroLinea(l.linea); setBusqueda(''); setFiltroPrio('todas'); setTab('articulos') }}
                 />
               ))}
             </div>
@@ -174,23 +213,55 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
         </div>
       )}
 
-      {tab === 'urgentes' && (
+      {tab === 'articulos' && (
         <div className="p-5">
-          {/* filtro por línea si aplica */}
-          {filtroLinea && (
-            <div className="mb-3 flex items-center gap-2 text-xs">
-              <span className="text-[var(--text-muted)]">Línea:</span>
-              <span className="badge-warning">{filtroLinea}</span>
-              <button
-                onClick={() => setFiltroLinea('')}
-                className="text-[var(--accent-blue)] hover:underline"
-              >
-                limpiar
-              </button>
+          {/* Barra de filtros: búsqueda, línea y prioridad */}
+          <div className="mb-4 flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <MagnifyingGlassIcon className="w-4 h-4 text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => buscar(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setBusqueda('')}
+                placeholder="Buscar artículo, código o proveedor…"
+                className="input py-1.5 pl-8 text-sm w-72 max-w-full"
+              />
             </div>
-          )}
-          {urgentesFiltrados.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)] py-8 text-center">Nada urgente en el filtro actual.</p>
+            <select
+              value={filtroLinea}
+              onChange={(e) => elegirLinea(e.target.value)}
+              className="input py-1.5 text-sm w-52 max-w-full"
+            >
+              <option value="">Todas las líneas</option>
+              {lineasOrdenadas.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <div className="flex rounded-md border border-[var(--border-default)] overflow-hidden text-xs flex-wrap">
+              {FILTROS_PRIORIDAD.map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setFiltroPrio(id)}
+                  className={`px-2.5 py-1.5 font-medium flex items-center gap-1 ${filtroPrio === id ? 'bg-[#001639] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'}`}
+                >
+                  {PRIORIDAD[id] && <span className={`w-1.5 h-1.5 rounded-full ${PRIORIDAD[id].dot}`} />}
+                  {label}
+                  <span className={`tabular-nums ${filtroPrio === id ? 'text-white/70' : 'text-[var(--text-muted)]'}`}>{conteoPrio[id] ?? 0}</span>
+                </button>
+              ))}
+            </div>
+            {hayFiltros && (
+              <button onClick={limpiar} className="text-xs text-[var(--accent-blue)] hover:underline flex items-center gap-0.5">
+                <XMarkIcon className="w-3.5 h-3.5" /> limpiar
+              </button>
+            )}
+            <span className="ml-auto text-xs text-[var(--text-muted)] tabular-nums">
+              {fmtNum(filtrados.length)} artículo{filtrados.length === 1 ? '' : 's'} · sugerido {fmtQm(filtrados.reduce((s, it) => s + (it.valor_sugerido || 0), 0))}
+            </span>
+          </div>
+          {filtrados.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)] py-8 text-center">
+              {busqueda ? `Ningún artículo coincide con "${busqueda}".` : 'Sin artículos en el filtro actual.'}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -208,7 +279,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-default)]">
-                  {urgentesFiltrados.map((u, i) => (
+                  {filtrados.map((u, i) => (
                     <SkuUrgenteRow key={u.codigo + i} item={u} />
                   ))}
                 </tbody>
