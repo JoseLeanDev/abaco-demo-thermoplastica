@@ -63,6 +63,7 @@ export const endpoints = {
   inventario: {
     resumen: (params = {}) => cfoApi.get('/inventario', { params }),
     detalle: (params = {}) => cfoApi.get('/inventario/detalle', { params }),
+    analitica: (params = {}) => cfoApi.get('/inventario/analitica', { params }),
   },
   ventas: {
     resumen: (params = {}) => cfoApi.get('/ventas', { params }),

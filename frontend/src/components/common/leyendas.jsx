@@ -549,6 +549,106 @@ export const LEYENDAS = {
     titulo: 'Días de inventario',
     texto: <>Valor del stock del grupo ÷ su costo vendido diario en el período. “Sin venta en el período” = sin costo vendido.</>,
   },
+  inv_tipo_articulo: {
+    titulo: 'Tipo de artículo',
+    texto: <>
+      Según su historia en el ERP:
+      <L>
+        <li><strong>Producto terminado:</strong> tiene alguna factura de venta.</li>
+        <li><strong>Materia prima:</strong> nunca se vendió pero se compra (se consume en producción).</li>
+        <li><strong>Sin movimiento:</strong> ni ventas ni compras registradas.</li>
+      </L>
+      <Nota>Mismo criterio que Capital inmovilizado y Rotación de inventarios.</Nota>
+    </>,
+  },
+  inv_salida: {
+    titulo: 'Salida del período',
+    texto: <>
+      Lo que sale del inventario en el período, a costo:
+      <L>
+        <li><strong>Producto terminado:</strong> costo de ventas (mismo criterio que el margen del sitio).</li>
+        <li><strong>Materia prima:</strong> lo comprado sin IVA, como aproximación de lo consumido (lo que se consume se repone).</li>
+      </L>
+      <Nota>“Salida/mes” = salida del período ÷ días del período × 30.</Nota>
+    </>,
+  },
+  inv_dias: {
+    titulo: 'Días de inventario',
+    texto: <>
+      Valor en stock hoy ÷ salida diaria del período: cuántos días alcanza el inventario al ritmo actual.
+      Rotación = 365 ÷ días.
+      <Nota>Para un grupo se usa su costo de ventas; si el grupo es solo materia prima (no vende), lo comprado (“por consumo”). No se suman ambos para no contar dos veces la materia prima que ya va dentro del costo de ventas.</Nota>
+    </>,
+  },
+  inv_cobertura: {
+    titulo: 'Cobertura por artículo',
+    texto: <>
+      Días que alcanza el stock de cada artículo: su valor ÷ su salida diaria del período.
+      “Sin salida” = tiene stock pero no se vendió ni compró en el período.
+    </>,
+  },
+  inv_objetivo: {
+    titulo: 'Cobertura objetivo',
+    texto: <>Días de inventario que se consideran sanos para tener en bodega. Lo que pase de ese nivel cuenta como exceso. Cámbialo para ver cuánto capital se liberaría con una política más o menos holgada (con importaciones de ~45 días, 90 es razonable).</>,
+  },
+  inv_quieto: {
+    titulo: 'Capital quieto',
+    texto: <>
+      Stock en estado lento o inmovilizado (vista de salud del inventario):
+      <L>
+        <li><strong>Inmovilizado:</strong> producto sin venta en 180 días, materia prima sin compra en 365, o sin ningún movimiento.</li>
+        <li><strong>Lento:</strong> se mueve, pero su stock cubre más de 180 días de consumo.</li>
+        <li><strong>Activo:</strong> todo lo demás.</li>
+      </L>
+      <Nota>Mismo cálculo que Salud financiera › Capital inmovilizado.</Nota>
+    </>,
+  },
+  inv_exceso: {
+    titulo: 'Exceso de inventario',
+    texto: <>
+      Por artículo: valor en stock − (salida diaria × días de cobertura objetivo), si es positivo. Un artículo sin salida en el período cuenta todo su valor como exceso.
+      <Nota>Es el capital que se liberaría dejando cada artículo en la cobertura objetivo (dejando de reponer, liquidando o devolviendo).</Nota>
+    </>,
+  },
+  inv_quiebre: {
+    titulo: 'Quiebre de stock',
+    texto: <>
+      Artículo en cero, sin nada en tránsito, con demanda recurrente: tuvo salida (venta o compra para consumo) en al menos 3 de los últimos 6 meses y alguna en los últimos 90 días.
+      <Nota>Mucho se fabrica contra pedido, así que un artículo en cero sin demanda recurrente no se cuenta. “Movían Q/mes” = salida mensual del período de esos artículos.</Nota>
+    </>,
+  },
+  inv_abc: {
+    titulo: 'Clasificación ABC',
+    texto: <>
+      Pareto por valor de salida del período (ver “Salida”), sobre todos los artículos:
+      <L>
+        <li><strong>A:</strong> los que suman el primer 80% de la salida.</li>
+        <li><strong>B:</strong> el siguiente 15%.</li>
+        <li><strong>C:</strong> el último 5%.</li>
+        <li><strong>Sin salida:</strong> no se vendieron ni compraron en el período.</li>
+      </L>
+      <Nota>La clase no cambia al filtrar: un artículo A sigue siendo A dentro de su categoría.</Nota>
+    </>,
+  },
+  inv_matriz_abc: {
+    titulo: 'Matriz ABC × cobertura',
+    texto: <>Valor en stock cruzando la clase ABC con los días de cobertura de cada artículo. Bordes rojos: artículos A con menos de 30 días (riesgo de quiebre) y C o sin salida con más de 180 días (capital estancado).</>,
+  },
+  inv_composicion: {
+    titulo: 'Inventario por grupo',
+    texto: <>Valor en stock, días de inventario, % en estado lento o inmovilizado, exceso sobre la cobertura objetivo y quiebres de cada grupo de la jerarquía Categoría › Subcategoría › Sublínea.</>,
+  },
+  inv_dias_sin_mov: {
+    titulo: 'Días sin movimiento',
+    texto: <>Días desde la última venta (producto terminado) o la última compra (materia prima).</>,
+  },
+  inv_proveedor: {
+    titulo: 'Proveedor principal',
+    texto: <>
+      La foto de inventario del ERP no trae proveedor, así que a cada artículo se le asigna el proveedor al que más se le compró (monto sin IVA) en los últimos 24 meses.
+      <Nota>“Sin compras registradas”: artículos fabricados o que no se compraron en 24 meses.</Nota>
+    </>,
+  },
   top_proveedores_stock: {
     titulo: 'Proveedores por valor en stock',
     texto: <>Valor del stock con existencia, agrupado por el proveedor asignado al artículo en el ERP.</>,

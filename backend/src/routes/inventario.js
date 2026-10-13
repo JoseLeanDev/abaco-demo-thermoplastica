@@ -292,4 +292,194 @@ router.get('/detalle', async (req, res) => {
   }
 });
 
+// =========================================================================
+// GET /api/inventario/analitica?desde=&hasta=
+// Una fila por artículo relevante para inventario (con stock, en tránsito, o con
+// salida en el período). El frontend agrega y filtra en el navegador para que
+// el drill-down por categoría › subcategoría › sublínea sea instantáneo.
+//
+//   - Stock y valor: foto más reciente del ERP.
+//   - Salida del período: producto → costo de ventas (mismo criterio de margen
+//     que el resto del sitio); materia prima → lo comprado (se consume en
+//     producción y se repone). Igual que Rotación de inventarios.
+//   - Cobertura = valor ÷ salida diaria del período.
+//   - ABC por salida: A = artículos que suman el 80% de la salida, B = siguiente
+//     15%, C = último 5%, N = sin salida en el período. Se calcula sobre todo el
+//     universo (la clase de un artículo no cambia al filtrar).
+//   - Quiebre: sin stock ni tránsito, con demanda recurrente (≥ 3 de los últimos 6
+//     meses) y salida en los últimos 90 días.
+//   - Clase y estado (activo / lento / inmovilizado): vista analitica.v_inventario_salud,
+//     igual que Capital inmovilizado.
+// Caché 5 min por rango de fechas.
+// =========================================================================
+const NOMBRE_PROV = `REGEXP_REPLACE(p.nombre, '^[A-Za-z]*[0-9][0-9A-Za-z]*-', '')`;
+// Líneas que no son inventario físico (servicios, gastos, fletes, activo fijo)
+const NO_INVENTARIO = `(COALESCE(a.es_gasto_operativo, FALSE)
+  OR a.linea IN ('Gastos de Operación', 'Costos Administrativos', 'No Aplica')
+  OR a.linea ILIKE 'activo fijo%' OR a.linea ILIKE 'gastos de importaci%' OR a.linea ILIKE 'costo% de producci%'
+  OR a.marca IN ('Contable', 'Articulos de Servicio', 'Maquila')
+  OR a.codigo_articulo IN ('GENARTICULO', 'GENARTICULOEXENTO', 'GENSERV', 'GENSERVICIO'))`;
+const cacheAnalitica = new Map();
+
+router.get('/analitica', async (req, res) => {
+  try {
+    const P = parsePeriodo(req);
+    const key = `${P.desde}|${P.hasta}`;
+    const hit = cacheAnalitica.get(key);
+    if (hit && Date.now() - hit.t < 5 * 60 * 1000) return res.json(hit.body);
+
+    const enP = `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`;
+    const en90 = `f.fecha_emision > CURRENT_DATE - 90`;
+    const limpio = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;
+    const [rows, meta] = await Promise.all([
+      db.allAsync(`
+        WITH snap AS (
+          SELECT * FROM thermoplastica.fact_inventario_snapshot
+          WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_inventario_snapshot)
+        ), g AS (
+          SELECT ${M.pct('f', enP)} AS pct FROM thermoplastica.fact_ventas_linea f WHERE f.tipo_doc = 'FACT'
+        ), v AS (
+          SELECT f.articulo_id,
+                 COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${enP}), 0)  AS ventas,
+                 COALESCE(SUM(f.unidades) FILTER (WHERE ${enP}), 0)       AS unidades,
+                 COALESCE(${M.costo('f', enP)},
+                          SUM(f.total_sin_iva) FILTER (WHERE ${enP}) * (1 - (SELECT pct FROM g) / 100), 0) AS cogs,
+                 COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${en90}), 0) AS ventas_90,
+                 COUNT(DISTINCT DATE_TRUNC('month', f.fecha_emision))
+                   FILTER (WHERE f.fecha_emision > CURRENT_DATE - 180)    AS meses_venta_6m,
+                 MAX(f.fecha_emision)                                     AS ultima_venta
+          FROM thermoplastica.fact_ventas_linea f
+          WHERE f.tipo_doc = 'FACT'
+          GROUP BY f.articulo_id
+        ), c AS (
+          SELECT f.articulo_id,
+                 COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${enP}), 0)  AS compras,
+                 COALESCE(SUM(f.unidades) FILTER (WHERE ${enP}), 0)       AS unidades,
+                 COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${en90}), 0) AS compras_90,
+                 COUNT(DISTINCT DATE_TRUNC('month', f.fecha_emision))
+                   FILTER (WHERE f.fecha_emision > CURRENT_DATE - 180)    AS meses_compra_6m,
+                 MAX(f.fecha_emision)                                     AS ultima_compra
+          FROM thermoplastica.fact_compras_linea f
+          WHERE f.tipo_doc = 'FACT' AND NOT COALESCE(f.es_outlier_fecha, false)
+            AND NOT COALESCE(f.es_gasto_operativo, false) AND f.fecha_emision <= CURRENT_DATE
+          GROUP BY f.articulo_id
+        ),
+        -- La foto del ERP no trae proveedor: se toma el de mayor monto comprado en 24 meses
+        prov AS (
+          SELECT DISTINCT ON (articulo_id) articulo_id, proveedor_id
+          FROM (
+            SELECT articulo_id, proveedor_id, SUM(total_sin_iva) AS monto
+            FROM thermoplastica.fact_compras_linea
+            WHERE tipo_doc = 'FACT' AND fecha_emision > CURRENT_DATE - INTERVAL '24 months'
+            GROUP BY 1, 2
+          ) x
+          ORDER BY articulo_id, monto DESC
+        )
+        SELECT a.codigo_articulo AS codigo, a.descripcion,
+               ${limpio('a.marca', 'Sin categoría')}    AS categoria,
+               ${limpio('a.linea', 'Sin subcategoría')} AS subcategoria,
+               ${limpio('a.sublinea', 'Sin sublínea')}  AS sublinea,
+               p.codigo_proveedor AS proveedor_codigo, ${NOMBRE_PROV} AS proveedor,
+               COALESCE(s.stock_actual, 0) AS stock, COALESCE(s.stock_en_transito, 0) AS transito,
+               COALESCE(s.costo_promedio, 0) AS costo, COALESCE(s.costo_ultimo, 0) AS costo_ultimo,
+               COALESCE(s.precio_venta_1, 0) AS precio,
+               CASE WHEN s.stock_actual > 0 THEN COALESCE(s.valor_inventario, 0) ELSE 0 END AS valor,
+               s.margen_bruto_pct AS margen,
+               sa.clase, sa.estado,
+               COALESCE(v.ventas, 0) AS ventas, COALESCE(v.unidades, 0) AS unidades_vendidas, COALESCE(v.cogs, 0) AS cogs,
+               COALESCE(v.ventas_90, 0) AS ventas_90, COALESCE(v.meses_venta_6m, 0) AS meses_venta_6m, v.ultima_venta,
+               COALESCE(c.compras, 0) AS compras, COALESCE(c.unidades, 0) AS unidades_compradas,
+               COALESCE(c.compras_90, 0) AS compras_90, COALESCE(c.meses_compra_6m, 0) AS meses_compra_6m, c.ultima_compra,
+               ${NO_INVENTARIO} AS no_inventario
+        FROM thermoplastica.dim_articulo a
+        LEFT JOIN snap s ON s.articulo_id = a.articulo_id
+        LEFT JOIN analitica.v_inventario_salud sa ON sa.articulo_id = a.articulo_id
+        LEFT JOIN prov pv ON pv.articulo_id = a.articulo_id
+        LEFT JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = COALESCE(s.proveedor_id, pv.proveedor_id)
+        LEFT JOIN v ON v.articulo_id = a.articulo_id
+        LEFT JOIN c ON c.articulo_id = a.articulo_id
+        WHERE s.stock_actual > 0 OR s.stock_en_transito > 0
+           OR (NOT ${NO_INVENTARIO} AND (COALESCE(v.ventas, 0) > 0 OR COALESCE(c.compras, 0) > 0
+                                         OR COALESCE(v.ventas_90, 0) > 0 OR COALESCE(c.compras_90, 0) > 0))
+      `),
+      db.getAsync(`
+        SELECT (SELECT COUNT(*) FROM thermoplastica.fact_inventario_snapshot
+                 WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_inventario_snapshot)) AS catalogo,
+               (SELECT MAX(fecha_snapshot)::date::text FROM thermoplastica.fact_inventario_snapshot) AS corte
+      `),
+    ]);
+
+    const num = (x) => parseFloat(x) || 0;
+    const fecha = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
+    const hoy = Date.now();
+    const diasDesde = (d) => (d ? Math.floor((hoy - new Date(d).getTime()) / 86400000) : null);
+    const filas = rows.map(r => {
+      const ventas = num(r.ventas), compras = num(r.compras);
+      // Sin stock hoy la vista de salud no trae clase: se deduce de la historia
+      const clase = r.clase || (r.ultima_venta ? 'producto' : r.ultima_compra ? 'materia_prima' : 'sin_movimiento');
+      const salida = clase === 'producto' ? num(r.cogs) : clase === 'materia_prima' ? compras : 0;
+      const salida90 = clase === 'producto' ? num(r.ventas_90) : clase === 'materia_prima' ? num(r.compras_90) : 0;
+      const meses6m = parseInt(clase === 'producto' ? r.meses_venta_6m : r.meses_compra_6m) || 0;
+      const valor = num(r.valor);
+      const stock = num(r.stock);
+      const ultimaMov = clase === 'producto' ? r.ultima_venta : r.ultima_compra;
+      return {
+        codigo: r.codigo, descripcion: r.descripcion,
+        categoria: r.categoria, subcategoria: r.subcategoria, sublinea: r.sublinea,
+        proveedor_codigo: r.proveedor_codigo || null, proveedor: r.proveedor || null,
+        clase, estado: stock > 0 ? (r.estado || 'activo') : 'sin_stock',
+        stock, transito: num(r.transito), costo: num(r.costo), costo_ultimo: num(r.costo_ultimo), precio: num(r.precio),
+        margen: r.margen !== null && r.margen !== undefined ? Math.round(num(r.margen) * 10) / 10 : null,
+        valor: Math.round(valor * 100) / 100,
+        valor_transito: Math.round(num(r.transito) * num(r.costo) * 100) / 100,
+        ventas: Math.round(ventas), unidades_vendidas: num(r.unidades_vendidas),
+        compras: Math.round(compras), unidades_compradas: num(r.unidades_compradas),
+        salida: Math.round(salida),
+        // Para la cobertura de un grupo: costo de ventas, o compras si el grupo es solo materia prima
+        cogs: clase === 'producto' ? Math.round(num(r.cogs)) : 0,
+        consumo_mp: clase === 'materia_prima' ? Math.round(compras) : 0,
+        meses_demanda_6m: meses6m,
+        dias_cobertura: salida > 0 ? Math.round(valor / (salida / P.dias)) : null,
+        // Mucho se fabrica contra pedido (stock 0 es normal): solo cuenta como quiebre si la
+        // demanda es recurrente (≥ 3 de los últimos 6 meses), hubo salida en 90 días y no hay tránsito
+        quiebre: stock <= 0 && num(r.transito) <= 0 && salida90 > 0 && meses6m >= 3 && !r.no_inventario,
+        ultima_venta: fecha(r.ultima_venta), ultima_compra: fecha(r.ultima_compra),
+        dias_sin_mov: diasDesde(ultimaMov),
+        no_inventario: !!r.no_inventario,
+      };
+    });
+
+    const COLS = Object.keys(filas[0] || {}).concat('abc');
+    // ABC por salida del período
+    const conSalida = filas.filter(f => f.salida > 0).sort((a, b) => b.salida - a.salida);
+    const totalSalida = conSalida.reduce((s, f) => s + f.salida, 0);
+    let acum = 0;
+    for (const f of conSalida) {
+      const antes = acum / totalSalida;
+      acum += f.salida;
+      f.abc = antes < 0.80 ? 'A' : antes < 0.95 ? 'B' : 'C';
+    }
+    for (const f of filas) if (!f.abc) f.abc = 'N';
+
+    const body = {
+      status: 'success',
+      timestamp: new Date().toISOString(),
+      data: {
+        periodo: P.ventana(),
+        fecha_corte: meta?.corte || null,
+        catalogo: parseInt(meta?.catalogo) || 0,
+        // Formato compacto (columnas + filas como arreglos): ~2,000 artículos sin repetir claves
+        columnas: COLS,
+        filas: filas.map(f => COLS.map(c => f[c])),
+      },
+    };
+    cacheAnalitica.set(key, { t: Date.now(), body });
+    if (cacheAnalitica.size > 20) cacheAnalitica.delete(cacheAnalitica.keys().next().value);
+    res.json(body);
+  } catch (error) {
+    console.error('inventario analitica error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 module.exports = router;

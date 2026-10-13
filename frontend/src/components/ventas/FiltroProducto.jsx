@@ -10,6 +10,8 @@ import { Leyenda } from '../common/leyendas'
 //   'ventas'     → lo que tuvo ventas en el período (página de Ventas)
 //   'inventario' → lo que tiene stock hoy (Capital inmovilizado)
 //   'compras'    → lo que se compró en el período (página de Compras)
+// opciones = (dim, filtrosArriba) => [{ clave, nombre }]: opciones ya calculadas en
+//   el navegador (página de Inventario); si se pasa, no se consulta al backend.
 export const NIVELES_PRODUCTO = [
   { dim: 'categoria',    singular: 'Categoría',    plural: 'Categorías',    todas: 'Todas las categorías' },
   { dim: 'subcategoria', singular: 'Subcategoría', plural: 'Subcategorías', todas: 'Todas las subcategorías' },
@@ -29,7 +31,7 @@ export function cambiarNivel(value, dim, clave) {
   return out
 }
 
-function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente }) {
+function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente, opcionesLocal }) {
   const { desde, hasta } = usePeriodo()
   const { data } = useQuery(
     fuente === 'inventario'
@@ -40,9 +42,9 @@ function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente }) {
       : fuente === 'compras'
         ? endpoints.compras.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 })
         : endpoints.ventas.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 })),
-    { staleTime: 5 * 60 * 1000 }
+    { staleTime: 5 * 60 * 1000, enabled: !opcionesLocal }
   )
-  const opciones = [...(data?.data?.items || [])].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+  const opciones = [...(opcionesLocal ? opcionesLocal(nivel.dim, filtrosArriba) : data?.data?.items || [])].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   const activo = !!value
 
   return (
@@ -71,7 +73,7 @@ function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente }) {
   )
 }
 
-export default function FiltroProducto({ value, onChange, fuente = 'ventas' }) {
+export default function FiltroProducto({ value, onChange, fuente = 'ventas', opciones }) {
   // Solo se muestra el siguiente nivel cuando el anterior está elegido
   const visibles = []
   for (const n of NIVELES_PRODUCTO) {
@@ -95,6 +97,7 @@ export default function FiltroProducto({ value, onChange, fuente = 'ventas' }) {
               value={value[n.dim]}
               filtrosArriba={arriba}
               fuente={fuente}
+              opcionesLocal={opciones}
               onChange={(v) => onChange(cambiarNivel(value, n.dim, v))}
             />
           </span>
