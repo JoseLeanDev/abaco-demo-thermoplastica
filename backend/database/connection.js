@@ -18,6 +18,13 @@ pool.on('error', (err) => {
   console.error('[pg] conexión ociosa cerrada:', err.code || err.message);
 });
 
+// Lo mismo para una conexión EN USO: si Postgres se reinicia (mantenimiento de
+// Render) la conexión emite 'error' además de rechazar la consulta. Sin listener
+// eso tumbaba el servidor; con él solo falla esa consulta y el pool se recupera.
+pool.on('connect', (client) => {
+  client.on('error', (err) => console.error('[pg] conexión en uso cerrada:', err.code || err.message));
+});
+
 console.log('✅ Conectado a base de datos PostgreSQL (Render)');
 
 // Helper para convertir ? → $1, $2, etc.

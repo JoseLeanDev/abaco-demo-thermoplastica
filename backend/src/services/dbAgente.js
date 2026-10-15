@@ -38,6 +38,8 @@ function getPool() {
     application_name: 'abaco_agente_ia'
   });
   pool.on('error', (e) => console.error('[dbAgente] error en el pool:', e.message));
+  // Conexión en uso cortada (p. ej. reinicio de Postgres): registrar en vez de tumbar el proceso
+  pool.on('connect', (c) => c.on('error', (e) => console.error('[dbAgente] conexión cerrada:', e.message)));
   return pool;
 }
 
