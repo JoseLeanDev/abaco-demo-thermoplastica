@@ -8,7 +8,8 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 
 // Margen por categoría con drill-down Categoría → Subcategoría → Sublínea → Artículo
 // (misma jerarquía que Ventas › Categorías). Compara contra el mismo período del
-// año anterior y cuantifica cuánto margen se dejó de ganar por la caída de puntos.
+// año anterior. El nivel lo define el filtro de producto de la página: sin filtro
+// muestra categorías, con categoría sus subcategorías, ... hasta artículos.
 
 const NIVELES = [
   { dim: 'categoria',    singular: 'Categoría',    plural: 'Categorías' },
@@ -28,14 +29,15 @@ const semaforo = (it) => {
   return 'verde'
 }
 
-export default function MargenCategorias() {
+export default function MargenCategorias({ filtro, onFiltro }) {
   const { desde, hasta } = usePeriodo()
-  const [path, setPath] = useState([])
   const [orden, setOrden] = useState({ col: 'margen', dir: 'desc' })
 
-  const nivel = NIVELES[Math.min(path.length, NIVELES.length - 1)]
-  const esHoja = path.length >= NIVELES.length - 1
-  const filtros = useMemo(() => Object.fromEntries(path.map(p => [p.dim, p.clave])), [path])
+  // Nivel a mostrar = primer nivel del filtro que está vacío
+  const idx = NIVELES.slice(0, 3).findIndex(n => !filtro[n.dim])
+  const nivel = NIVELES[idx === -1 ? 3 : idx]
+  const esHoja = nivel.dim === 'articulo'
+  const filtros = useMemo(() => Object.fromEntries(Object.entries(filtro).filter(([, v]) => v)), [filtro])
 
   const { data, isLoading } = useQuery(
     ['margen-categorias', nivel.dim, desde, hasta, JSON.stringify(filtros)],
@@ -51,8 +53,6 @@ export default function MargenCategorias() {
       return {
         ...i,
         delta,
-        // Q que se habrían ganado con el margen % del año anterior sobre las ventas de hoy
-        dejado_de_ganar: delta !== null && delta < 0 ? -delta / 100 * i.ventas : 0,
         aporte: margenTotal > 0 && i.margen !== null ? (i.margen / margenTotal) * 100 : null,
         semaforo: semaforo(i),
       }
@@ -68,7 +68,6 @@ export default function MargenCategorias() {
     })
   }, [items, orden])
 
-  const totalDejado = items.reduce((s, i) => s + i.dejado_de_ganar, 0)
   const rojos = items.filter(i => i.semaforo === 'rojo').length
   const grafica = items.filter(i => i.margen_pct !== null).slice(0, 12).map(i => ({
     nombre: i.nombre.length > 24 ? i.nombre.slice(0, 23) + '…' : i.nombre,
@@ -85,20 +84,6 @@ export default function MargenCategorias() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1 flex-wrap text-sm">
-        <button onClick={() => setPath([])} className={`px-2 py-1 rounded hover:bg-[var(--bg-secondary)] ${path.length === 0 ? 'font-semibold' : 'text-[var(--text-muted)]'}`}>
-          Todas las categorías
-        </button>
-        {path.map((p, i) => (
-          <span key={i} className="flex items-center gap-1">
-            <ChevronRightIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-            <button onClick={() => setPath(path.slice(0, i + 1))} className={`px-2 py-1 rounded hover:bg-[var(--bg-secondary)] ${i === path.length - 1 ? 'font-semibold' : 'text-[var(--text-muted)]'}`}>
-              <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mr-1">{NIVELES[i].singular}</span>{p.nombre}
-            </button>
-          </span>
-        ))}
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 card">
           <div className="p-4 border-b border-[var(--border-color)]">
@@ -109,7 +94,7 @@ export default function MargenCategorias() {
             </h2>
             <p className="text-sm text-[var(--text-muted)] mt-1">
               {rojos} {rojos === 1 ? nivel.singular.toLowerCase() : nivel.plural.toLowerCase()} en rojo
-              {totalDejado > 0 && <> · <span className="text-red-400">{fmtQ(totalDejado)}</span> dejados de ganar vs el margen del año anterior</>}
+              {!esHoja && ' · clic para bajar de nivel'}
             </p>
           </div>
           <div className="overflow-x-auto p-4 pt-2">
@@ -126,7 +111,6 @@ export default function MargenCategorias() {
                     <Th col="margen_pct" ayuda="margen_bruto">Margen %</Th>
                     <Th col="margen_pct_prev" ayuda="vs_anio_anterior">Año ant.</Th>
                     <Th col="delta" ayuda="margen_pts">Δ pts</Th>
-                    <Th col="dejado_de_ganar" ayuda="dejaste_de_ganar">Dejado de ganar</Th>
                     <th className="pb-2"><Leyenda k="semaforo_categoria" /></th>
                   </tr>
                 </thead>
@@ -134,7 +118,7 @@ export default function MargenCategorias() {
                   {filas.map(it => (
                     <tr
                       key={it.clave}
-                      onClick={() => !esHoja && !isLoading && setPath([...path, { dim: nivel.dim, clave: it.clave, nombre: it.nombre }])}
+                      onClick={() => !esHoja && !isLoading && onFiltro({ ...filtro, [nivel.dim]: it.clave })}
                       className={`text-sm hover:bg-[var(--bg-secondary)] ${esHoja ? '' : 'cursor-pointer'}`}
                     >
                       <td className="py-2 pr-2 max-w-[18rem]">
@@ -156,7 +140,6 @@ export default function MargenCategorias() {
                           <span className={it.delta < 0 ? 'text-red-400' : 'text-emerald-400'}>{it.delta > 0 ? '+' : ''}{it.delta.toFixed(1)}</span>
                         )}
                       </td>
-                      <td className="py-2 px-1 text-right tabular-nums">{it.dejado_de_ganar > 0 ? <span className="text-red-400">{fmtQ(it.dejado_de_ganar)}</span> : '-'}</td>
                       <td className="py-2 pl-1 text-center">
                         {it.semaforo && (
                           <span className={`inline-block w-3 h-3 rounded-full ${it.semaforo === 'rojo' ? 'bg-red-500' : it.semaforo === 'ambar' ? 'bg-amber-500' : 'bg-emerald-500'}`} />

@@ -17,20 +17,42 @@ function semaforo(delta) {
   return 'rojo';
 }
 
-// Q dejados de ganar = ventas_actuales × (delta puntos negativos / 100)
-// Solo aplica cuando el margen actual es MENOR al histórico.
-function qPerdidos(ventasActuales, deltaPuntos) {
-  const d = parseFloat(deltaPuntos) || 0;
-  if (d >= 0) return 0;
-  return Math.round(parseFloat(ventasActuales) * Math.abs(d) / 100);
+// Filtro de producto ?categoria=&subcategoria=&sublinea= (misma jerarquía que Ventas:
+// categoría = marca, subcategoría = linea, sublínea = sublinea del ERP).
+const limpio = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;
+const DIMS_PRODUCTO = {
+  categoria:    limpio('a.marca', 'Sin categoría'),
+  subcategoria: limpio('a.linea', 'Sin subcategoría'),
+  sublinea:     limpio('a.sublinea', 'Sin sublínea'),
+};
+function filtroProducto(req) {
+  const params = [];
+  const where = [];
+  for (const [k, expr] of Object.entries(DIMS_PRODUCTO)) {
+    const val = req.query[k];
+    if (val === undefined || val === '') continue;
+    params.push(String(val));
+    where.push(`${expr} = ?`);
+  }
+  return { params, and: where.length ? 'AND ' + where.join(' AND ') : '' };
+}
+
+// Líneas de venta facturadas del período (o del año anterior) con el filtro de
+// producto, como subconsulta con las columnas de fact_ventas_linea.
+function ventas(P, fp, anterior = false) {
+  return `(SELECT f.* FROM thermoplastica.fact_ventas_linea f
+           JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+           WHERE f.tipo_doc = 'FACT' AND f.fecha_emision BETWEEN ${anterior ? P.prevD : P.D} AND ${anterior ? P.prevH : P.H}
+           ${fp.and})`;
 }
 
 // GET /api/margenes   Resumen + top productos con margen comparado YoY
 router.get('/', async (req, res) => {
   try {
     const P = parsePeriodo(req);
-    // Producto: margen del período vs el mismo período del año anterior
-    // Solo artículos con ventas materiales en el período actual (>= Q1000).
+    const fp = filtroProducto(req);
+    // Producto: margen del período vs el mismo período del año anterior.
+    // Solo artículos con ventas materiales en el período (>= Q1,000).
     const rows = await db.allAsync(`
       WITH actual AS (
         SELECT f.articulo_id,
@@ -38,11 +60,10 @@ router.get('/', async (req, res) => {
                SUM(f.total_sin_iva)         AS ventas,
                ${M.costo('f')} AS costo,
                ${M.margen('f')}          AS margen
-        FROM thermoplastica.fact_ventas_linea f
+        FROM ${ventas(P, fp)} f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
-        WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
-          -- Excluir "articulo generico" y similares placeholders sin costo real
-          AND UPPER(a.codigo_articulo) NOT IN ('GENARTICULO','GENARTICULOEXENTO','GENSERV','GENSERVICIO')
+        -- Excluir "articulo generico" y similares placeholders sin costo real
+        WHERE UPPER(a.codigo_articulo) NOT IN ('GENARTICULO','GENARTICULOEXENTO','GENSERV','GENSERVICIO')
         GROUP BY f.articulo_id
         HAVING SUM(f.total_sin_iva) >= 1000 AND SUM(f.unidades) > 0
       ),
@@ -54,12 +75,16 @@ router.get('/', async (req, res) => {
         FROM thermoplastica.fact_ventas_linea
         WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND tipo_doc = 'FACT'
+          AND articulo_id IN (SELECT articulo_id FROM actual)
         GROUP BY articulo_id
       )
       SELECT
         a.articulo_id                                              AS id,
         art.codigo_articulo                                        AS sku,
         art.descripcion                                            AS nombre,
+        ${DIMS_PRODUCTO.categoria.replace(/a\./g, 'art.')}         AS categoria,
+        ${DIMS_PRODUCTO.subcategoria.replace(/a\./g, 'art.')}      AS subcategoria,
+        ${DIMS_PRODUCTO.sublinea.replace(/a\./g, 'art.')}          AS sublinea,
         a.unidades                                                 AS unidades_12m,
         a.ventas                                                   AS ventas_12m,
         CASE WHEN a.unidades > 0 THEN a.ventas / a.unidades ELSE NULL END          AS precio_actual,
@@ -71,8 +96,7 @@ router.get('/', async (req, res) => {
       LEFT JOIN historico h                ON h.articulo_id   = a.articulo_id
       WHERE a.ventas > 0
       ORDER BY a.ventas DESC
-      LIMIT 50
-    `);
+    `, fp.params);
 
     // Rango razonable para comparación: descartar históricos con márgenes absurdos
     // que suelen indicar mala data de costo en el ERP (ajustes contables, no cambios reales de precio)
@@ -87,11 +111,12 @@ router.get('/', async (req, res) => {
       })
       .map(r => {
       const margenAct = parseFloat(r.margen_pct_actual);
-      const margenHist = r.margen_pct_historico !== null ? parseFloat(r.margen_pct_historico) : margenAct;
+      const sinHist = r.margen_pct_historico === null;
+      const margenHist = sinHist ? margenAct : parseFloat(r.margen_pct_historico);
       const delta = Number((margenAct - margenHist).toFixed(2));
-      const perdidos = qPerdidos(r.ventas_12m, delta);
       const costo = parseFloat(r.costo_actual) || 0;
       const precio = parseFloat(r.precio_actual) || 0;
+      const ventasQ = parseFloat(r.ventas_12m) || 0;
       // Precio sugerido: costo / (1 - margen_historico/100), tope de subida 30%
       let precioSugerido = precio;
       if (margenHist > margenAct && margenHist < 90 && costo > 0) {
@@ -101,30 +126,34 @@ router.get('/', async (req, res) => {
         id: parseInt(r.id),
         sku: r.sku,
         nombre: r.nombre,
+        categoria: r.categoria,
+        subcategoria: r.subcategoria,
+        sublinea: r.sublinea,
+        ventas: Math.round(ventasQ),
+        margen_q: Math.round(ventasQ * margenAct / 100),
         precio_actual: Number(precio.toFixed(4)),
         costo_actual:  Number(costo.toFixed(4)),
         margen_pct_actual:    Number(margenAct.toFixed(2)),
-        margen_pct_historico: Number(margenHist.toFixed(2)),
-        delta_puntos: delta,
-        quetzales_perdidos: perdidos,
+        margen_pct_historico: sinHist ? null : Number(margenHist.toFixed(2)),
+        delta_puntos: sinHist ? null : delta,
         semaforo: semaforo(delta),
         unidades_12m: Math.round(parseFloat(r.unidades_12m) || 0),
         precio_sugerido: Number(precioSugerido.toFixed(4)),
       };
     });
 
-    // Resumen global desde el mismo dataset
+    // Resumen global (mismo filtro de producto), este período y el año anterior
     const totalRow = await db.getAsync(`
       SELECT COALESCE(SUM(total_sin_iva), 0)         AS ventas,
              ${M.margen()}          AS margen,
-             ${M.pctSinCosto()}     AS pct_sin_costo
-      FROM thermoplastica.fact_ventas_linea
-      WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
-    `);
+             ${M.pctSinCosto()}     AS pct_sin_costo,
+             (SELECT ${M.pct()} FROM ${ventas(P, fp, true)} x) AS margen_pct_prev
+      FROM ${ventas(P, fp)} x
+    `, [...fp.params, ...fp.params]);
     const totalVentas = parseFloat(totalRow.ventas) || 0;
     const totalMargen = parseFloat(totalRow.margen) || 0;
     const margenGlobal = totalVentas > 0 ? (totalMargen / totalVentas * 100) : 0;
-    const totalPerdido = productos.reduce((s, p) => s + (p.quetzales_perdidos || 0), 0);
+    const margenPrev = totalRow.margen_pct_prev !== null ? parseFloat(totalRow.margen_pct_prev) : null;
 
     res.json({
       status: 'success',
@@ -133,7 +162,7 @@ router.get('/', async (req, res) => {
         resumen: {
           total_margen_bruto_q: Math.round(totalMargen),
           margen_global_pct:    Number(margenGlobal.toFixed(1)),
-          total_margen_perdido_12m: totalPerdido,
+          margen_global_pct_prev: margenPrev === null ? null : Number(margenPrev.toFixed(1)),
           total_ventas_q:       Math.round(totalVentas),
           pct_ventas_sin_costo: Math.round((parseFloat(totalRow.pct_sin_costo) || 0) * 10) / 10,
           productos_rojo:  productos.filter(p => p.semaforo === 'rojo').length,
@@ -224,23 +253,22 @@ router.get('/producto/:id/detalle', async (req, res) => {
 router.get('/vendedores', async (req, res) => {
   try {
     const P = parsePeriodo(req);
+    const fp = filtroProducto(req);
     const rows = await db.allAsync(`
       WITH actual AS (
         SELECT vendedor_id,
                SUM(total_sin_iva)         AS ventas,
                ${M.margen()}          AS margen
-        FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}
-          AND tipo_doc = 'FACT' AND vendedor_id IS NOT NULL
+        FROM ${ventas(P, fp)} x
+        WHERE vendedor_id IS NOT NULL
         GROUP BY vendedor_id
       ),
       historico AS (
         SELECT vendedor_id,
                SUM(total_sin_iva) AS ventas,
                ${M.margen()}  AS margen
-        FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
-          AND tipo_doc = 'FACT' AND vendedor_id IS NOT NULL
+        FROM ${ventas(P, fp, true)} x
+        WHERE vendedor_id IS NOT NULL
         GROUP BY vendedor_id
       )
       SELECT v.vendedor_id AS id, v.nombre,
@@ -251,7 +279,7 @@ router.get('/vendedores', async (req, res) => {
       JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = a.vendedor_id
       LEFT JOIN historico h ON h.vendedor_id = a.vendedor_id
       ORDER BY a.ventas DESC
-    `);
+    `, [...fp.params, ...fp.params]);
 
     // Sin ninguna línea con costo no hay margen conocido: se omite.
     const vendedores = rows.filter(r => r.margen_pct_actual !== null).map(r => {
@@ -265,7 +293,6 @@ router.get('/vendedores', async (req, res) => {
         margen_pct_actual:    Number(act.toFixed(2)),
         margen_pct_historico: Number(hist.toFixed(2)),
         delta_puntos: delta,
-        quetzales_perdidos: qPerdidos(r.ventas_12m, delta),
         semaforo: semaforo(delta),
       };
     });
@@ -280,35 +307,33 @@ router.get('/vendedores', async (req, res) => {
 router.get('/clientes', async (req, res) => {
   try {
     const P = parsePeriodo(req);
+    const fp = filtroProducto(req);
     const rows = await db.allAsync(`
       WITH actual AS (
         SELECT cliente_id,
                SUM(total_sin_iva) AS ventas,
                ${M.margen()}  AS margen
-        FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
+        FROM ${ventas(P, fp)} x
         GROUP BY cliente_id
       ),
       historico AS (
         SELECT cliente_id,
                SUM(total_sin_iva) AS ventas,
                ${M.margen()}  AS margen
-        FROM thermoplastica.fact_ventas_linea
-        WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
-          AND tipo_doc = 'FACT'
+        FROM ${ventas(P, fp, true)} x
         GROUP BY cliente_id
       )
-      SELECT c.cliente_id AS id, c.nombre,
+      SELECT c.cliente_id AS id, REGEXP_REPLACE(c.nombre, '^[A-Za-z]*[0-9][0-9A-Za-z]*-', '') AS nombre,
              a.ventas AS ventas_12m,
              CASE WHEN a.ventas > 0 THEN a.margen / a.ventas * 100 ELSE NULL END AS margen_pct_actual,
              CASE WHEN h.ventas > 0 THEN h.margen / h.ventas * 100 ELSE NULL END AS margen_pct_historico
       FROM actual a
       JOIN thermoplastica.dim_cliente c ON c.cliente_id = a.cliente_id
       LEFT JOIN historico h ON h.cliente_id = a.cliente_id
-      WHERE a.ventas >= 10000
+      WHERE a.ventas >= ${fp.and ? 1000 : 10000}
       ORDER BY a.ventas DESC
       LIMIT 30
-    `);
+    `, [...fp.params, ...fp.params]);
 
     // Sin ninguna línea con costo no hay margen conocido: se omite.
     const clientes = rows.filter(r => r.margen_pct_actual !== null).map(r => {
@@ -322,7 +347,6 @@ router.get('/clientes', async (req, res) => {
         margen_pct_actual:    Number(act.toFixed(2)),
         margen_pct_historico: Number(hist.toFixed(2)),
         delta_puntos: delta,
-        quetzales_perdidos: qPerdidos(r.ventas_12m, delta),
         semaforo: semaforo(delta),
       };
     });
@@ -382,7 +406,6 @@ router.get('/lineas', async (req, res) => {
         margen_pct_actual:    Number(act.toFixed(2)),
         margen_pct_historico: Number(hist.toFixed(2)),
         delta_puntos: delta,
-        quetzales_perdidos: qPerdidos(r.ventas_12m, delta),
         semaforo: semaforo(delta),
       };
     });

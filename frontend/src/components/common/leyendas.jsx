@@ -139,14 +139,6 @@ export const LEYENDAS = {
   },
 
   // ======================= Márgenes =======================
-  dejaste_de_ganar: {
-    titulo: 'Q que dejaste de ganar',
-    texto: <>
-      Ventas del período × puntos de margen perdidos ÷ 100, solo donde el margen bajó vs el año anterior.
-      Es lo que se habría ganado vendiendo lo mismo con el margen del año anterior.
-      <Nota>En el resumen se suma sobre los 50 productos de mayor venta (≥ Q1,000 en el período).</Nota>
-    </>,
-  },
   semaforo_margen: {
     titulo: 'Semáforo de margen',
     texto: <>
@@ -171,7 +163,7 @@ export const LEYENDAS = {
   },
   necesitan_ajuste: {
     titulo: 'Necesitan ajuste de precio',
-    texto: <>Productos en rojo (perdieron más de 5 puntos de margen) y en ámbar (entre 1 y 5), entre los 50 de mayor venta del período.</>,
+    texto: <>Productos en rojo (perdieron más de 5 puntos de margen vs el año anterior) y en ámbar (entre 1 y 5), entre los que vendieron Q1,000 o más en el período. Respeta el filtro de producto.</>,
   },
   precio_sugerido: {
     titulo: 'Precio sugerido',

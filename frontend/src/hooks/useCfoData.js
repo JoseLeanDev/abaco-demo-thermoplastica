@@ -94,9 +94,9 @@ export const useFlujoCaja = (semanas = 13) => {
   })
 }
 
-export const useMargenes = () => {
+export const useMargenes = (filtros = {}) => {
   const { params } = usePeriodo()
-  return useQuery(['margenes', params], () => endpoints.margenes.resumen(params), {
+  return useQuery(['margenes', params, filtros], () => endpoints.margenes.resumen({ ...params, ...filtros }), {
     keepPreviousData: true,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
@@ -111,18 +111,18 @@ export const useMargenProductoDetalle = (id) => {
   )
 }
 
-export const useMargenVendedores = () => {
+export const useMargenVendedores = (filtros = {}) => {
   const { params } = usePeriodo()
-  return useQuery(['margen-vendedores', params], () => endpoints.margenes.vendedores(params), {
+  return useQuery(['margen-vendedores', params, filtros], () => endpoints.margenes.vendedores({ ...params, ...filtros }), {
     keepPreviousData: true,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
   })
 }
 
-export const useMargenClientes = () => {
+export const useMargenClientes = (filtros = {}) => {
   const { params } = usePeriodo()
-  return useQuery(['margen-clientes', params], () => endpoints.margenes.clientes(params), {
+  return useQuery(['margen-clientes', params, filtros], () => endpoints.margenes.clientes({ ...params, ...filtros }), {
     keepPreviousData: true,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 2 * 60 * 1000,
