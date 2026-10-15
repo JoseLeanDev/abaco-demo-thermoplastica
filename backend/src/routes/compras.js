@@ -769,4 +769,137 @@ router.get('/recomendaciones', async (req, res) => {
   }
 });
 
+// =========================================================================
+// GET /api/compras/reposicion/:codigo
+// Punto de reorden (ROP) de un artículo con la fórmula clásica de inventarios:
+//   ROP = d̄ × L + SS        SS = Z × σd × √L
+//   d̄  = demanda diaria promedio (últimos N meses)
+//   σd = desviación estándar de la demanda diaria = σ mensual ÷ √30
+//   L  = lead time en días;  Z = factor del nivel de servicio (95% → 1.65)
+// Demanda = unidades vendidas si el artículo se vende; si no (materia prima,
+// cuyo consumo no registra el ERP) = unidades compradas.
+// =========================================================================
+const Z_SERVICIO = { 90: 1.28, 95: 1.65, 97.5: 1.96, 99: 2.33 };
+
+router.get('/reposicion/:codigo', async (req, res) => {
+  try {
+    const codigo = String(req.params.codigo);
+    const meses = Math.min(Math.max(parseInt(req.query.meses_consumo) || 6, 3), 24);
+    const leadTime = Math.min(Math.max(parseInt(req.query.lead_time) || 45, 7), 180);
+    const horizonteMeses = Math.min(Math.max(parseInt(req.query.horizonte_meses) || 3, 1), 12);
+    const factorSeguridad = Math.min(Math.max(parseFloat(req.query.safety) || 0.30, 0), 1.0);
+    const servicio = Z_SERVICIO[req.query.nivel_servicio] ? Number(req.query.nivel_servicio) : 95;
+    const Z = Z_SERVICIO[servicio];
+
+    const art = await db.getAsync(`
+      SELECT a.articulo_id, a.codigo_articulo, a.descripcion,
+             COALESCE(NULLIF(a.linea, ''), 'Sin línea') AS linea,
+             i.stock_actual, i.stock_en_transito, i.costo_ultimo, i.costo_promedio
+      FROM thermoplastica.dim_articulo a
+      LEFT JOIN thermoplastica.fact_inventario_snapshot i
+        ON i.articulo_id = a.articulo_id
+       AND i.fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_inventario_snapshot)
+      WHERE a.codigo_articulo = ?
+      LIMIT 1
+    `, [codigo]);
+    if (!art) return res.status(404).json({ status: 'error', message: 'Artículo no encontrado' });
+
+    // Serie mensual de los últimos 12 meses (o N si es mayor) con ceros en los meses sin movimiento
+    const nSerie = Math.max(12, meses);
+    const serie = await db.allAsync(`
+      WITH m AS (
+        SELECT generate_series(DATE_TRUNC('month', CURRENT_DATE) - (? || ' months')::interval,
+                               DATE_TRUNC('month', CURRENT_DATE), INTERVAL '1 month')::date AS mes
+      ),
+      v AS (
+        SELECT DATE_TRUNC('month', fecha_emision)::date AS mes, SUM(unidades) AS u
+        FROM thermoplastica.fact_ventas_linea
+        WHERE articulo_id = ? AND tipo_doc = 'FACT'
+          AND fecha_emision >= DATE_TRUNC('month', CURRENT_DATE) - (? || ' months')::interval
+        GROUP BY 1
+      ),
+      c AS (
+        SELECT DATE_TRUNC('month', fecha_emision)::date AS mes, SUM(unidades) AS u
+        FROM thermoplastica.fact_compras_linea
+        WHERE articulo_id = ?
+          AND fecha_emision >= DATE_TRUNC('month', CURRENT_DATE) - (? || ' months')::interval
+        GROUP BY 1
+      )
+      SELECT TO_CHAR(m.mes, 'YYYY-MM') AS mes, COALESCE(v.u, 0) AS ventas, COALESCE(c.u, 0) AS compras
+      FROM m LEFT JOIN v USING (mes) LEFT JOIN c USING (mes)
+      ORDER BY m.mes
+    `, [nSerie, art.articulo_id, nSerie, art.articulo_id, nSerie]);
+
+    // Ventana rolling de N meses (igual que la tabla de reposición)
+    const vent = await db.getAsync(`
+      SELECT (SELECT COALESCE(SUM(unidades), 0) FROM thermoplastica.fact_ventas_linea
+              WHERE articulo_id = ? AND tipo_doc = 'FACT'
+                AND fecha_emision >= CURRENT_DATE - (? || ' months')::interval) AS ventas,
+             (SELECT COALESCE(SUM(unidades), 0) FROM thermoplastica.fact_compras_linea
+              WHERE articulo_id = ?
+                AND fecha_emision >= CURRENT_DATE - (? || ' months')::interval) AS compras
+    `, [art.articulo_id, meses, art.articulo_id, meses]);
+
+    const unidadesVentas = parseFloat(vent.ventas) || 0;
+    const unidadesCompras = parseFloat(vent.compras) || 0;
+    const fuente = unidadesVentas > 0 ? 'ventas' : 'compras';
+    const total = fuente === 'ventas' ? unidadesVentas : unidadesCompras;
+
+    // σ mensual sobre los últimos N meses completos (sin el mes en curso)
+    const completos = serie.slice(0, -1).slice(-meses).map(s => parseFloat(s[fuente]) || 0);
+    const media = completos.reduce((s, x) => s + x, 0) / completos.length;
+    const sigmaMensual = completos.length > 1
+      ? Math.sqrt(completos.reduce((s, x) => s + (x - media) ** 2, 0) / (completos.length - 1))
+      : 0;
+
+    const d = total / (meses * 30);
+    const sigmaD = sigmaMensual / Math.sqrt(30);
+    const demandaLead = d * leadTime;
+    const ss = Z * sigmaD * Math.sqrt(leadTime);
+    const rop = demandaLead + ss;
+    const lote = d * 30 * horizonteMeses;
+    const stock = parseFloat(art.stock_actual) || 0;
+    const transito = parseFloat(art.stock_en_transito) || 0;
+    const posicion = stock + transito;
+    const diasParaPedir = d > 0 ? (posicion - rop) / d : null;
+    const costo = parseFloat(art.costo_ultimo) || parseFloat(art.costo_promedio) || 0;
+    // Regla simple que usa la tabla: SS = 30% de la demanda durante el lead time
+    const ssTabla = d * leadTime * factorSeguridad;
+    const r = (x, n = 2) => Math.round(x * 10 ** n) / 10 ** n;
+
+    res.json({
+      status: 'success',
+      data: {
+        articulo: { codigo: art.codigo_articulo, descripcion: art.descripcion, linea: art.linea },
+        parametros: { meses_consumo: meses, lead_time_dias: leadTime, horizonte_meses: horizonteMeses, nivel_servicio: servicio, z: Z, factor_seguridad: factorSeguridad },
+        fuente_demanda: fuente,
+        serie: serie.map(s => ({ mes: s.mes, ventas: Math.round(parseFloat(s.ventas)), compras: Math.round(parseFloat(s.compras)) })),
+        calculo: {
+          unidades_periodo: r(total, 0),
+          demanda_diaria: r(d, 3),
+          demanda_mensual: r(d * 30, 1),
+          sigma_mensual: r(sigmaMensual, 1),
+          sigma_diaria: r(sigmaD, 3),
+          coef_variacion: media > 0 ? r(sigmaMensual / media, 2) : null,
+          demanda_lead_time: r(demandaLead, 0),
+          safety_stock: r(ss, 0),
+          rop: r(rop, 0),
+          lote: r(lote, 0),
+          stock_actual: r(stock, 0),
+          stock_transito: r(transito, 0),
+          posicion: r(posicion, 0),
+          dias_para_pedir: diasParaPedir === null ? null : Math.round(diasParaPedir),
+          cantidad_a_pedir: r(Math.max(0, rop + lote - posicion), 0),
+          costo_unitario: costo,
+          safety_stock_tabla: r(ssTabla, 0),
+          rop_tabla: r(demandaLead + ssTabla, 0),
+        },
+      },
+    });
+  } catch (error) {
+    console.error('compras reposicion error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 module.exports = router;

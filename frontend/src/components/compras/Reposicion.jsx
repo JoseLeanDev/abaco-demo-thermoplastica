@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { endpoints } from '../../services/cfoApi'
 import { Leyenda } from '../common/leyendas'
+import DetalleReorden from './DetalleReorden'
 
 const fmtNum = (n) => Number(n || 0).toLocaleString('es-GT')
 
@@ -54,6 +55,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
   const [filtroLinea, setFiltroLinea] = useState('')
   const [filtroPrio, setFiltroPrio] = useState('accion')
   const [busqueda, setBusqueda] = useState('')
+  const [seleccion, setSeleccion] = useState(null)
   const kpis = reco?.kpis || {}
   const lineas = reco?.lineas || []
   const items = reco?.items || reco?.urgentes || []
@@ -280,7 +282,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
                 </thead>
                 <tbody className="divide-y divide-[var(--border-default)]">
                   {filtrados.map((u, i) => (
-                    <SkuUrgenteRow key={u.codigo + i} item={u} />
+                    <SkuUrgenteRow key={u.codigo + i} item={u} onClick={() => setSeleccion(u)} />
                   ))}
                 </tbody>
               </table>
@@ -288,6 +290,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
           )}
         </div>
       )}
+      {seleccion && <DetalleReorden item={seleccion} params={params} onClose={() => setSeleccion(null)} />}
     </div>
   )
 }
@@ -399,11 +402,11 @@ function LineaCard({ linea, onFocus }) {
   )
 }
 
-function SkuUrgenteRow({ item }) {
+function SkuUrgenteRow({ item, onClick }) {
   const p = PRIORIDAD[item.prioridad] || PRIORIDAD.media
   const stockCritico = item.dias_cobertura !== null && item.dias_cobertura < item.lead_time_dias
   return (
-    <tr className="text-xs hover:bg-[var(--bg-secondary)]">
+    <tr onClick={onClick} className="text-xs hover:bg-[var(--bg-secondary)] cursor-pointer" title="Ver punto de reorden">
       <td className="py-2 pr-2">
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${p.bg} ${p.text} ring-1 ${p.ring}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`} />

@@ -50,7 +50,8 @@ export const endpoints = {
     desglose: (params = {}) => cfoApi.get('/compras/desglose', { params }),
     precios: (params = {}) => cfoApi.get('/compras/precios', { params }),
     detalle: (params = {}) => cfoApi.get('/compras/detalle', { params }),
-    recomendaciones: (params = {}) => cfoApi.get('/compras/recomendaciones', { params })
+    recomendaciones: (params = {}) => cfoApi.get('/compras/recomendaciones', { params }),
+    reorden: (codigo, params = {}) => cfoApi.get(`/compras/reposicion/${encodeURIComponent(codigo)}`, { params })
   },
   gastos: {
     resumen: (params = {}) => cfoApi.get('/gastos', { params }),
