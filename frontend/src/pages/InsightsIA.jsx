@@ -29,7 +29,7 @@ function slugDeSource(agentSource) {
 }
 
 export default function InsightsIA() {
-  const { data, isLoading, error, refetch, isFetching } = useInsightsHistorico({ limit: 200, usarPeriodo: true })
+  const { data, isLoading, error, refetch, isFetching } = useInsightsHistorico({ limit: 200, usarPeriodo: true, fuente: 'playbook' })
 
   const insights = data?.data?.insights || []
 

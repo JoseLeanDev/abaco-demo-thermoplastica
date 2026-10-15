@@ -552,6 +552,9 @@ router.get('/insights/historico', async (req, res) => {
     const status = req.query.status || 'active';
     const type = req.query.type;
     const severity = req.query.severity;
+    // fuente=playbook: solo los del analista diario (las alertas automáticas de
+    // "abaco Core" son cientos y desplazaban a los insights de IA del límite)
+    const soloPlaybooks = req.query.fuente === 'playbook';
     const days = parseInt(req.query.days) || 30;
     // Con ?desde/&hasta (filtro global de fechas) manda la ventana; si no, los últimos N días.
     const rangoCreacion = (req.query.desde || req.query.hasta)
@@ -595,6 +598,10 @@ router.get('/insights/historico', async (req, res) => {
     if (severity) {
       query += ` AND severity = ?`;
       params.push(severity);
+    }
+
+    if (soloPlaybooks) {
+      query += ` AND agent_source LIKE 'playbook:%'`;
     }
     
     query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;

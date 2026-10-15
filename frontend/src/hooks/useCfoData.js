@@ -50,12 +50,12 @@ export const useInsights = (context = 'all') => {
 // usarPeriodo=true: filtra por el período global (página Insights de IA).
 // Sin él: últimos `days` días (banners de insights recientes dentro de cada módulo).
 export const useInsightsHistorico = (options = {}) => {
-  const { limit = 50, type, severity, days = 30, usarPeriodo = false } = options
+  const { limit = 50, type, severity, days = 30, usarPeriodo = false, fuente } = options
   const { params } = usePeriodo()
   const ventana = usarPeriodo ? params : { days }
   return useQuery(
-    ['insights-historico', limit, type, severity, ventana],
-    () => endpoints.analisis.insightsHistorico({ limit, type, severity, ...ventana }),
+    ['insights-historico', limit, type, severity, fuente, ventana],
+    () => endpoints.analisis.insightsHistorico({ limit, type, severity, fuente, ...ventana }),
     {
       refetchInterval: 10 * 60 * 1000,
     }

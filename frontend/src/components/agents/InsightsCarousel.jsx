@@ -49,7 +49,7 @@ const fmtQ = (v) =>
 
 export default function InsightsCarousel() {
   const scroller = useRef(null)
-  const { data, isLoading } = useInsightsHistorico({ limit: 100, days: 30 })
+  const { data, isLoading } = useInsightsHistorico({ limit: 100, days: 60, fuente: 'playbook' })
 
   const insights = (data?.data?.insights || [])
     .filter(i => slugDe(i.agentSource))

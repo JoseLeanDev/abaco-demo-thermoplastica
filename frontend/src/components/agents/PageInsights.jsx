@@ -59,7 +59,7 @@ export default function PageInsights({ context = 'general', vertical = null, max
   // En modo vertical solo importa el histórico; el generador en tiempo real se
   // pide únicamente en modo heredado.
   const { data: insightsData, isLoading: isLoadingReal } = useInsights(isVertical ? 'none' : context)
-  const { data: historicoData, isLoading: isLoadingHist } = useInsightsHistorico({ limit: 100, days: 30 })
+  const { data: historicoData, isLoading: isLoadingHist } = useInsightsHistorico({ limit: 100, days: 60, ...(isVertical ? { fuente: 'playbook' } : {}) })
 
   const historico = historicoData?.data?.insights || []
   const hasRealInsights = !isVertical && insightsData?.insights?.length > 0
