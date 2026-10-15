@@ -15,6 +15,9 @@ services:
         fromDatabase:
           name: abaco-demo-thermoplastica-db
           property: connectionString
+      # Agentes de IA (analista diario y chat SQL): API de Claude directa
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: OPENROUTER_API_KEY
         sync: false
       - key: LLM_PROVIDER
@@ -92,6 +95,9 @@ services:
         fromDatabase:
           name: abaco-demo-thermoplastica-db
           property: connectionString
+      # Agentes de IA (analista diario y chat SQL): API de Claude directa
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: OPENROUTER_API_KEY
         sync: false
       - key: LLM_PROVIDER
@@ -125,6 +131,9 @@ services:
       # Rol de solo lectura agente_ia (schema analitica). Se define manualmente
       # en el dashboard: es el mismo valor que usa el web service.
       - key: DATABASE_URL_READONLY
+        sync: false
+      # Agentes de IA (analista diario y chat SQL): API de Claude directa
+      - key: ANTHROPIC_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false

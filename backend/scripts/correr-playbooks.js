@@ -215,13 +215,16 @@ async function main() {
   }
 
   log(`Listo. ${totalInsights} insights de ${playbooks.length} playbooks (${fallidos} con problemas). Costo total ~$${totalCosto.toFixed(4)}.`);
+  // Si fallan todos, la corrida termina con error para que Render avise (antes
+  // terminaba "successfully" aunque la API no respondiera)
+  if (fallidos === playbooks.length) process.exitCode = 1;
 }
 
 main()
   .then(async () => {
     await admin.end().catch(() => {});
     await dbAgente.cerrar().catch(() => {});
-    process.exit(0);
+    process.exit(process.exitCode || 0);
   })
   .catch(async (e) => {
     console.error('FATAL:', e);

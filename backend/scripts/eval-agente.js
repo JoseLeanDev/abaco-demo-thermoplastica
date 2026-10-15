@@ -55,8 +55,8 @@ const CASOS = [
 const c = { v: s => `\x1b[32m${s}\x1b[0m`, r: s => `\x1b[31m${s}\x1b[0m`, g: s => `\x1b[90m${s}\x1b[0m`, b: s => `\x1b[1m${s}\x1b[0m` };
 
 (async () => {
-  if (!process.env.OPENROUTER_API_KEY || !process.env.DATABASE_URL_READONLY) {
-    console.error(c.r('Faltan OPENROUTER_API_KEY o DATABASE_URL_READONLY en backend/.env')); process.exit(1);
+  if (!process.env.ANTHROPIC_API_KEY || !process.env.DATABASE_URL_READONLY) {
+    console.error(c.r('Faltan ANTHROPIC_API_KEY o DATABASE_URL_READONLY en backend/.env')); process.exit(1);
   }
 
   let pasaron = 0, costo = 0;

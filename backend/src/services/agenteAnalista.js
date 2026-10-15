@@ -10,11 +10,10 @@
  * produccion y no queremos arriesgarlo. Aqui reusamos lo valioso y sensible
  * (dbAgente: rol read-only + sqlGuard + catalogo), no el loop de chat.
  */
-const axios = require('axios');
 const db = require('./dbAgente');
+const claude = require('./claude');
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODELO = process.env.OPENROUTER_MODEL_AGENTE || 'anthropic/claude-sonnet-4.6';
+const MODELO = claude.MODELO;
 const MAX_VUELTAS = parseInt(process.env.ANALISTA_MAX_VUELTAS || '14', 10);
 const MAX_FILAS_AL_MODELO = 60;
 
@@ -135,6 +134,8 @@ const TOOLS = [
   }
 ];
 
+const HERRAMIENTAS = claude.aHerramientas(TOOLS);
+
 // ---------------------------------------------------------------------------
 // System prompt: reglas comunes + catalogo real. Cacheable entre playbooks.
 // ---------------------------------------------------------------------------
@@ -149,29 +150,9 @@ async function construirSystemPrompt() {
 ${catalogo}`;
 }
 
-async function llamarModelo(messages, apiKey) {
-  const { data } = await axios.post(
-    OPENROUTER_URL,
-    {
-      model: MODELO,
-      messages,
-      tools: TOOLS,
-      tool_choice: 'auto',
-      temperature: 0.2,
-      max_tokens: 3000
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
-        'X-Title': 'abaco Analista Diario'
-      },
-      timeout: 120000
-    }
-  );
-  return data;
-}
+// Análisis de varios pasos con SQL: esfuerzo medio (en Sonnet 5.5 rinde como el alto de antes)
+const llamarModelo = (system, messages) =>
+  claude.llamar({ system, messages, tools: HERRAMIENTAS, effort: 'medium', timeoutMs: 300000 });
 
 /**
  * Corre el analisis de una vertical.
@@ -182,11 +163,6 @@ async function llamarModelo(messages, apiKey) {
 async function analizar(playbook) {
   const t0 = Date.now();
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey || apiKey.includes('placeholder') || apiKey.includes('tu-api-key')) {
-    throw new Error('OPENROUTER_API_KEY no está configurada.');
-  }
-
   if (!cacheSystem) cacheSystem = await construirSystemPrompt();
 
   const maxIns = playbook.max_insights || 4;
@@ -195,31 +171,27 @@ async function analizar(playbook) {
     `${playbook.prompt}\n\n` +
     `Entrega entre 3 y ${maxIns} insights. Empieza a consultar la base y termina con entregar_insights.`;
 
-  const messages = [
-    { role: 'system', content: [{ type: 'text', text: cacheSystem, cache_control: { type: 'ephemeral' } }] },
-    { role: 'user', content: encargo }
-  ];
+  // El system prompt (reglas + catálogo) es igual para todas las verticales: se cachea
+  const system = [{ type: 'text', text: cacheSystem, cache_control: { type: 'ephemeral' } }];
+  const messages = [{ role: 'user', content: encargo }];
 
   const consultas = [];
-  let uso = { entrada: 0, salida: 0, cacheadas: 0 };
+  const uso = claude.usoVacio();
 
   for (let vuelta = 1; vuelta <= MAX_VUELTAS; vuelta++) {
-    const data = await llamarModelo(messages, apiKey);
+    const resp = await llamarModelo(system, messages);
+    claude.sumarUso(uso, resp.usage);
 
-    if (data.usage) {
-      uso.entrada += data.usage.prompt_tokens || 0;
-      uso.salida += data.usage.completion_tokens || 0;
-      uso.cacheadas += data.usage.prompt_tokens_details?.cached_tokens || 0;
+    if (resp.stop_reason === 'refusal') {
+      throw new Error(`El modelo rechazó el análisis (${resp.stop_details?.category || 'sin categoría'}).`);
     }
 
-    const msg = data.choices?.[0]?.message;
-    if (!msg) throw new Error('Respuesta vacía del modelo.');
+    // Se devuelve el contenido completo (incluye los bloques de razonamiento)
+    messages.push({ role: 'assistant', content: resp.content });
+    const llamadas = resp.content.filter(b => b.type === 'tool_use');
 
-    const llamadas = msg.tool_calls || [];
-
-    // Sin herramientas y con texto: el modelo no cerró bien. Reencaminar.
+    // Sin herramientas: el modelo no cerró bien. Reencaminar.
     if (!llamadas.length) {
-      messages.push(msg);
       messages.push({
         role: 'user',
         content: 'No entregaste los insights con la herramienta. Llama a entregar_insights con la lista de hallazgos.'
@@ -227,12 +199,11 @@ async function analizar(playbook) {
       continue;
     }
 
-    messages.push(msg);
-
+    // Todas las respuestas de herramientas van en un solo mensaje
+    const resultados = [];
     for (const lc of llamadas) {
-      const nombre = lc.function?.name;
-      let args = {};
-      try { args = JSON.parse(lc.function?.arguments || '{}'); } catch { args = {}; }
+      const nombre = lc.name;
+      const args = lc.input || {};
 
       // ---- entregar_insights: fin del bucle ----
       if (nombre === 'entregar_insights') {
@@ -263,23 +234,24 @@ async function analizar(playbook) {
             instruccion: 'La consulta falló. Corrige el SQL según este error y vuelve a intentar.'
           });
         }
-        messages.push({ role: 'tool', tool_call_id: lc.id, name: nombre, content: contenido });
+        resultados.push({ type: 'tool_result', tool_use_id: lc.id, content: contenido, ...(r.ok ? {} : { is_error: true }) });
         continue;
       }
 
       // ---- muestrear_valores ----
       if (nombre === 'muestrear_valores') {
         const r = await db.muestrearValores(args.vista, args.columna);
-        messages.push({ role: 'tool', tool_call_id: lc.id, name: nombre, content: JSON.stringify(r) });
+        resultados.push({ type: 'tool_result', tool_use_id: lc.id, content: JSON.stringify(r) });
         continue;
       }
 
       // ---- herramienta desconocida ----
-      messages.push({
-        role: 'tool', tool_call_id: lc.id, name: nombre || 'desconocida',
+      resultados.push({
+        type: 'tool_result', tool_use_id: lc.id, is_error: true,
         content: JSON.stringify({ error: `No existe la herramienta "${nombre}". Usa ejecutar_sql, muestrear_valores o entregar_insights.` })
       });
     }
+    messages.push({ role: 'user', content: resultados });
   }
 
   // Se agotaron las vueltas sin entregar_insights.
@@ -287,8 +259,7 @@ async function analizar(playbook) {
 }
 
 function terminar(insights, consultas, uso, t0, incidencia) {
-  const noCacheadas = Math.max(uso.entrada - uso.cacheadas, 0);
-  const costo = (noCacheadas / 1e6) * 3 + (uso.cacheadas / 1e6) * 0.3 + (uso.salida / 1e6) * 15;
+  const costo = claude.costo(uso);
   return {
     insights,
     consultas,

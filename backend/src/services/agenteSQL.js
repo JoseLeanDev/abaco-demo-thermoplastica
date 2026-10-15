@@ -9,11 +9,10 @@
  * El modelo NUNCA toca la base. Solo escribe texto; quien ejecuta es dbAgente,
  * contra el rol de solo lectura y pasando por sqlGuard.
  */
-const axios = require('axios');
 const db = require('./dbAgente');
+const claude = require('./claude');
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODELO = process.env.OPENROUTER_MODEL_AGENTE || 'anthropic/claude-sonnet-4.6';
+const MODELO = claude.MODELO;
 const MAX_VUELTAS = parseInt(process.env.AGENTE_MAX_VUELTAS || '8', 10);
 const MAX_FILAS_AL_MODELO = 60;
 
@@ -162,32 +161,11 @@ ${catalogo}`;
 
 let cacheSystem = null;
 
-// ---------------------------------------------------------------------------
-// Llamada a OpenRouter
-// ---------------------------------------------------------------------------
-async function llamarModelo(messages, apiKey) {
-  const { data } = await axios.post(
-    OPENROUTER_URL,
-    {
-      model: MODELO,
-      messages,
-      tools: TOOLS,
-      tool_choice: 'auto',
-      temperature: 0.1,
-      max_tokens: 2000
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
-        'X-Title': 'abaco Agente SQL'
-      },
-      timeout: 90000
-    }
-  );
-  return data;
-}
+const HERRAMIENTAS = claude.aHerramientas(TOOLS);
+
+// Chat: respuesta rápida, esfuerzo bajo
+const llamarModelo = (system, messages) =>
+  claude.llamar({ system, messages, tools: HERRAMIENTAS, effort: 'low', timeoutMs: 120000 });
 
 /**
  * Corre el agente.
@@ -202,58 +180,55 @@ async function correr(pregunta, opts = {}) {
   const { onPaso = () => {}, historial = [], periodo = null } = opts;
   const t0 = Date.now();
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey || apiKey.includes('placeholder') || apiKey.includes('tu-api-key')) {
-    throw new Error('OPENROUTER_API_KEY no esta configurada en el servidor.');
-  }
-
   if (!cacheSystem) cacheSystem = await construirSystemPrompt();
 
-  const messages = [
+  const system = [
     // cache_control: el system prompt es identico en todas las vueltas y en
     // todas las preguntas. Cachearlo baja el costo de las lecturas a ~10%.
-    { role: 'system', content: [{ type: 'text', text: cacheSystem, cache_control: { type: 'ephemeral' } }] },
-    // Va aparte del system cacheado: cambia con cada selección del filtro.
+    { type: 'text', text: cacheSystem, cache_control: { type: 'ephemeral' } },
+    // Va después del bloque cacheado: cambia con cada selección del filtro.
     ...(periodo ? [{
-      role: 'system',
-      content: `Filtro de fechas activo en la app: desde ${periodo.desde} hasta ${periodo.hasta} (inclusive). ` +
-               'Si la pregunta no indica fechas, limita las consultas a ese rango y menciónalo en la respuesta.'
+      type: 'text',
+      text: `Filtro de fechas activo en la app: desde ${periodo.desde} hasta ${periodo.hasta} (inclusive). ` +
+            'Si la pregunta no indica fechas, limita las consultas a ese rango y menciónalo en la respuesta.'
     }] : []),
-    ...historial,
-    { role: 'user', content: pregunta }
   ];
+  // Historial del chat: solo turnos de texto de usuario y asistente
+  const previos = historial
+    .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+    .map(m => ({ role: m.role, content: m.content }));
+  while (previos.length && previos[0].role !== 'user') previos.shift();
+  const messages = [...previos, { role: 'user', content: pregunta }];
 
   const consultas = [];   // { id, sql, proposito, filas, num_filas }
   const pasos = [];
-  let uso = { entrada: 0, salida: 0, cacheadas: 0 };
+  const uso = claude.usoVacio();
 
   for (let vuelta = 1; vuelta <= MAX_VUELTAS; vuelta++) {
-    const data = await llamarModelo(messages, apiKey);
+    const resp = await llamarModelo(system, messages);
+    claude.sumarUso(uso, resp.usage);
 
-    if (data.usage) {
-      uso.entrada += data.usage.prompt_tokens || 0;
-      uso.salida += data.usage.completion_tokens || 0;
-      uso.cacheadas += data.usage.prompt_tokens_details?.cached_tokens || 0;
+    if (resp.stop_reason === 'refusal') {
+      pasos.push({ vuelta, accion: 'rechazo', categoria: resp.stop_details?.category || null });
+      return terminar({ texto: 'No puedo responder esa consulta. Intenta reformularla.', bloques: [] }, consultas, pasos, uso, t0);
     }
 
-    const msg = data.choices?.[0]?.message;
-    if (!msg) throw new Error('Respuesta vacia del modelo.');
-
-    const llamadas = msg.tool_calls || [];
+    const llamadas = resp.content.filter(b => b.type === 'tool_use');
 
     // Sin herramientas: el modelo contesto en texto plano. Lo aceptamos.
     if (!llamadas.length) {
       pasos.push({ vuelta, accion: 'texto_libre' });
-      return terminar({ texto: msg.content || 'Sin respuesta.', bloques: [] }, consultas, pasos, uso, t0);
+      const texto = resp.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+      return terminar({ texto: texto || 'Sin respuesta.', bloques: [] }, consultas, pasos, uso, t0);
     }
 
-    messages.push(msg);
+    // Se devuelve el contenido completo (incluye los bloques de razonamiento)
+    messages.push({ role: 'assistant', content: resp.content });
+    const resultados = [];   // todas las respuestas de herramientas van en un solo mensaje
 
     for (const lc of llamadas) {
-      const nombre = lc.function?.name;
-      let args = {};
-      try { args = JSON.parse(lc.function?.arguments || '{}'); }
-      catch { args = {}; }
+      const nombre = lc.name;
+      const args = lc.input || {};
 
       // ---- responder: fin del bucle ----
       if (nombre === 'responder') {
@@ -293,7 +268,7 @@ async function correr(pregunta, opts = {}) {
           });
         }
 
-        messages.push({ role: 'tool', tool_call_id: lc.id, name: nombre, content: contenido });
+        resultados.push({ type: 'tool_result', tool_use_id: lc.id, content: contenido, ...(r.ok ? {} : { is_error: true }) });
         continue;
       }
 
@@ -302,16 +277,17 @@ async function correr(pregunta, opts = {}) {
         onPaso({ tipo: 'explorando', vista: args.vista, columna: args.columna });
         const r = await db.muestrearValores(args.vista, args.columna);
         pasos.push({ vuelta, accion: 'muestreo', vista: args.vista, columna: args.columna, ok: r.ok });
-        messages.push({ role: 'tool', tool_call_id: lc.id, name: nombre, content: JSON.stringify(r) });
+        resultados.push({ type: 'tool_result', tool_use_id: lc.id, content: JSON.stringify(r) });
         continue;
       }
 
       // ---- herramienta desconocida ----
-      messages.push({
-        role: 'tool', tool_call_id: lc.id, name: nombre || 'desconocida',
+      resultados.push({
+        type: 'tool_result', tool_use_id: lc.id, is_error: true,
         content: JSON.stringify({ error: `No existe la herramienta "${nombre}". Usa ejecutar_sql, muestrear_valores o responder.` })
       });
     }
+    messages.push({ role: 'user', content: resultados });
   }
 
   // Se acabaron las vueltas sin que llamara a responder.
@@ -343,9 +319,8 @@ function terminar(args, consultas, pasos, uso, t0) {
     };
   }).filter(Boolean);
 
-  // Costo aproximado con precios de Sonnet 4.6 en OpenRouter.
-  const noCacheadas = Math.max(uso.entrada - uso.cacheadas, 0);
-  const costo = (noCacheadas / 1e6) * 3 + (uso.cacheadas / 1e6) * 0.3 + (uso.salida / 1e6) * 15;
+  // Costo aproximado con los precios de la API de Claude
+  const costo = claude.costo(uso);
 
   return {
     texto: args.texto || '',

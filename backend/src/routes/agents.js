@@ -660,7 +660,7 @@ router.post('/chat-agente', async (req, res) => {
 
   } catch (error) {
     console.error('[POST /api/agents/chat-agente] Error:', error.message);
-    const faltaConfig = /OPENROUTER_API_KEY|DATABASE_URL_READONLY|schema "analitica"/.test(error.message);
+    const faltaConfig = /ANTHROPIC_API_KEY|DATABASE_URL_READONLY|schema "analitica"/.test(error.message);
     return res.status(faltaConfig ? 503 : 500).json({
       success: false,
       error: faltaConfig ? error.message : 'Error al procesar la consulta',
@@ -677,7 +677,7 @@ router.post('/chat-agente', async (req, res) => {
 router.get('/chat-agente/salud', async (req, res) => {
   const dbAgente = require('../services/dbAgente');
   const out = {
-    openrouter_key: !!process.env.OPENROUTER_API_KEY,
+    anthropic_key: !!process.env.ANTHROPIC_API_KEY,
     readonly_url: !!process.env.DATABASE_URL_READONLY,
     usuario_correcto: (process.env.DATABASE_URL_READONLY || '').includes('agente_ia'),
     modelo: agenteSQL.MODELO,
@@ -692,7 +692,7 @@ router.get('/chat-agente/salud', async (req, res) => {
   } catch (e) {
     out.error = e.message;
   }
-  out.listo = out.openrouter_key && out.readonly_url && out.usuario_correcto && out.capa_semantica;
+  out.listo = out.anthropic_key && out.readonly_url && out.usuario_correcto && out.capa_semantica;
   res.status(out.listo ? 200 : 503).json(out);
 });
 

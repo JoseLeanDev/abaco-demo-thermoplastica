@@ -5,7 +5,7 @@
  *   node scripts/probar-agente.js "cuanto me deben mis clientes"
  *   node scripts/probar-agente.js            (corre la bateria de ejemplo)
  *
- * Lee OPENROUTER_API_KEY y DATABASE_URL_READONLY de backend/.env
+ * Lee ANTHROPIC_API_KEY y DATABASE_URL_READONLY de backend/.env
  */
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
@@ -26,7 +26,7 @@ const c = { gris: s => `\x1b[90m${s}\x1b[0m`, verde: s => `\x1b[32m${s}\x1b[0m`,
 
 function chequeos() {
   const faltan = [];
-  if (!process.env.OPENROUTER_API_KEY) faltan.push('OPENROUTER_API_KEY');
+  if (!process.env.ANTHROPIC_API_KEY) faltan.push('ANTHROPIC_API_KEY');
   if (!process.env.DATABASE_URL_READONLY) faltan.push('DATABASE_URL_READONLY');
   if (faltan.length) {
     console.error(c.rojo(`\nFaltan variables en backend/.env: ${faltan.join(', ')}\n`));
