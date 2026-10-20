@@ -26,7 +26,7 @@ import { Leyenda } from '../components/common/leyendas'
 
 /**
  * Rotación de inventarios por Categoría › Subcategoría › Sublínea › Artículo
- * (página secundaria de Salud financiera).
+ * (página secundaria de Análisis).
  *
  *   Rotación = costo de ventas anualizado ÷ inventario promedio
  *   Días de inventario = 365 ÷ rotación
@@ -175,12 +175,12 @@ export default function RotacionInventario() {
     <div className="space-y-6 animate-fade-in max-w-6xl">
       {/* Encabezado */}
       <div className="flex items-start gap-3">
-        <Link to="/analisis" className="w-10 h-10 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors shrink-0" title="Volver a Salud financiera">
+        <Link to="/analisis" className="w-10 h-10 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors shrink-0" title="Volver a Análisis">
           <ArrowLeftIcon className="w-5 h-5 text-[var(--text-muted)]" />
         </Link>
         <div>
           <p className="text-xs text-[var(--text-muted)]">
-            <Link to="/analisis" className="hover:underline">Salud financiera</Link> ›
+            <Link to="/analisis" className="hover:underline">Análisis</Link> ›
           </p>
           <h1 className="text-2xl font-semibold">Rotación de inventarios</h1>
           <p className="text-sm text-[var(--text-muted)]">Cuántas veces al año se renueva el inventario, por categoría, subcategoría y sublínea</p>

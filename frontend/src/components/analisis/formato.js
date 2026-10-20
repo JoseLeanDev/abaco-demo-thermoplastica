@@ -1,4 +1,4 @@
-// Formato compartido por los componentes de Salud financiera y Proyecciones.
+// Formato compartido por los componentes de Análisis y Proyecciones.
 export const fmtQ = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 
 export const fmtM = (n) => {

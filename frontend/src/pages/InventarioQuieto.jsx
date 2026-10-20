@@ -20,7 +20,7 @@ import { Leyenda } from '../components/analisis/leyendasInventario'
 
 /**
  * Capital inmovilizado en inventario por Categoría › Subcategoría › Sublínea › Artículo
- * (página secundaria de Salud financiera). Es la foto del stock al corte, no
+ * (página secundaria de Análisis). Es la foto del stock al corte, no
  * depende del filtro de período.
  *
  * Estados (vista analitica.v_inventario_salud):
@@ -176,12 +176,12 @@ export default function InventarioQuieto() {
     <div className="space-y-6 animate-fade-in max-w-6xl">
       {/* Encabezado */}
       <div className="flex items-start gap-3">
-        <Link to="/analisis" className="w-10 h-10 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors shrink-0" title="Volver a Salud financiera">
+        <Link to="/analisis" className="w-10 h-10 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors shrink-0" title="Volver a Análisis">
           <ArrowLeftIcon className="w-5 h-5 text-[var(--text-muted)]" />
         </Link>
         <div>
           <p className="text-xs text-[var(--text-muted)]">
-            <Link to="/analisis" className="hover:underline">Salud financiera</Link> ›
+            <Link to="/analisis" className="hover:underline">Análisis</Link> ›
           </p>
           <h1 className="text-2xl font-semibold">Capital inmovilizado en inventario</h1>
           <p className="text-sm text-[var(--text-muted)]">

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from 'react-query'
 import { endpoints } from '../services/cfoApi'
 import {
-  HeartIcon,
+  ChartBarIcon,
   ArrowPathIcon,
   CubeIcon,
   ExclamationTriangleIcon,
@@ -20,7 +20,7 @@ import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/analisis/leyendasInventario'
 
 /**
- * Salud financiera: la única vista que cruza cartera, inventario y proveedores.
+ * Análisis: la única vista que cruza cartera, inventario y proveedores.
  * Las métricas fijas salen de las vistas analitica.v_ciclo_caja,
  * v_ciclo_caja_mensual, v_inventario_salud y v_capital_trabajo; el analista
  * diario (playbook "salud") lee las mismas vistas.
@@ -35,10 +35,10 @@ export default function Analisis() {
     <div className="space-y-6 animate-fade-in max-w-6xl">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg bg-[#001639] flex items-center justify-center">
-          <HeartIcon className="w-5 h-5 text-white" />
+          <ChartBarIcon className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold">Salud financiera</h1>
+          <h1 className="text-2xl font-semibold">Análisis</h1>
           <p className="text-sm text-[var(--text-muted)]">
             Ciclo de caja, capital de trabajo y proyecciones
             {salud?.ciclo?.fecha_corte && <> · datos al {String(salud.ciclo.fecha_corte).slice(0, 10)}</>}
@@ -48,6 +48,8 @@ export default function Analisis() {
       </div>
 
       <PageInsights vertical="salud" maxInsights={4} />
+
+      <ResumenVentasCompras />
 
       {error && (
         <div className="card p-5 text-sm text-[var(--danger)]">
@@ -371,3 +373,23 @@ function CalidadDatos({ ciclo }) {
 }
 
 const sumar = (filas) => filas.reduce((s, r) => s + (Number(r.valor) || 0), 0)
+
+// Acceso rápido a Análisis › Ventas vs compras: lo vendido vs lo comprado en el año
+function ResumenVentasCompras() {
+  const { data } = useQuery(['ventas-vs-compras', null, 'materiales', '{}'], () => endpoints.analisis.ventasVsCompras({ compras: 'materiales' }), { staleTime: 5 * 60 * 1000 })
+  const d = data?.data
+  if (!d) return null
+  const t = d.totales
+  return (
+    <Link to="/analisis/ventas-vs-compras" className="card card-hover p-4 flex flex-wrap items-center gap-x-8 gap-y-2">
+      <div>
+        <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Ventas vs compras {d.anio}</p>
+        <p className="text-sm text-[var(--text-secondary)]">Materiales e insumos, 1 ene a hoy</p>
+      </div>
+      <div><p className="text-xs text-[var(--text-muted)]">Vendido</p><p className="text-lg font-bold tabular-nums">{fmtM(t.ventas)}</p></div>
+      <div><p className="text-xs text-[var(--text-muted)]">Comprado</p><p className="text-lg font-bold tabular-nums text-amber-600">{fmtM(t.compras)}</p></div>
+      {t.ventas > 0 && <p className="text-sm text-[var(--text-secondary)]">Por cada Q100 vendidos se compraron <strong>Q{Math.round(t.compras / t.ventas * 100)}</strong></p>}
+      <span className="ml-auto inline-flex items-center gap-1 text-sm text-[var(--accent-blue)]">Ver por categoría <ArrowRightIcon className="w-4 h-4" /></span>
+    </Link>
+  )
+}

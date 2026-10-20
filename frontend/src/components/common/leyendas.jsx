@@ -221,23 +221,23 @@ export const LEYENDAS = {
     titulo: 'DSO · días cobrando',
     texto: <>
       Lo que los clientes deben hoy ÷ lo que se vende en un día (con IVA, promedio del período).
-      <Nota>No cuenta facturas vencidas hace más de 90 días: se tratan como cobro dudoso y distorsionarían el número. Mismo cálculo que Salud financiera.</Nota>
+      <Nota>No cuenta facturas vencidas hace más de 90 días: se tratan como cobro dudoso y distorsionarían el número. Mismo cálculo que Análisis.</Nota>
     </>,
   },
   dio_panel: {
     titulo: 'DIO · días de inventario',
-    texto: <>Inventario a costo hoy ÷ costo de venta diario del período. Mismo cálculo que Salud financiera.</>,
+    texto: <>Inventario a costo hoy ÷ costo de venta diario del período. Mismo cálculo que Análisis.</>,
   },
   dpo_panel: {
     titulo: 'DPO · días pagando',
     texto: <>
       Lo que se debe hoy a proveedores ÷ lo que se compra en un día (con IVA, promedio del período).
-      <Nota>No cuenta facturas de proveedor vencidas hace más de 90 días: casi siempre son saldos viejos sin depurar en el ERP, no deudas reales. Mismo cálculo que Salud financiera.</Nota>
+      <Nota>No cuenta facturas de proveedor vencidas hace más de 90 días: casi siempre son saldos viejos sin depurar en el ERP, no deudas reales. Mismo cálculo que Análisis.</Nota>
     </>,
   },
   ccc_panel: {
     titulo: 'Ciclo de conversión de efectivo',
-    texto: <>DSO + DIO − DPO: días que el efectivo queda atrapado entre pagar a proveedores y cobrar a clientes. Es el mismo número que en Salud financiera.</>,
+    texto: <>DSO + DIO − DPO: días que el efectivo queda atrapado entre pagar a proveedores y cobrar a clientes. Es el mismo número que en Análisis.</>,
   },
   cascada_pl: {
     titulo: 'Cascada P&L',
@@ -534,7 +534,7 @@ export const LEYENDAS = {
     titulo: 'Con stock y sin venta',
     texto: <>
       Valor de los artículos con existencia que no tuvieron ninguna factura de venta en el período.
-      <Nota>Incluye materia prima, que no se vende directamente; para distinguirla ver Salud financiera › Capital inmovilizado.</Nota>
+      <Nota>Incluye materia prima, que no se vende directamente; para distinguirla ver Análisis › Capital inmovilizado.</Nota>
     </>,
   },
   dias_inventario_grupo: {
@@ -592,7 +592,7 @@ export const LEYENDAS = {
         <li><strong>Lento:</strong> se mueve, pero su stock cubre más de 180 días de consumo.</li>
         <li><strong>Activo:</strong> todo lo demás.</li>
       </L>
-      <Nota>Mismo cálculo que Salud financiera › Capital inmovilizado.</Nota>
+      <Nota>Mismo cálculo que Análisis › Capital inmovilizado.</Nota>
     </>,
   },
   inv_exceso: {
@@ -777,7 +777,7 @@ export const LEYENDAS = {
     texto: <>Reglas fijas sobre los números de esta ficha (atraso de más de 5 días, cambio de 7+ días en el tiempo de pago, compras ±15%, días sin comprar más de 2.5× su frecuencia). No es IA.</>,
   },
 
-  // ======================= Salud financiera =======================
+  // ======================= Análisis =======================
   ciclo_caja: {
     titulo: 'Ciclo de caja',
     texto: <>
@@ -806,7 +806,7 @@ export const LEYENDAS = {
     titulo: 'Días de inventario',
     texto: <>
       365 ÷ rotación: para cuántos días alcanza lo que hay en bodega al ritmo de salida del período.
-      <Nota>Para toda la empresa es el mismo número que “Días de inventario” en el ciclo de caja de Salud financiera; puede variar unos días porque aquí se usa el inventario promedio.</Nota>
+      <Nota>Para toda la empresa es el mismo número que “Días de inventario” en el ciclo de caja de Análisis; puede variar unos días porque aquí se usa el inventario promedio.</Nota>
     </>,
   },
   costo_ventas_rot: {

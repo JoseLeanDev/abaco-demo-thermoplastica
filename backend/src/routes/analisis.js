@@ -1322,4 +1322,147 @@ router.get('/flujo-caja', async (req, res) => {
   }
 });
 
+// =========================================================================
+// GET /api/analisis/ventas-vs-compras?anio=2026&compras=materiales|todas
+//     &categoria=&subcategoria=        (drill-down: categoría › subcategoría › sublínea)
+// Cuánto se vendió vs cuánto se compró en un año calendario, por categoría.
+//   Vendido  = facturas de venta sin IVA (fact_ventas_linea, FACT).
+//   Comprado = facturas de compra sin IVA (fact_compras_linea); por default solo
+//              "Materiales e insumos" (sin gastos, fletes ni activo fijo).
+//   Costo de lo vendido = mismo criterio de margen del sitio (services/margen).
+// El año en curso va del 1 de enero a hoy y se compara con el mismo tramo del
+// año anterior. No usa el filtro global de período.
+// =========================================================================
+const { TIPO_EXPR } = require('../services/tipoCompra');
+const INICIO_DATOS = '2024-09-18'; // primer día cargado de ventas y compras al detalle
+const limpioVC = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;
+const NIVELES_VC = [
+  { dim: 'categoria',    expr: limpioVC('a.marca', 'Sin categoría') },
+  { dim: 'subcategoria', expr: limpioVC('a.linea', 'Sin subcategoría') },
+  { dim: 'sublinea',     expr: limpioVC('a.sublinea', 'Sin sublínea') },
+];
+const isoDia = (d) => d.toISOString().slice(0, 10);
+
+router.get('/ventas-vs-compras', async (req, res) => {
+  try {
+    const db = req.app.get('db');
+    const hoy = new Date();
+    const anioHoy = hoy.getFullYear();
+    const primerAnio = Number(INICIO_DATOS.slice(0, 4)) + 1; // 2024 está incompleto
+    const anios = [];
+    for (let y = anioHoy; y >= primerAnio; y--) anios.push(y);
+    const anio = anios.includes(Number(req.query.anio)) ? Number(req.query.anio) : anioHoy;
+    const soloMateriales = req.query.compras !== 'todas';
+
+    const desde = `${anio}-01-01`;
+    const hasta = anio === anioHoy ? isoDia(hoy) : `${anio}-12-31`;
+    const prevDesde = `${anio - 1}-01-01`;
+    const prevHasta = `${anio - 1}${hasta.slice(4)}`;
+    const hayPrev = prevDesde >= INICIO_DATOS;
+
+    // Nivel de agrupación = primer nivel del filtro vacío
+    const params = [];
+    const where = [];
+    let nivel = NIVELES_VC[NIVELES_VC.length - 1];
+    for (const n of NIVELES_VC) {
+      const val = req.query[n.dim];
+      if (!val) { nivel = n; break; }
+      params.push(String(val));
+      where.push(`${n.expr} = ?`);
+    }
+    const filtro = where.length ? 'AND ' + where.join(' AND ') : '';
+    const filtroCompras = `${filtro} ${soloMateriales ? `AND ${TIPO_EXPR} = 'inventario'` : ''}`;
+    const enAct = (c) => `${c} BETWEEN '${desde}' AND '${hasta}'`;
+    const enPrev = (c) => `${c} BETWEEN '${prevDesde}' AND '${prevHasta}'`;
+
+    const [grupos, meses] = await Promise.all([
+      db.allAsync(`
+        WITH v AS (
+          SELECT ${nivel.expr} AS clave,
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enAct('f.fecha_emision')})  AS ventas,
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS ventas_prev,
+                 ${M.costo('f', enAct('f.fecha_emision'))}                         AS costo_ventas
+          FROM thermoplastica.fact_ventas_linea f
+          JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+          WHERE f.tipo_doc = 'FACT' AND f.fecha_emision BETWEEN '${prevDesde}' AND '${hasta}' ${filtro}
+          GROUP BY 1
+        ),
+        c AS (
+          SELECT ${nivel.expr} AS clave,
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enAct('f.fecha_emision')})  AS compras,
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS compras_prev
+          FROM thermoplastica.fact_compras_linea f
+          JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+          WHERE f.fecha_emision BETWEEN '${prevDesde}' AND '${hasta}' ${filtroCompras}
+          GROUP BY 1
+        )
+        SELECT COALESCE(v.clave, c.clave) AS clave,
+               COALESCE(v.ventas, 0) AS ventas, COALESCE(v.ventas_prev, 0) AS ventas_prev,
+               COALESCE(v.costo_ventas, 0) AS costo_ventas,
+               COALESCE(c.compras, 0) AS compras, COALESCE(c.compras_prev, 0) AS compras_prev
+        FROM v FULL JOIN c ON c.clave = v.clave
+      `, [...params, ...params]),
+      db.allAsync(`
+        WITH m AS (SELECT generate_series(1, 12) AS mes),
+        v AS (
+          SELECT EXTRACT(MONTH FROM f.fecha_emision)::int AS mes,
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enAct('f.fecha_emision')})  AS ventas,
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS ventas_prev,
+                 ${M.costo('f', enAct('f.fecha_emision'))}                         AS costo_ventas
+          FROM thermoplastica.fact_ventas_linea f
+          JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+          WHERE f.tipo_doc = 'FACT' AND f.fecha_emision BETWEEN '${prevDesde}' AND '${hasta}' ${filtro}
+          GROUP BY 1
+        ),
+        c AS (
+          SELECT EXTRACT(MONTH FROM f.fecha_emision)::int AS mes,
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enAct('f.fecha_emision')})  AS compras,
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS compras_prev
+          FROM thermoplastica.fact_compras_linea f
+          JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+          WHERE f.fecha_emision BETWEEN '${prevDesde}' AND '${hasta}' ${filtroCompras}
+          GROUP BY 1
+        )
+        SELECT m.mes, v.ventas, v.ventas_prev, v.costo_ventas, c.compras, c.compras_prev
+        FROM m LEFT JOIN v USING (mes) LEFT JOIN c USING (mes)
+        ORDER BY m.mes
+      `, [...params, ...params]),
+    ]);
+
+    const n = (x) => Math.round(parseFloat(x) || 0);
+    const items = grupos.map(g => ({
+      clave: g.clave,
+      ventas: n(g.ventas), compras: n(g.compras), costo_ventas: n(g.costo_ventas),
+      ventas_prev: hayPrev ? n(g.ventas_prev) : null,
+      compras_prev: hayPrev ? n(g.compras_prev) : null,
+    })).filter(i => i.ventas || i.compras || i.ventas_prev || i.compras_prev)
+      .sort((a, b) => b.ventas - a.ventas || b.compras - a.compras);
+    const sum = (k) => items.reduce((s, i) => s + (i[k] || 0), 0);
+    const mesHasta = Number(hasta.slice(5, 7));
+
+    res.json({
+      status: 'success',
+      data: {
+        anio, anios, desde, hasta,
+        prev: hayPrev ? { desde: prevDesde, hasta: prevHasta } : null,
+        compras: soloMateriales ? 'materiales' : 'todas',
+        nivel: nivel.dim,
+        totales: {
+          ventas: sum('ventas'), compras: sum('compras'), costo_ventas: sum('costo_ventas'),
+          ventas_prev: hayPrev ? sum('ventas_prev') : null, compras_prev: hayPrev ? sum('compras_prev') : null,
+        },
+        meses: meses.filter(m => m.mes <= mesHasta).map(m => ({
+          mes: `${anio}-${String(m.mes).padStart(2, '0')}`,
+          ventas: n(m.ventas), compras: n(m.compras), costo_ventas: n(m.costo_ventas),
+          ventas_prev: hayPrev ? n(m.ventas_prev) : null, compras_prev: hayPrev ? n(m.compras_prev) : null,
+        })),
+        items,
+      },
+    });
+  } catch (error) {
+    console.error('ventas-vs-compras error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 module.exports = router;

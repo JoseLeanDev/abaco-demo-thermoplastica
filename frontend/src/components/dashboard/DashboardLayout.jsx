@@ -38,8 +38,9 @@ const navigation = [
   { name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon },
   // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
   {
-    name: 'Salud financiera', href: '/analisis', icon: ChartBarIcon,
+    name: 'Análisis', href: '/analisis', icon: ChartBarIcon,
     children: [
+      { name: 'Ventas vs compras', href: '/analisis/ventas-vs-compras' },
       { name: 'Capital inmovilizado', href: '/analisis/capital-inmovilizado' },
       { name: 'Rotación de inventarios', href: '/analisis/rotacion-inventario' },
     ],

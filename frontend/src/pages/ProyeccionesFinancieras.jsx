@@ -8,7 +8,7 @@ import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 
 /**
  * Proyecciones desde Tesorería. Usa los mismos componentes y el mismo cálculo
- * que la página de Salud financiera (/analisis); aquí se puede variar el horizonte.
+ * que la página de Análisis (/analisis); aquí se puede variar el horizonte.
  */
 export default function ProyeccionesFinancieras() {
   const [semanas, setSemanas] = useState(13)

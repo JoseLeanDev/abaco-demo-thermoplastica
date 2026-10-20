@@ -92,6 +92,7 @@ export const endpoints = {
     salud: (params = {}) => cfoApi.get('/analisis/salud', { params }),
     inventarioQuieto: (params = {}) => cfoApi.get('/analisis/inventario-quieto', { params }),
     rotacionInventario: (params = {}) => cfoApi.get('/analisis/rotacion-inventario', { params }),
+    ventasVsCompras: (params = {}) => cfoApi.get('/analisis/ventas-vs-compras', { params }),
     proyeccionVentas: (meses = 6) => cfoApi.get('/analisis/proyeccion-ventas', { params: { meses } }),
     flujoCaja: (semanas = 13) => cfoApi.get('/analisis/flujo-caja', { params: { semanas } })
   },

@@ -24,7 +24,7 @@ import { useInsights, useInsightsHistorico } from '../../hooks/useCfoData'
  * Si en modo vertical no hay insights aún, no renderiza nada (no ensucia la página).
  */
 
-const V_LABEL = { cartera: 'Cartera', ventas: 'Ventas', margenes: 'Márgenes', compras: 'Compras', salud: 'Salud financiera' }
+const V_LABEL = { cartera: 'Cartera', ventas: 'Ventas', margenes: 'Márgenes', compras: 'Compras', salud: 'Análisis' }
 
 const TYPE_CFG = {
   gasto:       { icon: ArrowTrendingDownIcon, color: 'text-rose-300',    bg: 'bg-rose-500/15',    label: 'Gasto' },

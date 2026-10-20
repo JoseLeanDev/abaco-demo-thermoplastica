@@ -25,7 +25,7 @@ const VERT = {
   ventas:   { label: 'Ventas',   dot: 'bg-emerald-400', text: 'text-emerald-300' },
   margenes: { label: 'Márgenes', dot: 'bg-violet-400',  text: 'text-violet-300' },
   compras:  { label: 'Compras',  dot: 'bg-amber-400',   text: 'text-amber-300' },
-  salud:    { label: 'Salud financiera', dot: 'bg-rose-400', text: 'text-rose-300' },
+  salud:    { label: 'Análisis', dot: 'bg-rose-400', text: 'text-rose-300' },
 }
 const ORDEN = ['cartera', 'ventas', 'margenes', 'compras', 'salud']
 

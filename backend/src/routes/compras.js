@@ -5,34 +5,8 @@ const db = require('../../database/connection');
 // Ventana default: año en curso (ver services/periodo.js).
 const { parsePeriodo: parseWindow } = require('../services/periodo');
 
-// ---------------------------------------------------------------------------
-// Tipo de compra
-//
-// En el ERP todo entra como "factura de compra", pero no todo es inventario.
-// Se clasifica cada línea por la jerarquía del artículo:
-//   - Gastos de operación: categoría contable "Gastos de Operación" (es_gasto_operativo),
-//     costos administrativos y servicios sin clasificar.
-//   - Costos de producción: servicios, repuestos y mantenimiento cargados al costo.
-//   - Gastos de importación: fletes, aduana y demás costos de traer mercadería.
-//   - Activo fijo: compras de mobiliario/equipo.
-//   - Materiales e insumos: todo lo demás (lo que entra al inventario).
-// ---------------------------------------------------------------------------
-const TIPO_EXPR = `(CASE
-  WHEN COALESCE(a.es_gasto_operativo, FALSE)
-       OR a.linea IN ('Gastos de Operación', 'Costos Administrativos')          THEN 'gasto'
-  WHEN a.linea ILIKE 'activo fijo%'                                            THEN 'activo'
-  WHEN a.linea ILIKE 'gastos de importaci%'                                    THEN 'importacion'
-  WHEN a.linea ILIKE 'costo% de producci%'                                     THEN 'produccion'
-  WHEN a.marca IN ('Contable', 'Articulos de Servicio')                        THEN 'gasto'
-  ELSE 'inventario' END)`;
-
-const TIPOS = [
-  { id: 'inventario',  label: 'Materiales e insumos' },
-  { id: 'produccion',  label: 'Costos de producción' },
-  { id: 'importacion', label: 'Gastos de importación' },
-  { id: 'gasto',       label: 'Gastos de operación' },
-  { id: 'activo',      label: 'Activo fijo' },
-];
+// Tipo de compra (materiales, producción, importación, gasto, activo): ver services/tipoCompra.js
+const { TIPO_EXPR, TIPOS } = require('../services/tipoCompra');
 const TIPO_LABEL = Object.fromEntries(TIPOS.map(t => [t.id, t.label]));
 
 // Jerarquía de producto igual que en Ventas:
