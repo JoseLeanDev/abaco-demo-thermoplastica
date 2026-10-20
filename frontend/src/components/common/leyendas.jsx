@@ -957,6 +957,13 @@ export const LEYENDAS = {
       <Nota>En un grupo se suman el valor y el consumo de sus artículos; los que no tienen consumo suben la cobertura.</Nota>
     </>,
   },
+  unidades: {
+    titulo: 'Unidades en stock',
+    texto: <>
+      Existencia actual en la unidad de medida del ERP de cada artículo (rollos, kilos, millares, unidades…), en la foto más reciente del inventario.
+      <Nota>En categorías y subcategorías es la suma de artículos que pueden tener distinta unidad de medida: sirve para ver volumen, no para comparar entre grupos.</Nota>
+    </>,
+  },
   articulos: {
     titulo: 'Artículos quietos',
     texto: <>Artículos en estado lento o inmovilizado, sobre el total de artículos con existencia.</>,

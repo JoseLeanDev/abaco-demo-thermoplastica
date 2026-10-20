@@ -891,8 +891,11 @@ function resumirInv(filas) {
   // Cobertura del grupo = valor / consumo diario (consumo implícito = valor / días de cobertura)
   const consumo = filas.reduce((s, r) => s + (r.dias_cobertura > 0 ? r.valor / r.dias_cobertura : 0), 0);
   const r1 = (x) => Math.round(x * 10) / 10;
+  const uds = (f) => Math.round(filas.reduce((s, r) => s + (f(r) ? (r.stock_actual || 0) : 0), 0));
   return {
     articulos: filas.length,
+    unidades: uds(() => true),
+    unidades_quietas: uds(r => r.estado !== 'activo'),
     articulos_quietos: filas.filter(r => r.estado !== 'activo').length,
     total: Math.round(total),
     activo: Math.round(total - lento - inmovilizado),

@@ -52,6 +52,7 @@ const TRAMOS = [
 ]
 
 const fmtInt = (n) => Number(n || 0).toLocaleString('es-GT')
+const fmtUds = (n) => Number(n || 0).toLocaleString('es-GT', { maximumFractionDigits: Math.abs(n) < 100 ? 2 : 0 })
 const fmtDias = (d) => (d === null || d === undefined ? '—' : d >= 730 ? `${(d / 365).toFixed(1)} años` : `${fmtInt(d)} días`)
 const fmtFecha = (d) => (d ? String(d).slice(0, 10) : '—')
 
@@ -233,7 +234,7 @@ export default function InventarioQuieto() {
             <div className="kpi-card">
               <span className="kpi-label flex items-center gap-1">Inventario a costo <Leyenda k="inventario" /></span>
               <p className="kpi-value">{fmtM(t.total)}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(t.articulos)} artículos con stock</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(t.articulos)} artículos con stock · {fmtUds(t.unidades)} unidades</p>
             </div>
             <div className="kpi-card">
               <span className="kpi-label flex items-center gap-1">Inmovilizado <Leyenda k="inmovilizado" /></span>
@@ -297,7 +298,7 @@ export default function InventarioQuieto() {
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="font-medium text-sm truncate">{it.nombre}</p>
                       <BarraEstado r={it} max={maxTotal} />
-                      <p className="text-xs text-[var(--text-muted)]">{it.pct_quieto}% quieto · {fmtM(it.total)} total</p>
+                      <p className="text-xs text-[var(--text-muted)]">{it.pct_quieto}% quieto · {fmtM(it.total)} total · {fmtUds(esHoja ? it.stock_actual : it.unidades)} uds</p>
                     </div>
                     <p className="text-sm font-semibold tabular-nums shrink-0" style={{ color: ESTADOS.inmovilizado.color }}>{fmtM(it.quieto)}</p>
                     {!esHoja && <ChevronRightIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />}
@@ -312,6 +313,7 @@ export default function InventarioQuieto() {
                   <tr className="text-xs text-[var(--text-muted)]">
                     <Th col="nombre" align="left">{nivel.singular}</Th>
                     <Th col="total" align="left" ayuda="inventario">Inventario</Th>
+                    <Th col={esHoja ? 'stock_actual' : 'unidades'} ayuda="unidades">Unidades</Th>
                     {!esHoja && <>
                       <Th col="inmovilizado" ayuda="inmovilizado">Inmovilizado</Th>
                       <Th col="lento" ayuda="lento">Lento</Th>
@@ -337,6 +339,10 @@ export default function InventarioQuieto() {
                           <span className="tabular-nums font-semibold w-16 shrink-0">{fmtM(it.total)}</span>
                           <div className="flex-1"><BarraEstado r={it} max={maxTotal} /></div>
                         </div>
+                      </td>
+                      <td className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap">
+                        {fmtUds(esHoja ? it.stock_actual : it.unidades)}
+                        {!esHoja && it.unidades_quietas > 0 && <p className="text-[10px] text-[var(--text-muted)]">{fmtUds(it.unidades_quietas)} quietas</p>}
                       </td>
                       {!esHoja && <>
                         <td className="py-2.5 px-2 text-right tabular-nums" style={{ color: it.inmovilizado ? ESTADOS.inmovilizado.color : undefined }}>{it.inmovilizado ? fmtM(it.inmovilizado) : '—'}</td>
@@ -401,7 +407,7 @@ export default function InventarioQuieto() {
                   { label: 'Sublínea', get: a => a.sublinea },
                   { label: 'Tipo', get: a => CLASES[a.clase] },
                   { label: 'Estado', get: a => ESTADOS[a.estado]?.nombre },
-                  { label: 'Stock', get: a => a.stock_actual },
+                  { label: 'Unidades en stock', get: a => a.stock_actual },
                   { label: 'Valor a costo', get: a => a.valor },
                   { label: 'Cobertura (días)', get: a => a.dias_cobertura },
                   { label: 'Días sin movimiento', get: a => a.dias_sin_mov },
@@ -421,6 +427,7 @@ export default function InventarioQuieto() {
                   <th className="text-left font-semibold pb-2 pr-2">Artículo <Leyenda k="tipo" /></th>
                   <th className="text-left font-semibold pb-2 px-2 hidden md:table-cell">Categoría › Subcategoría › Sublínea <Leyenda k="categoria" /></th>
                   <th className="text-left font-semibold pb-2 px-2">Estado</th>
+                  <th className="text-right font-semibold pb-2 px-2">Unidades <Leyenda k="unidades" /></th>
                   <th className="text-right font-semibold pb-2 px-2">Valor</th>
                   <th className="text-right font-semibold pb-2 px-2 hidden sm:table-cell">Cobertura <Leyenda k="cobertura" /></th>
                   <th className="text-right font-semibold pb-2 pl-2">Último movimiento <Leyenda k="antiguedad" /></th>
@@ -437,6 +444,7 @@ export default function InventarioQuieto() {
                       {a.categoria} › {a.subcategoria} › {a.sublinea}
                     </td>
                     <td className="py-2 px-2"><Estado estado={a.estado} /></td>
+                    <td className="py-2 px-2 text-right tabular-nums">{fmtUds(a.stock_actual)}</td>
                     <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtQ(a.valor)}</td>
                     <td className="py-2 px-2 text-right tabular-nums text-xs hidden sm:table-cell whitespace-nowrap">{fmtDias(a.dias_cobertura)}</td>
                     <td className="py-2 pl-2 text-right text-xs text-[var(--text-muted)] whitespace-nowrap">{ultimoMovimiento(a)}</td>
