@@ -18,7 +18,7 @@ import { endpoints } from '../services/cfoApi'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
 import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ventas/FiltroProducto'
-import { Delta, Kpi, TIPOS, exportarCSV, fmtInt, fmtM, fmtQ } from '../components/compras/comun'
+import { Delta, Kpi, TIPOS, exportarExcel, fmtInt, fmtM, fmtQ } from '../components/compras/comun'
 import TabResumen from '../components/compras/TabResumen'
 import TabProveedores from '../components/compras/TabProveedores'
 import TabCategorias from '../components/compras/TabCategorias'
@@ -71,7 +71,7 @@ export default function Compras() {
     setExportando(true)
     try {
       const res = await endpoints.compras.detalle({ ...filtros, limit: 20000 })
-      exportarCSV(`compras_${periodo.desde}_${periodo.hasta}.csv`, COLUMNAS_DETALLE, res?.data?.filas || [])
+      await exportarExcel(`compras_${periodo.desde}_${periodo.hasta}.xlsx`, COLUMNAS_DETALLE, res?.data?.filas || [])
     } finally {
       setExportando(false)
     }

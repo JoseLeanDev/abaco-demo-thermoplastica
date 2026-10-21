@@ -23,6 +23,7 @@ import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ventas/FiltroProducto'
 import { fmtM, fmtQ, tooltipStyle } from '../components/analisis/formato'
 import { Leyenda } from '../components/common/leyendas'
+import { exportarExcel } from '../services/excel'
 
 /**
  * Rotación de inventarios por Categoría › Subcategoría › Sublínea › Artículo
@@ -93,20 +94,6 @@ function Peso({ inv, cogs, flujo }) {
       </div>
     </div>
   )
-}
-
-function exportarCSV(nombre, columnas, filas) {
-  const esc = (v) => {
-    const s = v === null || v === undefined ? '' : String(v)
-    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
-  const csv = [columnas.map(c => esc(c.label)).join(','), ...filas.map(f => columnas.map(c => esc(c.get(f))).join(','))].join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nombre
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 export default function RotacionInventario() {
@@ -471,7 +458,7 @@ export default function RotacionInventario() {
           accion={
             <button
               className="btn-secondary flex items-center gap-1 text-xs py-1"
-              onClick={() => exportarCSV(`rotacion_inventario_${d.periodo.desde}_${d.periodo.hasta}.csv`, [
+              onClick={() => exportarExcel(`rotacion_inventario_${d.periodo.desde}_${d.periodo.hasta}.xlsx`, [
                 { label: 'Código', get: a => a.codigo_articulo },
                 { label: 'Artículo', get: a => a.articulo },
                 { label: 'Categoría', get: a => a.categoria },

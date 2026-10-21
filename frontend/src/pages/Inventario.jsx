@@ -17,7 +17,7 @@ import { endpoints } from '../services/cfoApi'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
 import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ventas/FiltroProducto'
-import { Kpi, exportarCSV, fmtFecha, fmtInt, fmtM } from '../components/compras/comun'
+import { Kpi, exportarExcel, fmtFecha, fmtInt, fmtM } from '../components/compras/comun'
 import { ABCS, CLASES, OBJETIVOS, filtrar, hidratar, opcionesProducto, resumir } from '../components/inventario/datos'
 import TabResumen from '../components/inventario/TabResumen'
 import TabAbc from '../components/inventario/TabAbc'
@@ -63,7 +63,7 @@ export default function Inventario() {
 
   const limpiar = () => { setProducto(FILTRO_VACIO); setClase(''); setAbc(''); setProveedor(null) }
   const irDetalle = (v) => { setVista({ rapido: 'todos', tramo: '', ...v }); setTab('detalle') }
-  const exportar = () => exportarCSV(`inventario_${d?.fecha_corte || 'hoy'}.csv`, COLUMNAS_DETALLE(dias, objetivo), filas)
+  const exportar = () => exportarExcel(`inventario_${d?.fecha_corte || 'hoy'}.xlsx`, COLUMNAS_DETALLE(dias, objetivo), filas)
 
   const ctx = { filas, todas, tot, dias, objetivo, setObjetivo, producto, setProducto, setClase, setAbc, setProveedor, irDetalle, vista, setVista, setTab, periodo: d?.periodo }
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, MagnifyingGlassIcon, TagIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import { Seccion, Th, exportarCSV, fmtInt, fmtPrecio, fmtQ, ordenar, td } from '../compras/comun'
+import { Seccion, Th, exportarExcel, fmtInt, fmtPrecio, fmtQ, ordenar, td } from '../compras/comun'
 import DetalleProducto from './DetalleProducto'
 
 const fmtPct = (n) => (n === null || n === undefined ? '—' : `${Number(n).toFixed(1)}%`)
@@ -41,7 +41,7 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
     return ordenar(out, orden)
   }, [productos, semaforo, busqueda, orden])
 
-  const exportar = () => exportarCSV('margen_por_producto.csv', [
+  const exportar = () => exportarExcel('margen_por_producto.xlsx', [
     { label: 'Código', get: p => p.sku },
     { label: 'Producto', get: p => p.nombre },
     { label: 'Categoría', get: p => p.categoria },
@@ -65,7 +65,7 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
         leyenda="semaforo_margen"
         subtitulo={`${fmtInt(filas.length)} de ${fmtInt(productos.length)} productos con ventas ≥ Q1,000 en el período · clic en una fila para ver el detalle`}
         sinPadding
-        extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> CSV</button>}
+        extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
       >
         <div className="px-5 pb-3 flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-80">
@@ -144,7 +144,7 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
               ))}
             </tbody>
           </table>
-          {filas.length > MAX_FILAS && <p className="px-5 py-3 text-xs text-[var(--text-muted)]">Mostrando {MAX_FILAS} de {fmtInt(filas.length)}; usa la búsqueda o los filtros para acotar. El CSV trae todos.</p>}
+          {filas.length > MAX_FILAS && <p className="px-5 py-3 text-xs text-[var(--text-muted)]">Mostrando {MAX_FILAS} de {fmtInt(filas.length)}; usa la búsqueda o los filtros para acotar. El Excel trae todos.</p>}
         </div>
       </Seccion>
 

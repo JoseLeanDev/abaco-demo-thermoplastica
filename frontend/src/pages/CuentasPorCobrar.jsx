@@ -18,6 +18,7 @@ import {
   ChartBarIcon,
   ChevronRightIcon
 } from '@heroicons/react/24/outline'
+import { exportarExcel, traerTodo } from '../services/excel'
 
 const fmtQ = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
 const fmtDate = (d) => {
@@ -32,6 +33,44 @@ const badgeForDias = (dias) => {
   if (dias <= 60) return { label: `${dias}d`,      color: 'badge-warning', icon: ExclamationCircleIcon }
   return                       { label: `${dias}d`, color: 'badge-danger',  icon: ExclamationCircleIcon }
 }
+
+// Columnas del Excel
+const COLUMNAS_CXC_CLIENTES = [
+  { label: 'Código', get: r => r.codigo_cliente },
+  { label: 'Cliente', get: r => r.cliente },
+  { label: 'Sector', get: r => r.sector },
+  { label: 'Documentos', get: r => r.documentos },
+  { label: 'Saldo', get: r => Number(r.saldo).toFixed(2) },
+  { label: '% del total', get: r => r.pct_saldo },
+  { label: 'Vencido', get: r => Number(r.vencido).toFixed(2) },
+  { label: 'Documentos vencidos', get: r => r.documentos_vencidos },
+  { label: 'Atraso máximo (días)', get: r => r.atraso_max },
+  { label: 'Días de crédito', get: r => r.dias_credito },
+  { label: 'Días reales de pago', get: r => r.dias_pago },
+  { label: '% pagado a tiempo', get: r => r.pct_a_tiempo },
+]
+const COLUMNAS_CXC_DOCS = [
+  { label: 'Código cliente', get: r => r.codigo_cliente },
+  { label: 'Cliente', get: r => r.cliente },
+  { label: 'Forma de pago', get: r => r.forma_pago },
+  { label: 'Sucursal', get: r => r.sucursal || r.codigo_sucursal },
+  { label: 'Vendedor', get: r => r.vendedor },
+  { label: 'Documento', get: r => `${r.tipo_documento} ${r.documento}` },
+  { label: 'Emisión', get: r => r.fecha_emision && String(r.fecha_emision).slice(0, 10) },
+  { label: 'Vencimiento', get: r => r.fecha_vencimiento && String(r.fecha_vencimiento).slice(0, 10) },
+  { label: 'Días de atraso', get: r => r.dias_atraso },
+  { label: 'Saldo', get: r => r.saldo_total.toFixed(2) },
+  { label: 'Por vencer', get: r => r.porvencer.toFixed(2) },
+  { label: 'Vencido', get: r => r.vencido.toFixed(2) },
+  { label: '1-30', get: r => r.v30.toFixed(2) },
+  { label: '31-60', get: r => r.v31a60.toFixed(2) },
+  { label: '61-90', get: r => r.v61a90.toFixed(2) },
+  { label: '91-120', get: r => r.v91a120.toFixed(2) },
+  { label: '+120', get: r => r.v120.toFixed(2) },
+  { label: 'Días crédito (ficha)', get: r => r.dias_credito_ficha },
+  { label: 'Días según facturas', get: r => r.dias_segun_facturas },
+  { label: 'Estado', get: r => r.estado_cxc },
+]
 
 export default function CuentasPorCobrar() {
   const [busqueda, setBusqueda] = useState('')
@@ -66,6 +105,24 @@ export default function CuentasPorCobrar() {
   const totalFilas   = detalleData?.data?.total_filas || 0
   const sumaFiltrada = detalleData?.data?.suma_saldo || 0
 
+  // Exporta la vista activa (clientes o documentos) con la búsqueda y el filtro de antigüedad
+  const [exportando, setExportando] = useState(false)
+  const exportar = async () => {
+    setExportando(true)
+    try {
+      const corte = periodo.hasta || 'hoy'
+      if (vista === 'clientes') {
+        const res = clientesData || await endpoints.tesoreria.cxcClientes({ busqueda, ...periodo })
+        await exportarExcel(`cxc_clientes_${corte}.xlsx`, COLUMNAS_CXC_CLIENTES, res?.data?.filas || [], { hoja: 'Clientes' })
+      } else {
+        const docs = await traerTodo(endpoints.tesoreria.cxcDetalle, { busqueda, bucket, ...periodo })
+        await exportarExcel(`cxc_documentos_${corte}.xlsx`, COLUMNAS_CXC_DOCS, docs, { hoja: 'Documentos' })
+      }
+    } finally {
+      setExportando(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl">
       {/* Header */}
@@ -90,9 +147,9 @@ export default function CuentasPorCobrar() {
             </div>
           </div>
         </div>
-        <button className="btn-secondary flex items-center gap-2">
+        <button onClick={exportar} disabled={exportando} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
           <ArrowDownTrayIcon className="w-4 h-4" />
-          Exportar
+          {exportando ? 'Exportando…' : 'Exportar Excel'}
         </button>
       </div>
 

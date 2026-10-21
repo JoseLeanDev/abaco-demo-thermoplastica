@@ -3,7 +3,7 @@ import { useQuery } from 'react-query'
 import { ArrowDownTrayIcon, BuildingOfficeIcon, MagnifyingGlassIcon, UserMinusIcon } from '@heroicons/react/24/outline'
 import { endpoints } from '../../services/cfoApi'
 import { Leyenda } from '../common/leyendas'
-import { Cargando, Delta, Mini, Seccion, Th, exportarCSV, fmtFecha, fmtInt, fmtM, fmtQ, ordenar, td, th } from './comun'
+import { Cargando, Delta, Mini, Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, fmtQ, ordenar, td, th } from './comun'
 
 export default function TabProveedores({ filtros, clave, r, setProveedor, setTab }) {
   const [orden, setOrden] = useState({ col: 'gasto', dir: 'desc' })
@@ -25,7 +25,7 @@ export default function TabProveedores({ filtros, clave, r, setProveedor, setTab
   const c = r.concentracion || {}
   const elegir = (i) => { setProveedor({ codigo: i.clave, nombre: i.nombre }); setTab('resumen') }
 
-  const exportar = () => exportarCSV('proveedores_compras.csv', [
+  const exportar = () => exportarExcel('proveedores_compras.xlsx', [
     { label: 'Código', get: i => i.clave },
     { label: 'Proveedor', get: i => i.nombre },
     { label: 'Compras sin IVA', get: i => i.gasto.toFixed(2) },
@@ -69,7 +69,7 @@ export default function TabProveedores({ filtros, clave, r, setProveedor, setTab
               />
             </div>
             <button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1">
-              <ArrowDownTrayIcon className="w-4 h-4" /> CSV
+              <ArrowDownTrayIcon className="w-4 h-4" /> Excel
             </button>
           </div>
         }

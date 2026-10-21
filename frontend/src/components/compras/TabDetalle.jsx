@@ -6,7 +6,7 @@ import { TIPO, fmtInt, fmtPrecio, fmtQ, td, th } from './comun'
 
 const PAGINA = 200
 
-// Columnas del CSV de líneas (también lo usa el botón "Exportar líneas" del encabezado)
+// Columnas del Excel de líneas (también lo usa el botón "Exportar líneas" del encabezado)
 export const COLUMNAS_DETALLE = [
   { label: 'Fecha', get: f => String(f.fecha_emision).slice(0, 10) },
   { label: 'Documento', get: f => `${f.tipo_doc} ${f.fact_num}` },

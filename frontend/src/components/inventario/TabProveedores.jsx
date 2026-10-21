@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline'
-import { Seccion, Th, exportarCSV, fmtInt, fmtM, ordenar, td } from '../compras/comun'
+import { Seccion, Th, exportarExcel, fmtInt, fmtM, ordenar, td } from '../compras/comun'
 import { agrupar, fmtDias } from './datos'
 import { BarraPct, colorDias } from './TabResumen'
 
@@ -21,7 +21,7 @@ export default function TabProveedores({ filas, tot, dias, objetivo, setProveedo
   }, [items, tot.valor])
   const sinProv = items.find(i => !i.clave)
 
-  const exportar = () => exportarCSV('inventario_por_proveedor.csv', [
+  const exportar = () => exportarExcel('inventario_por_proveedor.xlsx', [
     { label: 'Proveedor', get: g => g.nombre },
     { label: 'Código', get: g => g.clave },
     { label: 'Valor en stock', get: g => g.valor.toFixed(2) },
@@ -40,7 +40,7 @@ export default function TabProveedores({ filas, tot, dias, objetivo, setProveedo
       leyenda="inv_proveedor"
       subtitulo={`${conc.n80} proveedores concentran el 80% del stock · top 5 = ${conc.top5}%${sinProv ? ` · ${fmtM(sinProv.valor)} en artículos sin compras registradas` : ''}. Clic para filtrar la página.`}
       sinPadding
-      extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> CSV</button>}
+      extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
     >
       <div className="overflow-x-auto">
         <table className="w-full">

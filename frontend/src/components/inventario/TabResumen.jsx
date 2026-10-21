@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, ClockIcon, HeartIcon, Squares2X2Icon } from '@heroicons/react/24/outline'
 import { cambiarNivel } from '../ventas/FiltroProducto'
-import { Seccion, Th, exportarCSV, fmtInt, fmtM, ordenar, td } from '../compras/comun'
+import { Seccion, Th, exportarExcel, fmtInt, fmtM, ordenar, td } from '../compras/comun'
 import { ESTADOS, TRAMOS, agrupar, fmtDias, nivelSiguiente } from './datos'
 
 // Barra horizontal con el % del grupo
@@ -42,7 +42,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
   const maxTramo = Math.max(1, ...tramos.map(t => t.valor))
 
   const siguiente = esArticulo ? null : nivelSiguiente(cambiarNivel(producto, nivel.dim, 'x'))
-  const exportar = () => exportarCSV(`inventario_por_${nivel.dim}.csv`, [
+  const exportar = () => exportarExcel(`inventario_por_${nivel.dim}.xlsx`, [
     { label: nivel.singular, get: g => g.nombre },
     ...(esArticulo ? [{ label: 'Código', get: g => g.clave }] : []),
     { label: 'Valor en stock', get: g => g.valor.toFixed(2) },
@@ -69,7 +69,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
           sinPadding
           extra={
             <button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1">
-              <ArrowDownTrayIcon className="w-4 h-4" /> CSV
+              <ArrowDownTrayIcon className="w-4 h-4" /> Excel
             </button>
           }
         >

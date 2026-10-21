@@ -18,6 +18,7 @@ import {
   ChartBarIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/outline'
+import { exportarExcel, traerTodo } from '../services/excel'
 
 const fmtQ = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
 const fmtM = (n) => {
@@ -37,6 +38,24 @@ const badgeForDias = (dias) => {
   if (dias <= 60) return { label: `${dias}d`,       color: 'badge-warning', icon: ExclamationCircleIcon }
   return                { label: `${dias}d`,       color: 'badge-danger',  icon: ExclamationCircleIcon }
 }
+
+// Columnas del Excel
+const COLUMNAS_CXP = [
+  { label: 'Código proveedor', get: r => r.codigo_proveedor },
+  { label: 'Proveedor', get: r => r.proveedor },
+  { label: 'NIT', get: r => r.rif },
+  { label: 'Sucursal', get: r => r.sucursal || r.codigo_sucursal },
+  { label: 'Número interno', get: r => r.numero_interno },
+  { label: 'Factura proveedor', get: r => r.factura_proveedor },
+  { label: 'Emisión', get: r => r.fecha_emision && String(r.fecha_emision).slice(0, 10) },
+  { label: 'Vencimiento', get: r => r.fecha_vencimiento && String(r.fecha_vencimiento).slice(0, 10) },
+  { label: 'Días de atraso', get: r => r.dias_atraso },
+  { label: 'Valor', get: r => r.valor.toFixed(2) },
+  { label: 'Saldo', get: r => r.saldo.toFixed(2) },
+  { label: 'Forma de pago', get: r => r.forma_pago },
+  { label: 'Estado', get: r => r.estado },
+  { label: 'Último pago', get: r => r.fecha_ultimo_pago && String(r.fecha_ultimo_pago).slice(0, 10) },
+]
 
 export default function CuentasPorPagar() {
   const [busqueda, setBusqueda]     = useState('')
@@ -65,6 +84,18 @@ export default function CuentasPorPagar() {
   const totalFilas   = detalleData?.data?.total_filas || 0
   const sumaFiltrada = detalleData?.data?.suma_saldo || 0
 
+  // Exporta los documentos con la búsqueda, antigüedad y proveedor activos
+  const [exportando, setExportando] = useState(false)
+  const exportar = async () => {
+    setExportando(true)
+    try {
+      const docs = await traerTodo(endpoints.tesoreria.cxpDetalle, { busqueda, bucket, proveedor: proveedorSel, ...periodo })
+      await exportarExcel(`cxp_documentos_${periodo.hasta || 'hoy'}.xlsx`, COLUMNAS_CXP, docs, { hoja: 'Por pagar' })
+    } finally {
+      setExportando(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl">
       {/* Header */}
@@ -92,9 +123,9 @@ export default function CuentasPorPagar() {
           </div>
         </div>
 
-        <button className="btn-secondary flex items-center gap-2">
+        <button onClick={exportar} disabled={exportando} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
           <ArrowDownTrayIcon className="w-4 h-4" />
-          Exportar
+          {exportando ? 'Exportando…' : 'Exportar Excel'}
         </button>
       </div>
 

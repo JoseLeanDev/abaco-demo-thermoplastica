@@ -94,19 +94,7 @@ export function ordenar(items, { col, dir }) {
   })
 }
 
-export function exportarCSV(nombre, columnas, filas) {
-  const esc = (v) => {
-    const s = v === null || v === undefined ? '' : String(v)
-    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
-  const csv = [columnas.map(c => esc(c.label)).join(','), ...filas.map(f => columnas.map(c => esc(c.get(f))).join(','))].join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nombre
-  a.click()
-  URL.revokeObjectURL(url)
-}
+export { exportarExcel } from '../../services/excel'
 
 export function Cargando({ alto = 'h-64' }) {
   return <div className={`card ${alto} animate-pulse bg-[var(--bg-secondary)]`} />

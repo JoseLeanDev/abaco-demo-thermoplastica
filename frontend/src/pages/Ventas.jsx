@@ -30,6 +30,7 @@ import TabCategorias from '../components/ventas/TabCategorias'
 import { Leyenda } from '../components/common/leyendas'
 import TabMatriz from '../components/ventas/TabMatriz'
 import FiltroProducto, { FILTRO_VACIO } from '../components/ventas/FiltroProducto'
+import { exportarExcel, traerTodo } from '../services/excel'
 
 // -------------------------------------------------------------------
 // Helpers
@@ -73,6 +74,27 @@ const Var = ({ pct, nuevo }) => {
   const tone = pct > 0 ? 'text-[var(--success)]' : pct < 0 ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'
   return <span className={`tabular-nums font-semibold ${tone}`}>{pct > 0 ? '+' : ''}{Number(pct).toFixed(1)}%</span>
 }
+
+// Columnas del Excel de líneas de venta
+const COLUMNAS_VENTAS = [
+  { label: 'Fecha', get: f => String(f.fecha_emision).slice(0, 10) },
+  { label: 'Documento', get: f => `${f.tipo_doc} ${f.fact_num}` },
+  { label: 'Código cliente', get: f => f.codigo_cliente },
+  { label: 'Cliente', get: f => f.cliente },
+  { label: 'Vendedor', get: f => f.vendedor },
+  { label: 'Sucursal', get: f => f.sucursal },
+  { label: 'Código artículo', get: f => f.codigo_articulo },
+  { label: 'Artículo', get: f => f.articulo },
+  { label: 'Subcategoría', get: f => f.linea },
+  { label: 'Sublínea', get: f => f.sublinea },
+  { label: 'Unidades', get: f => f.unidades },
+  { label: 'Total sin IVA', get: f => f.total_sin_iva.toFixed(2) },
+  { label: 'IVA', get: f => f.iva.toFixed(2) },
+  { label: 'Total con IVA', get: f => f.total_con_iva.toFixed(2) },
+  { label: 'Costo', get: f => (f.sin_costo ? '' : f.costo_total_facturado.toFixed(2)) },
+  { label: 'Margen bruto', get: f => (f.margen_bruto === null ? '' : f.margen_bruto.toFixed(2)) },
+  { label: 'Margen %', get: f => (f.margen_bruto_pct === null ? '' : Number(f.margen_bruto_pct).toFixed(1)) },
+]
 
 const PIE_COLORS = ['#001639', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#a855f7']
 
@@ -136,6 +158,20 @@ export default function Ventas() {
   const totalFilas   = dRes?.data?.total_filas || 0
   const sumaFiltrada = dRes?.data?.suma_ventas || 0
 
+  // Exporta las líneas de venta con los filtros activos (período, producto, búsqueda, cliente, vendedor)
+  const [exportando, setExportando] = useState(false)
+  const exportar = async () => {
+    setExportando(true)
+    try {
+      const lineas = await traerTodo(endpoints.ventas.detalle, {
+        ...commonParams, ...prodParams, busqueda, codigo_cliente: clienteSel, vendedor: vendedorSel,
+      })
+      await exportarExcel(`ventas_${desde}_${hasta}.xlsx`, COLUMNAS_VENTAS, lineas, { hoja: 'Ventas' })
+    } finally {
+      setExportando(false)
+    }
+  }
+
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl">
@@ -160,9 +196,9 @@ export default function Ventas() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="btn-secondary flex items-center gap-2">
+          <button onClick={exportar} disabled={exportando} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
             <ArrowDownTrayIcon className="w-4 h-4" />
-            Exportar
+            {exportando ? 'Exportando…' : 'Exportar Excel'}
           </button>
         </div>
       </div>

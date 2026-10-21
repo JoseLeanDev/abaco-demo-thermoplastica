@@ -12,6 +12,7 @@ import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
+import { exportarExcelFilas } from '../services/excel'
 
 // Ficha de un cliente: estado de cuenta, cómo paga y qué compra.
 
@@ -723,14 +724,10 @@ function MiniDato({ titulo, leyenda, valor, prev }) {
 }
 
 // ------------------------------------------------------------------
-// Estado de cuenta en CSV (Excel lo abre directo; BOM para los acentos)
+// Estado de cuenta en Excel
 // ------------------------------------------------------------------
 function descargarEstadoCuenta(d) {
   const { cliente: c, estado_cuenta: docs, saldo } = d
-  const esc = (v) => {
-    const s = v === null || v === undefined ? '' : String(v)
-    return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
   const n = (v) => (v === null || v === undefined ? '' : Number(v).toFixed(2))
   const filas = [
     [`Estado de cuenta — ${c.nombre} (código ${c.codigo})`],
@@ -745,11 +742,8 @@ function descargarEstadoCuenta(d) {
     ['Total', '', '', '', '', n(saldo.total)],
     ['Vencido', '', '', '', '', n(saldo.vencido)],
   ]
-  const csv = '﻿' + filas.map(f => f.map(esc).join(',')).join('\r\n')
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `estado-de-cuenta-${c.codigo}-${saldo.corte || 'hoy'}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const ultima = filas.length - 1
+  exportarExcelFilas(`estado-de-cuenta-${c.codigo}-${saldo.corte || 'hoy'}.xlsx`, filas, {
+    hoja: 'Estado de cuenta', negritas: [0, 3, ultima - 1, ultima],
+  })
 }

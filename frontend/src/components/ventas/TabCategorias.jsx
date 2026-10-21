@@ -18,6 +18,7 @@ import {
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell, LabelList,
 } from 'recharts'
+import { exportarExcel } from '../../services/excel'
 
 // -------------------------------------------------------------------
 // Ventas por categoría. Responde, en orden:
@@ -80,20 +81,6 @@ function Seccion({ icon: Icon, titulo, subtitulo, children, accion, leyenda }) {
       <div className="p-5 pt-0">{children}</div>
     </div>
   )
-}
-
-function exportarCSV(nombreArchivo, columnas, filas) {
-  const esc = (v) => {
-    const s = v === null || v === undefined ? '' : String(v)
-    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
-  const csv = [columnas.map(c => esc(c.label)).join(','), ...filas.map(f => columnas.map(c => esc(c.get(f))).join(','))].join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nombreArchivo
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 // Frase que resume la selección: cuánto, vs año anterior, por qué y qué destaca
@@ -258,8 +245,8 @@ export default function TabCategorias({ filtro, onFiltro }) {
             </button>
             <button
               className="btn-secondary flex items-center gap-1 text-xs py-1"
-              title="Descargar la tabla en CSV (abre en Excel)"
-              onClick={() => exportarCSV(`ventas_${nivel.dim}_${desde}_${hasta}.csv`, [
+              title="Descargar la tabla en Excel"
+              onClick={() => exportarExcel(`ventas_${nivel.dim}_${desde}_${hasta}.xlsx`, [
                 { label: nivel.singular, get: f => f.nombre },
                 ...(esHoja ? [{ label: 'Código', get: f => f.clave }] : []),
                 { label: 'Ventas', get: f => f.ventas.toFixed(2) },

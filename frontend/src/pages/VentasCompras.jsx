@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import { endpoints } from '../services/cfoApi'
 import { fmtM, fmtQ, fmtMes, tooltipStyle } from '../components/analisis/formato'
-import { Cargando, Seccion, Th, exportarCSV, ordenar, td } from '../components/compras/comun'
+import { Cargando, Seccion, Th, exportarExcel, ordenar, td } from '../components/compras/comun'
 
 const NIVELES = [
   { dim: 'categoria',    singular: 'Categoría',    plural: 'categorías' },
@@ -88,7 +88,7 @@ export default function VentasCompras() {
   const tramo = d ? (d.anio === anioActual ? `1 ene – ${fmtFecha(d.hasta)}` : `año completo ${d.anio}`) : ''
   const vsPrev = (v, vp) => (d?.prev && vp ? `${fmtVar(varPct(v, vp))} vs ${d.anio - 1} (${fmtM(vp)})` : null)
 
-  const exportar = () => exportarCSV(`ventas_vs_compras_${d.anio}_${nivel.dim}.csv`, [
+  const exportar = () => exportarExcel(`ventas_vs_compras_${d.anio}_${nivel.dim}.xlsx`, [
     { label: nivel.singular, get: i => i.clave },
     { label: 'Vendido', get: i => i.ventas },
     { label: `Comprado (${etiquetaCompras})`, get: i => i.compras },
@@ -207,7 +207,7 @@ export default function VentasCompras() {
                 titulo={`Por ${nivel.singular.toLowerCase()}`}
                 subtitulo={esHoja ? `${items.length} ${nivel.plural}` : `${items.length} ${nivel.plural} · clic para ver el detalle`}
                 sinPadding
-                extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> CSV</button>}
+                extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
               >
                 <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
                   <table className="w-full">

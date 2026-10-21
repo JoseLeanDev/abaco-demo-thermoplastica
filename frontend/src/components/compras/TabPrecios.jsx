@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, MagnifyingGlassIcon, TagIcon } from '@heroicons/react/24/outline'
-import { Cargando, Delta, Mini, Seccion, Th, exportarCSV, fmtInt, fmtM, fmtPrecio, ordenar, td } from './comun'
+import { Cargando, Delta, Mini, Seccion, Th, exportarExcel, fmtInt, fmtM, fmtPrecio, ordenar, td } from './comun'
 
 const VISTAS = [['todos', 'Todos'], ['subieron', 'Subieron'], ['bajaron', 'Bajaron']]
 
@@ -21,7 +21,7 @@ export default function TabPrecios({ precios: d }) {
   if (!d) return <Cargando alto="h-96" />
 
   const cobertura = d.gasto_inventario > 0 ? Math.round(d.base_comparable / d.gasto_inventario * 100) : 0
-  const exportar = () => exportarCSV('variacion_precios_compras.csv', [
+  const exportar = () => exportarExcel('variacion_precios_compras.xlsx', [
     { label: 'Código', get: i => i.clave },
     { label: 'Artículo', get: i => i.nombre },
     { label: 'Categoría', get: i => i.extra },
@@ -74,7 +74,7 @@ export default function TabPrecios({ precios: d }) {
               />
             </div>
             <button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1">
-              <ArrowDownTrayIcon className="w-4 h-4" /> CSV
+              <ArrowDownTrayIcon className="w-4 h-4" /> Excel
             </button>
           </div>
         }

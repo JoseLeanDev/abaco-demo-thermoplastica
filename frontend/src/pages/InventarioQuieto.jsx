@@ -17,6 +17,7 @@ import { endpoints } from '../services/cfoApi'
 import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ventas/FiltroProducto'
 import { fmtM, fmtQ, tooltipStyle } from '../components/analisis/formato'
 import { Leyenda } from '../components/analisis/leyendasInventario'
+import { exportarExcel } from '../services/excel'
 
 /**
  * Capital inmovilizado en inventario por Categoría › Subcategoría › Sublínea › Artículo
@@ -98,20 +99,6 @@ function ultimoMovimiento(a) {
   if (a.clase === 'producto') return a.dias_sin_mov !== null ? `Venta hace ${fmtDias(a.dias_sin_mov)}` : 'Sin ventas'
   if (a.clase === 'materia_prima') return a.dias_sin_mov !== null ? `Compra hace ${fmtDias(a.dias_sin_mov)}` : 'Sin compras'
   return 'Sin movimiento registrado'
-}
-
-function exportarCSV(nombre, columnas, filas) {
-  const esc = (v) => {
-    const s = v === null || v === undefined ? '' : String(v)
-    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
-  const csv = [columnas.map(c => esc(c.label)).join(','), ...filas.map(f => columnas.map(c => esc(c.get(f))).join(','))].join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nombre
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 export default function InventarioQuieto() {
@@ -399,7 +386,7 @@ export default function InventarioQuieto() {
               </div>
               <button
                 className="btn-secondary flex items-center gap-1 text-xs py-1"
-                onClick={() => exportarCSV(`inventario_quieto_${fmtFecha(d.fecha_corte)}.csv`, [
+                onClick={() => exportarExcel(`inventario_quieto_${fmtFecha(d.fecha_corte)}.xlsx`, [
                   { label: 'Código', get: a => a.codigo_articulo },
                   { label: 'Artículo', get: a => a.articulo },
                   { label: 'Categoría', get: a => a.categoria },

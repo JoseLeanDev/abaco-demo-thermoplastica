@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowDownTrayIcon, ArrowTrendingDownIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
-import { Seccion, Th, exportarCSV, fmtFecha, fmtInt, fmtM, ordenar, td } from '../compras/comun'
+import { Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, ordenar, td } from '../compras/comun'
 import { ESTADO, agrupar, excesoDe, fmtDias, fmtNum } from './datos'
 import { BarraPct, colorDias } from './TabResumen'
 
@@ -24,7 +24,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
     ordenQ
   ), [filas, dias, ordenQ])
 
-  const exportarExceso = () => exportarCSV(`inventario_exceso_${objetivo}d.csv`, [
+  const exportarExceso = () => exportarExcel(`inventario_exceso_${objetivo}d.xlsx`, [
     { label: 'Código', get: f => f.codigo },
     { label: 'Artículo', get: f => f.descripcion },
     { label: 'Categoría', get: f => f.categoria },
@@ -37,7 +37,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
     { label: 'Última venta', get: f => f.ultima_venta || '' },
     { label: 'Última compra', get: f => f.ultima_compra || '' },
   ], exceso)
-  const exportarQuiebres = () => exportarCSV('inventario_quiebres.csv', [
+  const exportarQuiebres = () => exportarExcel('inventario_quiebres.xlsx', [
     { label: 'Código', get: f => f.codigo },
     { label: 'Artículo', get: f => f.descripcion },
     { label: 'Categoría', get: f => f.categoria },
@@ -81,7 +81,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
         leyenda="inv_exceso"
         subtitulo={`${fmtInt(exceso.length)} artículos · cambia el objetivo arriba a la derecha`}
         sinPadding
-        extra={<button onClick={exportarExceso} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> CSV</button>}
+        extra={<button onClick={exportarExceso} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
       >
         <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
           <table className="w-full">
@@ -112,7 +112,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
               ))}
             </tbody>
           </table>
-          {exceso.length > 200 && <p className="px-5 py-3 text-xs text-[var(--text-muted)]">Mostrando 200 de {fmtInt(exceso.length)}; el CSV trae todos.</p>}
+          {exceso.length > 200 && <p className="px-5 py-3 text-xs text-[var(--text-muted)]">Mostrando 200 de {fmtInt(exceso.length)}; el Excel trae todos.</p>}
         </div>
       </Seccion>
 
@@ -122,7 +122,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
         leyenda="inv_quiebre"
         subtitulo={<>Artículos con demanda recurrente que hoy están en cero y sin tránsito. Para pedir cantidades, ver <Link to="/compras" className="text-[var(--accent-blue)] hover:underline">Compras › Reposición</Link>.</>}
         sinPadding
-        extra={quiebres.length > 0 && <button onClick={exportarQuiebres} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> CSV</button>}
+        extra={quiebres.length > 0 && <button onClick={exportarQuiebres} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
       >
         <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
           <table className="w-full">

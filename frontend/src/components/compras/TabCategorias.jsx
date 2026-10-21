@@ -5,7 +5,7 @@ import { ArrowDownTrayIcon, ChartBarIcon, Squares2X2Icon } from '@heroicons/reac
 import { endpoints } from '../../services/cfoApi'
 import { cambiarNivel } from '../ventas/FiltroProducto'
 import { nivelSiguiente } from './TabResumen'
-import { Cargando, Delta, Seccion, Th, exportarCSV, fmtFecha, fmtInt, fmtM, fmtPrecio, fmtQ, ordenar, td, tooltipStyle } from './comun'
+import { Cargando, Delta, Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, fmtPrecio, fmtQ, ordenar, td, tooltipStyle } from './comun'
 
 export default function TabCategorias({ filtros, clave, producto, setProducto }) {
   const nivel = nivelSiguiente(producto)
@@ -22,7 +22,7 @@ export default function TabCategorias({ filtros, clave, producto, setProducto })
   if (isLoading && !d) return <Cargando alto="h-96" />
 
   const top = (d?.items || []).slice(0, 10).map(i => ({ ...i, corto: i.nombre?.length > 22 ? i.nombre.slice(0, 21) + '…' : i.nombre }))
-  const exportar = () => exportarCSV(`compras_por_${nivel.dim}.csv`, [
+  const exportar = () => exportarExcel(`compras_por_${nivel.dim}.xlsx`, [
     { label: nivel.singular, get: i => i.nombre },
     ...(esArticulo ? [{ label: 'Código', get: i => i.clave }] : []),
     { label: 'Compras sin IVA', get: i => i.gasto.toFixed(2) },
@@ -61,7 +61,7 @@ export default function TabCategorias({ filtros, clave, producto, setProducto })
         sinPadding
         extra={
           <button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1">
-            <ArrowDownTrayIcon className="w-4 h-4" /> CSV
+            <ArrowDownTrayIcon className="w-4 h-4" /> Excel
           </button>
         }
       >

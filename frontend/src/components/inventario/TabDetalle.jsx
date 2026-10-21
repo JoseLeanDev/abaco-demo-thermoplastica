@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, ListBulletIcon, MagnifyingGlassIcon, TruckIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import { Seccion, Th, exportarCSV, fmtInt, fmtM, fmtQ, ordenar, td } from '../compras/comun'
+import { Seccion, Th, exportarExcel, fmtInt, fmtM, fmtQ, ordenar, td } from '../compras/comun'
 import { ABC, CLASE, ESTADO, TRAMOS, excesoDe, fmtDias, fmtNum, normalizar } from './datos'
 import { colorDias } from './TabResumen'
 import { EstadoBadge } from './TabAccion'
@@ -69,7 +69,7 @@ export default function TabDetalle({ filas, dias, objetivo, vista, setVista }) {
   }, [filas, dias, objetivo, rapido, tramo, busqueda, orden])
   const suma = lista.reduce((s, f) => s + f.valor, 0)
 
-  const exportar = () => exportarCSV('inventario_detalle.csv', COLUMNAS_DETALLE(dias, objetivo), lista)
+  const exportar = () => exportarExcel('inventario_detalle.xlsx', COLUMNAS_DETALLE(dias, objetivo), lista)
 
   return (
     <Seccion
@@ -77,7 +77,7 @@ export default function TabDetalle({ filas, dias, objetivo, vista, setVista }) {
       titulo="Detalle por artículo"
       subtitulo={`${fmtInt(lista.length)} artículos · ${fmtM(suma)} en stock`}
       sinPadding
-      extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> CSV</button>}
+      extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
     >
       <div className="px-5 pb-4 flex items-center gap-2 flex-wrap">
         <div className="relative">

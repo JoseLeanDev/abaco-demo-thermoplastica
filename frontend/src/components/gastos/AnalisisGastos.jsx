@@ -26,7 +26,7 @@ import { PeriodoActivo } from '../common/FiltroPeriodo'
 import { Leyenda } from '../common/leyendas'
 import PageInsights from '../agents/PageInsights'
 import {
-  Cargando, Delta, Kpi, Seccion, Th, exportarCSV, fmtFecha, fmtInt, fmtM, fmtMes, fmtQ, ordenar, td, th, tooltipStyle,
+  Cargando, Delta, Kpi, Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, fmtMes, fmtQ, ordenar, td, th, tooltipStyle,
 } from '../compras/comun'
 
 /**
@@ -89,7 +89,7 @@ export default function AnalisisGastos({ centroFijo = null, titulo, icono: Icono
     setExportando(true)
     try {
       const res = await endpoints.gastos.detalle({ ...filtrosDetalle, limit: 20000 })
-      exportarCSV(`gastos_${(centro || 'operativos').toLowerCase().replace(/\W+/g, '_')}_${periodo.desde}_${periodo.hasta}.csv`, COLUMNAS_LINEAS, res?.data?.filas || [])
+      await exportarExcel(`gastos_${(centro || 'operativos').toLowerCase().replace(/\W+/g, '_')}_${periodo.desde}_${periodo.hasta}.xlsx`, COLUMNAS_LINEAS, res?.data?.filas || [])
     } finally {
       setExportando(false)
     }
@@ -523,7 +523,7 @@ function GastoVsVentas({ d }) {
 function Conceptos({ d, mostrarCentros, onConcepto }) {
   const [orden, setOrden] = useState({ col: 'gasto', dir: 'desc' })
   const items = useMemo(() => ordenar(d.conceptos, orden), [d, orden])
-  const exportar = () => exportarCSV('conceptos_gasto.csv', [
+  const exportar = () => exportarExcel('conceptos_gasto.xlsx', [
     { label: 'Cuenta', get: c => c.cuenta },
     { label: 'Concepto', get: c => c.concepto },
     { label: 'Rubro', get: c => c.rubro_label },
@@ -544,7 +544,7 @@ function Conceptos({ d, mostrarCentros, onConcepto }) {
       leyenda="concepto_gasto"
       subtitulo="Clic en un concepto para ver en qué consiste: proveedores, facturas y 24 meses de historia"
       sinPadding
-      extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> CSV</button>}
+      extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
     >
       <div className="overflow-x-auto">
         <table className="w-full">
