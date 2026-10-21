@@ -115,3 +115,18 @@ anterior y restaurar las definiciones previas de las vistas analíticas; no borr
 compras/ventas ni recalcular costos ERP. El respaldo inicial de definiciones se
 conservó en el expediente local `vistas-originales.json`; el worker respalda sus
 archivos en `/opt/thermoplastica/respaldo-cpp-20261021T225811Z`.
+
+## Publicación comprobada
+
+Commit de aplicación `eff3de4`, desplegado automáticamente desde `main`. GitHub
+registró `success` para el servicio web (21-oct-2026 23:09:34 UTC) y el scheduler
+(23:08:50 UTC). Se comprobó HTTP 200 de `/api/health`, la ruta SPA de Márgenes y
+el bundle publicado, con las leyendas nuevas de CPP. El contenedor de ingesta
+quedó `running/healthy`; el healthcheck confirmó importación 2 publicada.
+
+Validación: 40 pruebas del calculador/adaptadores, 5 pruebas SQL en READ ONLY,
+26 rutas locales con la base real y conciliación comercial de 18/19 categorías
+con costo. Los resultados de Laminados también coinciden usando el rol real
+`agente_ia`. Se regeneraron los cuatro insights del playbook de márgenes con el
+agregado nuevo. La comprobación visual autenticada en producción quedó pendiente
+de iniciar sesión: no se considera cubierta por las pruebas HTTP locales.
