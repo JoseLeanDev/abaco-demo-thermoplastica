@@ -9,6 +9,7 @@ import { endpoints } from '../../services/cfoApi'
 import { Cargando, fmtMes, fmtPrecio, fmtQ, tooltipStyle } from './comun'
 
 const SERVICIOS = [90, 95, 97.5, 99]
+const LEADS = [15, 30, 45, 60, 75, 90, 120, 150, 180]
 const n0 = (x) => Math.round(Number(x) || 0).toLocaleString('es-GT')
 const n1 = (x, d = 1) => Number(x || 0).toLocaleString('es-GT', { maximumFractionDigits: d, minimumFractionDigits: d })
 const DIA_MS = 86400000
@@ -70,9 +71,11 @@ function Variable({ simbolo, nombre, valor, sub }) {
 // dientes de sierra (existencias vs tiempo) y la fórmula con sus valores.
 export default function DetalleReorden({ item, params, onClose }) {
   const [servicio, setServicio] = useState(95)
-  const { data, isLoading, error } = useQuery(
-    ['compras-reorden', item.codigo, params.meses_consumo, params.lead_time, params.horizonte_meses, servicio],
-    () => endpoints.compras.reorden(item.codigo, { ...params, nivel_servicio: servicio }),
+  // Lead time propio del popup (default 45 días): recalcula la fórmula y la gráfica
+  const [lead, setLead] = useState(45)
+  const { data, isLoading, error, isPreviousData } = useQuery(
+    ['compras-reorden', item.codigo, params.meses_consumo, lead, params.horizonte_meses, servicio],
+    () => endpoints.compras.reorden(item.codigo, { ...params, lead_time: lead, nivel_servicio: servicio }),
     { keepPreviousData: true, staleTime: 60_000 }
   )
 
@@ -86,7 +89,7 @@ export default function DetalleReorden({ item, params, onClose }) {
   const r = data?.data
   const c = r?.calculo
   const P = r?.parametros
-  const L = P?.lead_time_dias || params.lead_time
+  const L = P?.lead_time_dias || lead
   const sim = useMemo(() => (c ? simular(c, L) : { puntos: [], pedidos: [] }), [c, L])
   const primero = sim.pedidos[0]
   const mediaMensual = c?.demanda_mensual || 0
@@ -102,6 +105,12 @@ export default function DetalleReorden({ item, params, onClose }) {
             <h2 className="text-lg font-semibold">{item.descripcion}</h2>
           </div>
           <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-xs">
+              <span className="text-[var(--text-muted)]">Lead time</span>
+              <select value={lead} onChange={(e) => setLead(Number(e.target.value))} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 py-1 text-sm">
+                {LEADS.map(l => <option key={l} value={l}>{l} días</option>)}
+              </select>
+            </label>
             <label className="flex items-center gap-1.5 text-xs">
               <span className="text-[var(--text-muted)]">Nivel de servicio</span>
               <select value={servicio} onChange={(e) => setServicio(Number(e.target.value))} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 py-1 text-sm">
@@ -121,7 +130,7 @@ export default function DetalleReorden({ item, params, onClose }) {
         ) : !(c.demanda_diaria > 0) ? (
           <p className="p-6 text-sm text-[var(--text-muted)]">Sin demanda en los últimos {P.meses_consumo} meses: no hay punto de reorden que calcular.</p>
         ) : (
-          <div className="p-6 space-y-6">
+          <div className={`p-6 space-y-6 transition-opacity ${isPreviousData ? "opacity-50" : ""}`}>
             {/* Veredicto */}
             <div className={`p-4 rounded-lg border flex flex-wrap items-center gap-x-6 gap-y-2 ${c.posicion <= c.rop ? 'border-rose-500/30 bg-rose-500/10' : 'border-emerald-500/30 bg-emerald-500/10'}`}>
               <div>
@@ -145,7 +154,7 @@ export default function DetalleReorden({ item, params, onClose }) {
             <div>
               <h3 className="text-sm font-semibold mb-1">Existencias proyectadas vs tiempo</h3>
               <p className="text-xs text-[var(--text-muted)] mb-2">
-                Consumo constante de {n1(c.demanda_diaria)} uds/día desde hoy. Cuando la posición toca el punto de reorden se emite el pedido; llega {L} días después (lead time).
+                Consumo constante de {n1(c.demanda_diaria, c.demanda_diaria < 1 ? 2 : 1)} uds/día desde hoy. Cuando la posición toca el punto de reorden se emite el pedido; llega {L} días después (lead time).
               </p>
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={sim.puntos} margin={{ top: 20, right: 120, bottom: 5, left: 0 }}>
@@ -231,7 +240,7 @@ export default function DetalleReorden({ item, params, onClose }) {
                   <div className="grid grid-cols-2 gap-2">
                     <Variable simbolo="d̄" nombre="demanda diaria" valor={`${n1(c.demanda_diaria, 2)} uds`} sub={`${n0(c.demanda_mensual)} uds/mes`} />
                     <Variable simbolo="σd" nombre="desviación diaria" valor={`${n1(c.sigma_diaria, 2)} uds`} sub={`σ mensual ${n0(c.sigma_mensual)}`} />
-                    <Variable simbolo="L" nombre="lead time" valor={`${L} días`} sub="selector Lead de la tabla" />
+                    <Variable simbolo="L" nombre="lead time" valor={`${L} días`} sub="selector Lead time (arriba)" />
                     <Variable simbolo="Z" nombre="nivel de servicio" valor={P.z} sub={`${P.nivel_servicio}% de ciclos sin quiebre`} />
                     <Variable simbolo="N" nombre="meses de historia" valor={P.meses_consumo} sub={`demanda = ${fuente}`} />
                     <Variable simbolo="Pos." nombre="stock + tránsito" valor={`${n0(c.posicion)} uds`} sub={`${n0(c.stock_actual)} + ${n0(c.stock_transito)} tránsito`} />
