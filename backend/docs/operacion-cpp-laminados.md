@@ -128,5 +128,56 @@ Validación: 40 pruebas del calculador/adaptadores, 5 pruebas SQL en READ ONLY,
 26 rutas locales con la base real y conciliación comercial de 18/19 categorías
 con costo. Los resultados de Laminados también coinciden usando el rol real
 `agente_ia`. Se regeneraron los cuatro insights del playbook de márgenes con el
-agregado nuevo. La comprobación visual autenticada en producción quedó pendiente
-de iniciar sesión: no se considera cubierta por las pruebas HTTP locales.
+agregado nuevo. La comprobación visual autenticada se completó posteriormente,
+como se detalla abajo.
+
+## Conciliación con sesión autenticada y Excel de Jonathan
+
+Revisión del 21 de octubre de 2026, con la sesión del usuario en producción.
+Se seleccionó Personalizado, 1-ene-2026 a 30-sept-2026, categoría Laminados.
+La pantalla de Márgenes presenta Q29,705,730 de ventas, Q8,966,039 de margen
+MP y 30.2%, consistentes con la publicación de Postgres y su redondeo visual.
+Se revisaron las vistas por categoría, vendedor y cliente, además de ejemplos
+del detalle por producto. Esto cubre esas pantallas observadas; no acredita
+por sí solo revisión visual de todos los módulos ni del Excel exportado.
+
+El archivo original `Reporte a septiembre 2026 (1).xlsx` se volvió a leer sin
+modificarlo. La comparación numérica independiente dio:
+
+- Los 63 CPP de la hoja `11. Productos Margen Bajo` coinciden con el calculador.
+  De ellos, 52 son exclusivamente Laminados y 11 pertenecen a las otras líneas
+  incluidas por el Excel. La comparación de esas otras líneas es diagnóstica;
+  no activa CPP en su publicación de producción.
+- Ejemplos visibles que coinciden con el Excel: M097410155, CPP Q226.05 y margen
+  21.0%; M097410110, CPP Q226.05 y margen 23.4%; M077260150, CPP Q65.09 y margen
+  23.0%. La pantalla deja M135310210 como N/D por falta de CPP.
+- Al reconstruir el alcance más amplio del Excel, 18 de 19 categorías con costo
+  coinciden al centavo en costo MP. ACLAR conserva la diferencia de Q64,084.20
+  de venta y Q48,001.67 de costo; todavía requiere el detalle documental de ALTIAN.
+- Foil de Aluminio coincide en costo, pero tiene Q3,935.46 menos de venta en los
+  datos actuales: la factura 1092096 aparece con Q78,916.50 frente a Q82,851.96
+  de la referencia. Entre ambos casos, la diferencia comercial de ventas es
+  Q68,019.66. No se ajustó el costo para compensarla.
+- De los 95 clientes con importe 2026 en la hoja `3. Clientes`, solo EUROFARMA
+  y ALTIAN difieren al normalizar espacios y comparar ese mismo alcance.
+  De los 12 vendedores del resumen, las diferencias actuales se concentran en
+  Sergio Sosa y Virginia Cordón, afectadas por esos casos y por las ventas sin CPP.
+
+Hay dos diferencias de presentación que deben conservarse explícitas:
+
+1. La hoja `11. Productos Margen Bajo` selecciona movimientos con margen menor
+   a 25% antes de agruparlos por artículo. Se reprodujeron así ventas y costos
+   de 62 de sus 63 filas. El artículo restante, M204570210, cambia porque la
+   factura 1092096 queda ahora por debajo del umbral: se incorpora completa
+   a esa selección. La tabla de productos de la aplicación muestra el conjunto
+   de ventas del artículo y su margen agregado; sus ventas no son directamente
+   comparables con ese subconjunto del Excel.
+2. El Excel muestra PVC impreso con costo vacío y margen 100% en la hoja 8.
+   La aplicación aplica el PDF: N/D y exclusión del denominador del margen.
+   Por eso el porcentaje total impreso de la hoja 8 tampoco debe usarse como
+   control idéntico sin corregir su tratamiento de los faltantes.
+
+Conclusión de esta revisión: el CPP de los productos contrastados coincide;
+la conciliación monetaria completa sigue abierta por los dos casos de ventas
+y por las diferencias de alcance y selección descritas. No hubo cambios de
+datos ni de código de producción durante esta comprobación.
