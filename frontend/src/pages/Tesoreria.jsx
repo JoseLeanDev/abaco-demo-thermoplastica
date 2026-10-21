@@ -16,6 +16,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
+import SemaforoCxc from '../components/common/SemaforoCxc'
 
 const fmtQ  = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtM  = (n) => {
@@ -114,6 +115,9 @@ export default function Tesoreria() {
           </p>
         </div>
       </div>
+
+      {/* Semáforo de cartera vencida */}
+      <SemaforoCxc total={cxc.total} vencido={cxc.vencido} link="/tesoreria/cuentas-por-cobrar" cargando={loadingPos} />
 
       {/* Insights del analista diario (vertical cartera) */}
       <PageInsights vertical="cartera" maxInsights={4} />

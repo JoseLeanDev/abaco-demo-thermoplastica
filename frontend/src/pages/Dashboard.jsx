@@ -32,6 +32,7 @@ import {
 } from '@heroicons/react/24/outline'
 import InsightsCarousel from '../components/agents/InsightsCarousel'
 import { Leyenda } from '../components/common/leyendas'
+import SemaforoCxc from '../components/common/SemaforoCxc'
 
 // ============================================================
 // Helpers de formato
@@ -132,7 +133,12 @@ export default function Dashboard() {
         <PnlWaterfall kpis={k} />
       </div>
 
-      {/* ============ 5. AGING CxC + CxP ============ */}
+      {/* ============ 5. SEMÁFORO CARTERA VENCIDA + AGING CxC / CxP ============ */}
+      <SemaforoCxc
+        total={cxcAg.total}
+        vencido={['v_1_30', 'v_31_60', 'v_61_90', 'v_90_mas'].reduce((s, key) => s + (Number(cxcAg[key]) || 0), 0)}
+        link="/tesoreria/cuentas-por-cobrar"
+      />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <AgingCard
           titulo="Antigüedad · Cuentas por Cobrar"
@@ -608,7 +614,7 @@ function AgingCard({ titulo, tono, total, docCount, buckets, link, linkLabel, le
             <p className="text-3xl font-bold tabular-nums">{fmtM(tot)}</p>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">{docCount || 0} documentos · vencido {fmtM(vencido)} ({pctVencido.toFixed(1)}%)</p>
           </div>
-          {pctVencido >= 20 && (
+          {!isCobrar && pctVencido >= 20 && (
             <span className="px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider bg-rose-500/10 text-rose-500 border border-rose-500/20">
               Riesgo alto
             </span>

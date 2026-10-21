@@ -38,7 +38,6 @@ export default function Login() {
               className="h-24 w-auto object-contain rounded-lg"
             />
           </div>
-          <p className="text-sm text-[var(--text-muted)] mt-2">Inteligencia Financiera para CEOs</p>
         </div>
 
         {/* Login Card */}

@@ -651,6 +651,10 @@ export const LEYENDAS = {
     titulo: 'Efectivo en bancos',
     texto: <>El ERP actual no expone saldos bancarios, por eso no se muestra.</>,
   },
+  cxc_vencida_pct: {
+    titulo: 'Cartera vencida (%)',
+    texto: <>Saldo de documentos de clientes que ya pasaron su fecha de vencimiento ÷ saldo total por cobrar, del último corte del reporte de cartera del ERP (documentos emitidos en el período). Semáforo: más de 30% rojo, de 25% a 30% amarillo, menos de 25% verde.</>,
+  },
   cxc_total: {
     titulo: 'Por cobrar (CxC)',
     texto: <>Saldo pendiente de documentos de clientes emitidos en el período, según el último corte del reporte de cartera del ERP.</>,
