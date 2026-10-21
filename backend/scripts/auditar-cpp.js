@@ -47,12 +47,14 @@ async function leerPostgres() {
       )
       SELECT ${campos},${extra}
       FROM raw_thermoplastica.${tabla} r JOIN ultimo u USING(source_row_hash,batch_id)
-      WHERE r.fec_emis BETWEEN $1::date AND $2::date ${filtro}`;
-    const ventas = (await db.query(baseRaw('ventas_lineas', 'r.cliente,r.nombre_vendedor', 'AND btrim(r.linea)=ANY($3::text[])'), [args.desde, args.hasta, LINEAS])).rows;
-    const categorias = [...new Set(ventas.map((r) => String(r.categoria ?? '').trim()))];
-    // Una compra de otro artículo puede financiar el CPP del grupo. Se limita
-    // por categoría, conservando todas las sublíneas/colores para L2/L3.
-    const compras = (await db.query(baseRaw('compras_lineas', 'r.proveedor', 'AND btrim(r.categoria)=ANY($3::text[])'), [inicioCompras, args.corte, categorias])).rows;
+      WHERE ${filtro}`;
+    const ventas = (await db.query(baseRaw('ventas_lineas', 'r.cliente,r.nombre_vendedor', 'r.fec_emis BETWEEN $1::date AND $2::date AND btrim(r.linea)=ANY($3::text[])'), [args.desde, args.hasta, LINEAS])).rows;
+    const categorias = [...new Set(ventas.filter((r) => String(r.linea ?? '').trim() === 'Laminados').map((r) => String(r.categoria ?? '').trim()))];
+    const articulos = [...new Set(ventas.filter((r) => String(r.linea ?? '').trim() !== 'Laminados').map((r) => String(r.codigo_articulo ?? '').trim()).filter(Boolean))];
+    // Laminados conserva sus grupos de categoría. Las otras líneas recuperan
+    // todo el historial de sus propios SKUs, incluso si cambió su clasificación.
+    const compras = (await db.query(baseRaw('compras_lineas', 'r.proveedor', `r.fec_emis <= $2::date AND
+      ((r.fec_emis >= $1::date AND btrim(r.categoria)=ANY($3::text[])) OR btrim(r.codigo_articulo)=ANY($4::text[]))`), [inicioCompras, args.corte, categorias, articulos])).rows;
     const historial = (await db.query('SELECT min(fec_emis)::text AS primera_compra FROM raw_thermoplastica.compras_lineas')).rows[0];
     await db.query('ROLLBACK');
     return { compras, ventas, historial };
@@ -65,8 +67,11 @@ async function main() {
     const d = JSON.parse(fs.readFileSync(args.datos, 'utf8'));
     datos = { compras: ultimoBatch(d[0]), ventas: ultimoBatch(d[1]), historial: null };
     datos.ventas = datos.ventas.filter((r) => LINEAS.includes(String(r.linea ?? '').trim()) && r.fec_emis.slice(0, 10) >= args.desde && r.fec_emis.slice(0, 10) <= args.hasta);
-    const categorias = new Set(datos.ventas.map((r) => String(r.categoria ?? '').trim()));
-    datos.compras = datos.compras.filter((r) => categorias.has(String(r.categoria ?? '').trim()));
+    const categorias = new Set(datos.ventas.filter((r) => String(r.linea ?? '').trim() === 'Laminados').map((r) => String(r.categoria ?? '').trim()));
+    const articulos = new Set(datos.ventas.filter((r) => String(r.linea ?? '').trim() !== 'Laminados').map((r) => String(r.codigo_articulo ?? '').trim()).filter(Boolean));
+    const inicioCompras = `${Number(args.desde.slice(0, 4)) - 1}-01-01`;
+    datos.compras = datos.compras.filter((r) => r.fec_emis.slice(0, 10) <= args.corte &&
+      ((r.fec_emis.slice(0, 10) >= inicioCompras && categorias.has(String(r.categoria ?? '').trim())) || articulos.has(String(r.codigo_articulo ?? '').trim())));
   } else datos = await leerPostgres();
   const cpp = crearCalculador(datos.compras, { corte: args.corte });
   const filas = datos.ventas.map(cpp.calcularVenta);
@@ -87,8 +92,8 @@ async function main() {
     tipo: 'auditoria_cpp_sin_activar_en_produccion', creado_en: new Date().toISOString(),
     periodo_ventas: { desde: args.desde, hasta: args.hasta }, corte_compras: cpp.corte,
     primera_compra_disponible: datos.historial?.primera_compra || cpp.primeraCompra,
-    criterio: 'Aplicación literal del documento de Laminados a modo de simulación; requiere validar los respaldos de categoría antes de extenderlos a otras líneas.',
-    pendiente: ['Confirmar unidad común de compra y venta y homogeneidad de los grupos en las tres líneas distintas de Laminados.', 'Definir si es válido usar categoría completa antes de una compra anterior del mismo SKU/presentación en las otras tres líneas.', 'Revisar grupos de CPP que contienen compras de varias líneas.', 'Resolver diferencias de alcance y datos frente al reporte de referencia.'],
+    criterio: 'Laminados conserva la jerarquía del PDF. Empaques, Tapas y Valvulas e Inyectables usan únicamente compras del mismo código: año de venta, luego años anteriores disponibles de más reciente a más antiguo, priorizando H2 antes del año completo.',
+    pendiente: ['Confirmar la unidad de compra y venta por artículo en las tres líneas distintas de Laminados.', 'Completar el historial de compras propias anterior al inicio de la ingesta para los artículos que siguen sin CPP.', 'Revisar compras del mismo código que aparecen en varias líneas.', 'Resolver diferencias de alcance y datos de Laminados frente al reporte de referencia.'],
     resumen: resumir(filas), lineas: grupos, incidencias_compras: cpp.incidencias,
     excluidas: filas.filter((r) => r.excluida).reduce((a, r) => { a[r.motivo] = (a[r.motivo] || 0) + 1; return a; }, {}),
   };

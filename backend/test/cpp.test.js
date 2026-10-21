@@ -2,8 +2,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { crearCalculador, resumir, fleteCompra } = require('../src/services/cpp');
 
-const compra = (r = {}) => ({ fec_emis: '2026-02-01', tipo_doc: 'FACT', linea: 'Laminados', categoria: 'PVC', sublinea: '250 micras', color: 'Cristal', unidades: 100, total_sin_iva: 2000, proveedor: 'Otro', ...r });
-const venta = (r = {}) => ({ fec_emis: '2026-01-10', linea: 'Laminados', categoria: 'PVC', sublinea: '250 micras', color: 'Cristal', unidades: 10, total_sin_iva: 300, cliente: 'Externo', ...r });
+const compra = (r = {}) => ({ fec_emis: '2026-02-01', tipo_doc: 'FACT', codigo_articulo: 'SKU1', linea: 'Laminados', categoria: 'PVC', sublinea: '250 micras', color: 'Cristal', unidades: 100, total_sin_iva: 2000, proveedor: 'Otro', ...r });
+const venta = (r = {}) => ({ fec_emis: '2026-01-10', codigo_articulo: 'SKU1', linea: 'Laminados', categoria: 'PVC', sublinea: '250 micras', color: 'Cristal', unidades: 10, total_sin_iva: 300, cliente: 'Externo', ...r });
 const engine = (rows) => crearCalculador(rows, { corte: '2026-09-30' });
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
 
@@ -103,13 +103,66 @@ test('la procedencia conserva las líneas mezcladas para revisión', () => {
   assert.deepEqual(r.advertencias, ['grupo_cpp_con_varias_lineas']);
   assert.deepEqual(r.fuente.lineas, ['Almacén General', 'Laminados']);
 });
-test('un respaldo por categoría en Inyectables se identifica como provisional', () => {
-  const c = engine([compra({ linea: 'Inyectables', sublinea: 'Otra presentación', color: 'Ambar' })]);
-  const r = c.calcularVenta(venta({ linea: 'Inyectables' }));
-  assert.equal(r.fuente_cpp, 'L3');
-  assert.equal(r.es_provisional, true);
-  assert.ok(r.advertencias.includes('respaldo_categoria_en_linea_no_validada'));
-  assert.equal(resumir([r]).ventas_pendientes_revision, 300);
+for (const linea of ['Empaques para alimentos', 'Tapas y Valvulas', 'Inyectables']) {
+  test(`${linea}: usa compras anteriores propias antes que compras actuales de otros artículos`, () => {
+    const c = engine([
+      compra({ linea, codigo_articulo: 'SKU2', total_sin_iva: 10000 }),
+      compra({ linea, fec_emis: '2025-08-01', total_sin_iva: 60000 }),
+    ]);
+    const r = c.calcularVenta(venta({ linea }));
+    close(r.cpp, 600);
+    assert.equal(r.fuente_cpp, 'SKU_H2_ANTERIOR');
+    assert.equal(r.fuente.nivel, 'articulo');
+    assert.deepEqual(r.fuente.llave, ['SKU1']);
+    assert.equal(r.es_provisional, true);
+  });
+}
+test('por artículo pondera solo sus compras actuales aunque cambie su categoría', () => {
+  const linea = 'Inyectables';
+  const c = engine([
+    compra({ linea, codigo_articulo: 'SKU2', total_sin_iva: 100000 }),
+    compra({ linea, codigo_articulo: ' SKU1 ', categoria: 'Anterior', unidades: 10, total_sin_iva: 100 }),
+    compra({ linea, unidades: 90, total_sin_iva: 2700 }),
+    compra({ linea, fec_emis: '2025-08-01', total_sin_iva: 60000 }),
+  ]);
+  const r = c.buscar(venta({ linea }));
+  close(r.cpp, 28); assert.equal(r.fuente_cpp, 'SKU_ANIO');
+});
+test('por artículo elige el año anterior más reciente disponible, incluso anterior a A-1', () => {
+  const linea = 'Tapas y Valvulas';
+  const c = engine([
+    compra({ linea, fec_emis: '2023-08-01', total_sin_iva: 3000 }),
+    compra({ linea, fec_emis: '2024-02-01', total_sin_iva: 4000 }),
+    compra({ linea, fec_emis: '2024-08-01', total_sin_iva: 6000 }),
+    compra({ linea, codigo_articulo: 'SKU2', fec_emis: '2025-08-01', total_sin_iva: 10000 }),
+  ]);
+  const r = c.buscar(venta({ linea }));
+  close(r.cpp, 60); assert.equal(r.fuente.anio, 2024); assert.equal(r.fuente.ventana, 'h2');
+});
+test('por artículo usa el año anterior completo cuando no hubo compra propia en H2', () => {
+  const linea = 'Empaques para alimentos';
+  const c = engine([
+    compra({ linea, fec_emis: '2025-02-01', total_sin_iva: 3000 }),
+    compra({ linea, codigo_articulo: 'SKU2', fec_emis: '2025-08-01', total_sin_iva: 9000 }),
+    compra({ linea, fec_emis: '2024-08-01', total_sin_iva: 1000 }),
+  ]);
+  const r = c.buscar(venta({ linea }));
+  close(r.cpp, 30); assert.equal(r.fuente_cpp, 'SKU_ANIO_ANTERIOR'); assert.equal(r.fuente.anio, 2025);
+});
+test('sin compras propias no toma CPP de otros artículos ni manuales de Laminados', () => {
+  const linea = 'Inyectables';
+  for (const categoria of ['PVC', 'Aluminio Impreso', 'Foil de Aluminio']) {
+    const campos = { linea, categoria, sublinea: '25 micras', color: 'Mate' };
+    const r = engine([compra({ ...campos, codigo_articulo: 'SKU2' })]).calcularVenta(venta(campos));
+    assert.equal(r.cpp, null); assert.equal(r.fuente_cpp, 'sin_cpp'); assert.equal(r.margen_mp, null);
+  }
+  const r = engine([compra({ linea, codigo_articulo: '' })]).buscar(venta({ linea, codigo_articulo: null }));
+  assert.equal(r.fuente_cpp, 'articulo_sin_codigo'); assert.equal(r.cpp, null);
+});
+test('una compra incompleta de otro artículo no bloquea el CPP propio', () => {
+  const linea = 'Inyectables';
+  const c = engine([compra({ linea }), compra({ linea, codigo_articulo: 'SKU2', unidades: null })]);
+  close(c.buscar(venta({ linea })).cpp, 20);
 });
 test('una llave No Aplica no se presenta sin advertencia', () => {
   const campos = { categoria: 'No Aplica', sublinea: 'No Aplica', color: 'No Aplica' };

@@ -1,4 +1,5 @@
-// CPP comercial según la metodología de Jonathan (21-oct-2026).
+// CPP comercial: Laminados según Jonathan; las otras tres líneas solo usan
+// compras del mismo artículo, según la indicación del usuario (21-oct-2026).
 // Cálculo puro: no consulta ni escribe en la base y todavía no sustituye margen.js.
 // Las cantidades se conservan en la unidad del exporte. La compatibilidad entre
 // compras/ventas y entre artículos agrupados debe validarse antes de publicar.
@@ -39,7 +40,9 @@ function fleteCompra(r) {
   return { por_unidad: porKg, estado: 'flete_pdf' };
 }
 
-const llave = (r, nivel) => JSON.stringify(['categoria', 'sublinea', 'color'].slice(0, nivel).map((k) => limpiar(r[k])));
+const llave = (r, nivel) => JSON.stringify(nivel === 'articulo'
+  ? [limpiar(r.codigo_articulo)]
+  : ['categoria', 'sublinea', 'color'].slice(0, nivel).map((k) => limpiar(r[k])));
 const idTabla = (anio, ventana, nivel, key) => JSON.stringify([anio, ventana, nivel, key]);
 
 function crearCalculador(compras, { corte } = {}) {
@@ -50,6 +53,7 @@ function crearCalculador(compras, { corte } = {}) {
     throw new Error('El corte de CPP debe corresponder al último día de un mes cerrado.');
   }
   const grupos = new Map();
+  const aniosPorArticulo = new Map();
   const incidencias = [];
   let primeraCompra = null;
   for (const r of compras) {
@@ -66,9 +70,15 @@ function crearCalculador(compras, { corte } = {}) {
       incidencias.push({ motivo: error, factura: r.fact_num, articulo: r.codigo_articulo });
     }
     const anio = Number(f.slice(0, 4)), mes = Number(f.slice(5, 7));
+    const codigo = limpiar(r.codigo_articulo);
+    if (codigo) {
+      if (!aniosPorArticulo.has(codigo)) aniosPorArticulo.set(codigo, new Set());
+      aniosPorArticulo.get(codigo).add(anio);
+    }
     primeraCompra = primeraCompra === null || f < primeraCompra ? f : primeraCompra;
     for (const ventana of mes >= 7 ? ['full', 'h2'] : ['full']) {
-      for (const nivel of [3, 2, 1]) {
+      for (const nivel of [3, 2, 1, 'articulo']) {
+        if (nivel === 'articulo' && !codigo) continue;
         const id = idTabla(anio, ventana, nivel, llave(r, nivel));
         if (!grupos.has(id)) grupos.set(id, { cantidad: 0, costo: 0, flete: 0, filas: 0, lineas: new Set(), errores: new Set(), desde: f, hasta: f });
         const g = grupos.get(id);
@@ -89,10 +99,21 @@ function crearCalculador(compras, { corte } = {}) {
     const f = fecha(r.fec_emis);
     if (!f || f > corte) return { cpp: null, fuente_cpp: 'fuera_de_corte' };
     const anio = Number(f.slice(0, 4));
-    if (anio === 2026 && limpiar(r.categoria) === 'Foil de Aluminio' && limpiar(r.sublinea) === '25 micras' && limpiar(r.color) === 'Mate') {
+    const porArticulo = LINEAS.includes(limpiar(r.linea)) && limpiar(r.linea) !== 'Laminados';
+    if (porArticulo && !limpiar(r.codigo_articulo)) {
+      return { cpp: null, fuente_cpp: 'articulo_sin_codigo', advertencias: [] };
+    }
+    if (!porArticulo && anio === 2026 && limpiar(r.categoria) === 'Foil de Aluminio' && limpiar(r.sublinea) === '25 micras' && limpiar(r.color) === 'Mate') {
       return { cpp: 75.99, fuente_cpp: 'manual_override', advertencias: [] };
     }
-    const orden = [[anio, 'full', 3], [anio, 'full', 2], [anio, 'full', 1],
+    // Para las tres líneas por artículo se recorre su historial disponible,
+    // del año más reciente al más antiguo. Se conserva la preferencia H2/full
+    // del documento dentro de cada año anterior; nunca se mezclan otros SKUs.
+    const anteriores = porArticulo ? [...(aniosPorArticulo.get(limpiar(r.codigo_articulo)) || [])]
+      .filter((a) => a < anio).sort((a, b) => b - a) : [];
+    const orden = porArticulo ? [[anio, 'full', 'articulo'],
+      ...anteriores.flatMap((a) => [[a, 'h2', 'articulo'], [a, 'full', 'articulo']])]
+      : [[anio, 'full', 3], [anio, 'full', 2], [anio, 'full', 1],
       [anio - 1, 'h2', 3], [anio - 1, 'h2', 2], [anio - 1, 'h2', 1],
       [anio - 1, 'full', 3], [anio - 1, 'full', 2], [anio - 1, 'full', 1]];
     for (let i = 0; i < orden.length; i += 1) {
@@ -104,12 +125,12 @@ function crearCalculador(compras, { corte } = {}) {
       if (g.cantidad <= 0 || g.costo <= 0) continue;
       return {
         cpp: g.costo / g.cantidad,
-        fuente_cpp: `L${i + 1}`,
+        fuente_cpp: porArticulo ? (a === anio ? 'SKU_ANIO' : v === 'h2' ? 'SKU_H2_ANTERIOR' : 'SKU_ANIO_ANTERIOR') : `L${i + 1}`,
         fuente: { anio: a, ventana: v, nivel: n, llave: JSON.parse(llave(r, n)), cantidad_comprada: g.cantidad, costo_compras: g.costo, flete: g.flete, filas: g.filas, lineas: [...g.lineas].sort(), desde: g.desde, hasta: g.hasta },
         advertencias: g.lineas.size > 1 ? ['grupo_cpp_con_varias_lineas'] : [],
       };
     }
-    if (Object.hasOwn(MANUALES, limpiar(r.categoria))) {
+    if (!porArticulo && Object.hasOwn(MANUALES, limpiar(r.categoria))) {
       return { cpp: MANUALES[limpiar(r.categoria)], fuente_cpp: 'manual_cpp', advertencias: [] };
     }
     return { cpp: null, fuente_cpp: 'sin_cpp', advertencias: [] };
@@ -128,8 +149,7 @@ function crearCalculador(compras, { corte } = {}) {
     const costo = cpp.cpp === null ? null : cantidad * cpp.cpp;
     const margen = costo === null ? null : venta - costo;
     const advertencias = [...(cpp.advertencias || [])];
-    if (linea !== 'Laminados' && cpp.fuente?.nivel === 1) advertencias.push('respaldo_categoria_en_linea_no_validada');
-    if (['categoria', 'sublinea', 'color'].every((k) => ['', 'NO APLICA'].includes(normalizar(r[k])))) advertencias.push('clave_totalmente_generica');
+    if (linea === 'Laminados' && ['categoria', 'sublinea', 'color'].every((k) => ['', 'NO APLICA'].includes(normalizar(r[k])))) advertencias.push('clave_totalmente_generica');
     return {
       ...base, ...cpp, advertencias, es_provisional: base.estado_unidad !== 'documentada_pdf' || advertencias.length > 0,
       venta, cantidad, costo_mp: costo, margen_mp: margen,
