@@ -44,7 +44,7 @@ test('ventas sin CPP permanecen N/D y una devolución con costo sí suma', () =>
   const p = r.data.productos.find((r) => r.sku === 'SKU2');
   assert.equal(p.costo_actual, null); assert.equal(p.margen_pct_actual, null); assert.equal(p.margen_q, null);
 });
-test('excluye ventas internas y meses abiertos; Colgate aparece una sola vez en Gerencia', () => {
+test('excluye internas y ventas fuera del período; Colgate se reasigna a Gerencia', () => {
   const r = reporte([venta({ cliente:'C1-Thermoplástica' }), venta({ cliente:'C2-COLGATE', codigo_cliente:'C2' }), venta({ fec_emis:'2026-10-01' }), venta({ linea:'Inyectables' })]);
   assert.equal(r.actual.length, 1); assert.equal(r.items('vendedor')[0].nombre, 'Gerencia Laminados');
 });
@@ -82,4 +82,11 @@ test('no acepta un corte abierto ni usa el filtro de producto para reducir compr
   await obtenerReporte(req, null, { now:new Date('2026-10-21T12:00:00Z'), cargar:async (_pool, args) => { opciones=args; return {ventas:[venta()],compras:[compra()],articulos:[]}; } });
   assert.deepEqual(Object.keys(opciones).sort(), ['corte','desde','hasta']);
   await assert.rejects(obtenerReporte({query:{...req.query,corte_cpp:'2026-10-31'}}, null, {now:new Date('2026-10-21T12:00:00Z')}), /cerrados/);
+});
+
+test('mes abierto conserva ventas y deja el CPP pendiente sin sustituir costo ERP',()=>{
+ const p=parsePeriodo({query:{desde:'2026-01-01',hasta:'2026-10-21'}});
+ const r=construirReporte({ventas:[venta(),venta({fec_emis:'2026-10-10',total_sin_iva:900})],compras:[compra()]},p,{corte:'2026-09-30'});
+ close(r.metricas.ventas_totales,1200);close(r.metricas.ventas_con_cpp,300);close(r.metricas.ventas_sin_cpp,900);
+ close(r.metricas.margen_mp,100);assert.equal(r.actual[1].fuente_cpp,'fuera_de_corte');
 });

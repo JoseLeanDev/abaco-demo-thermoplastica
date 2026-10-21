@@ -28,9 +28,9 @@ export const LEYENDAS = {
   margen_bruto: {
     titulo: 'Margen bruto',
     texto: <>
-      Margen % = (ventas − costo) ÷ ventas, usando solo las líneas que traen costo en el ERP
-      (costo = unidades × costo promedio facturado).
-      <Nota>El margen en Q aplica ese % a todas las ventas. Las ventas que vienen sin costo se informan aparte y no entran al %.</Nota>
+      Laminados usa el margen sobre materia prima con CPP de compras de meses cerrados.
+      Las demás líneas conservan unidades × costo promedio facturado del ERP.
+      <Nota>El total suma el margen conocido de Laminados y el margen estimado de las otras líneas. Las ventas de Laminados sin CPP se excluyen del numerador y denominador; no se les estima utilidad.</Nota>
     </>,
   },
   margen_mp: {
@@ -47,7 +47,7 @@ export const LEYENDAS = {
   },
   pct_sin_costo: {
     titulo: 'Ventas sin costo',
-    texto: <>% de las ventas cuyas líneas llegan del ERP con costo 0. No se cuentan como 100% de margen: se excluyen del margen %.</>,
+    texto: <>% de ventas sin costo disponible: CPP pendiente para Laminados o costo 0 del ERP en las otras líneas. No se cuentan como 100% de margen.</>,
   },
   clientes_compraron: {
     titulo: 'Clientes que compraron',

@@ -53,7 +53,7 @@ function construirReporte(datos, P, { corte, query = {} }) {
   const ids = new Map((datos.articulos || []).map((r) => [trim(r.codigo_articulo), Number(r.articulo_id)]));
   const inicio = P.desde < P.prevDesde ? P.desde : P.prevDesde;
   const fin = P.hasta > P.prevHasta ? P.hasta : P.prevHasta;
-  const filas = datos.ventas.filter((r) => trim(r.linea) === 'Laminados' && r.fec_emis.slice(0, 10) >= inicio && r.fec_emis.slice(0, 10) <= fin && r.fec_emis.slice(0, 10) <= corte).map((r) => c.calcularVenta({ ...r, codigo_articulo: trim(r.codigo_articulo), codigo_cliente: trim(r.codigo_cliente) }))
+  const filas = datos.ventas.filter((r) => trim(r.linea) === 'Laminados' && r.fec_emis.slice(0, 10) >= inicio && r.fec_emis.slice(0, 10) <= fin).map((r) => c.calcularVenta({ ...r, codigo_articulo: trim(r.codigo_articulo), codigo_cliente: trim(r.codigo_cliente) }))
     .filter((r) => !r.excluida);
   const filtradas = filtrar(filas, query);
   const entre = (a, b) => filtradas.filter((r) => r.fec_emis.slice(0, 10) >= a && r.fec_emis.slice(0, 10) <= b);
@@ -94,7 +94,7 @@ function construirReporte(datos, P, { corte, query = {} }) {
     };
   });
   const meta = { metodologia: 'CPP_LAMINADOS_JONATHAN_2026_10_21', corte_cpp: corte, unidad: 'kg',
-    periodo_solicitado: P.ventana(), hasta_efectivo: P.hasta < corte ? P.hasta : corte,
+    periodo_solicitado: P.ventana(), hasta_efectivo: P.hasta,
     fuente: 'snapshots_completos_erp', cargas: datos.metadata || [], incidencias_compras: c.incidencias,
     alcance: 'Solo linea original Laminados; Almacen General y Flexografia se concilian por separado.' };
   return { P, meta, actual, anterior, filas: filtradas, ids, items, metricas: a, metricas_previas: h,
@@ -116,10 +116,11 @@ async function obtenerReporte(req, pool, { now = new Date(), cargar = leerLamina
   if (corte > ultimoMesCerrado(now)) throw Object.assign(new Error('El CPP solo admite compras de meses cerrados.'), { statusCode: 400 });
   const desde = P.desde < P.prevDesde ? P.desde : P.prevDesde;
   const hasta = P.hasta > P.prevHasta ? P.hasta : P.prevHasta;
-  const key = JSON.stringify([desde, hasta, corte]);
+  const publicacion = cargar === leerLaminados ? (await pool.query('SELECT importacion_id FROM thermoplastica.cpp_laminados_publicacion WHERE singleton')).rows[0]?.importacion_id : null;
+  const key = JSON.stringify([desde, hasta, corte, publicacion]);
   let cached = cache.get(key);
   if (cargar !== leerLaminados || !cached || cached.hasta < Date.now()) {
-    const promise = cargar(pool, { desde, hasta: hasta < corte ? hasta : corte, corte });
+    const promise = cargar(pool, { desde, hasta, corte });
     cached = { hasta: Date.now() + 60000, promise };
     if (cargar === leerLaminados) {
       if (cache.size >= 24) cache.delete(cache.keys().next().value);

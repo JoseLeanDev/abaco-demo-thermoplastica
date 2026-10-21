@@ -46,8 +46,10 @@ async function leerPostgres() {
     const compras = (await db.query(consultaSnapshot('compras_lineas', `AND
       ((r.fec_emis >= $5::date AND btrim(r.categoria)=ANY($3::text[])) OR btrim(r.codigo_articulo)=ANY($4::text[]))`), ['1900-01-01', args.corte, categorias, articulos, inicioCompras])).rows;
     const historial = (await db.query('SELECT min(fec_emis)::text AS primera_compra FROM raw_thermoplastica.compras_lineas')).rows[0];
+    const laminados=(await db.query(`SELECT i.compras,i.ventas FROM thermoplastica.cpp_laminados_publicacion p
+      JOIN thermoplastica.cpp_laminados_importacion i ON i.id=p.importacion_id WHERE singleton`)).rows[0];
     await db.query('ROLLBACK');
-    return { compras, ventas, historial };
+    return { compras, ventas, historial, laminados };
   } finally { await db.end(); }
 }
 
@@ -69,7 +71,10 @@ async function main() {
       ((r.fec_emis.slice(0, 10) >= inicioCompras && categorias.has(String(r.categoria ?? '').trim())) || articulos.has(String(r.codigo_articulo ?? '').trim())));
   } else datos = await leerPostgres();
   const cpp = crearCalculador(datos.compras, { corte: args.corte });
-  const filas = datos.ventas.map(cpp.calcularVenta);
+  const cppLam=datos.laminados ? crearCalculador(datos.laminados.compras,{corte:args.corte}) : cpp;
+  const vv=datos.laminados ? [...datos.ventas.filter((r)=>String(r.linea).trim()!=='Laminados'),
+    ...datos.laminados.ventas.filter((r)=>r.fec_emis>=args.desde && r.fec_emis<=args.hasta)] : datos.ventas;
+  const filas = vv.map((v)=>(String(v.linea).trim()==='Laminados'?cppLam:cpp).calcularVenta(v));
   const grupos = {};
   for (const linea of LINEAS) {
     const propias = filas.filter((r) => String(r.linea ?? '').trim() === linea && !r.excluida);
@@ -84,7 +89,7 @@ async function main() {
     };
   }
   const salida = {
-    tipo: 'auditoria_cpp_sin_activar_en_produccion', creado_en: new Date().toISOString(),
+    tipo: datos.laminados ? 'laminados_publicado_otras_lineas_provisionales' : 'auditoria_cpp_sin_activar_en_produccion', creado_en: new Date().toISOString(),
     periodo_ventas: { desde: args.desde, hasta: args.hasta }, corte_compras: cpp.corte,
     primera_compra_disponible: datos.historial?.primera_compra || cpp.primeraCompra,
     advertencia_snapshot: datos.advertencia_snapshot || null,

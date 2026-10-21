@@ -12,7 +12,7 @@ async function cicloPeriodo(db, P) {
     WITH ventas AS (
       SELECT sum(total_sin_iva) AS sin_iva, sum(total_con_iva) AS con_iva, ${M.costo()} AS costo,
              max(fecha_emision) AS fecha_corte
-      FROM thermoplastica.fact_ventas_linea
+      FROM thermoplastica.v_ventas_costeadas
       WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     ),
     compras AS (

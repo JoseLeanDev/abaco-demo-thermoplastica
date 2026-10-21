@@ -787,7 +787,7 @@ router.get('/reposicion/:codigo', async (req, res) => {
       ),
       v AS (
         SELECT DATE_TRUNC('month', fecha_emision)::date AS mes, SUM(unidades) AS u
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE articulo_id = ? AND tipo_doc = 'FACT'
           AND fecha_emision >= DATE_TRUNC('month', CURRENT_DATE) - (? || ' months')::interval
         GROUP BY 1
@@ -806,7 +806,7 @@ router.get('/reposicion/:codigo', async (req, res) => {
 
     // Ventana rolling de N meses (igual que la tabla de reposición)
     const vent = await db.getAsync(`
-      SELECT (SELECT COALESCE(SUM(unidades), 0) FROM thermoplastica.fact_ventas_linea
+      SELECT (SELECT COALESCE(SUM(unidades), 0) FROM thermoplastica.v_ventas_costeadas
               WHERE articulo_id = ? AND tipo_doc = 'FACT'
                 AND fecha_emision >= CURRENT_DATE - (? || ' months')::interval) AS ventas,
              (SELECT COALESCE(SUM(unidades), 0) FROM thermoplastica.fact_compras_linea

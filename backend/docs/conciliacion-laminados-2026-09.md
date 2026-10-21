@@ -1,5 +1,7 @@
 # Conciliación de Laminados — cierre septiembre 2026
 
+**Actualización posterior:** se recuperaron los datos y se integró Laminados a los totales y módulos generales. Ver [operacion-cpp-laminados.md](operacion-cpp-laminados.md). Este documento conserva la comparación anterior a esa recuperación; ACLAR continúa pendiente del detalle del cliente.
+
 Revisión del 21-oct-2026. Comparación de solo lectura entre PostgreSQL, las vistas
 actuales de SQL Server TP_A y el reporte de Jonathan. No se modificaron datos
 del ERP/Postgres ni se publicaron cambios.

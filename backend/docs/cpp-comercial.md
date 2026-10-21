@@ -1,5 +1,7 @@
 # CPP comercial: preparación y auditoría
 
+**Actualización:** el histórico y la integración general de Laminados se implementaron el 21-oct-2026. Estado y operación en [operacion-cpp-laminados.md](operacion-cpp-laminados.md). Las secciones de auditoría inicial conservan sus cifras históricas.
+
 Estado: corrección local conectada al filtro `categoria=Laminados` de Ventas y
 Márgenes, con una sola fuente para resumen, artículos, detalle, vendedores,
 clientes, categorías, series y matriz. No publicada; no se modificaron datos

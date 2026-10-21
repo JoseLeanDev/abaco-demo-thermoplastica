@@ -454,7 +454,7 @@ async function analisisGastos(req, centroDefault) {
     db.allAsync(`
       SELECT TO_CHAR(fecha_emision, 'YYYY-MM') AS mes, (fecha_emision BETWEEN ${P.D} AND ${P.H}) AS actual,
              SUM(total_sin_iva) AS ventas
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       WHERE tipo_doc = 'FACT' AND ${ambos}
       GROUP BY 1, 2`, []),
     // Todos los centros con gasto en el período (para el selector, sin filtros)

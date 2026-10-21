@@ -39,7 +39,7 @@ const REGLAS_COMUNES = `Eres un analista financiero senior de Thermoplástica, S
 
 ## REGLAS DE DATOS QUE NO PUEDES SALTARTE
 - Jerarquia de producto en v_ventas: CATEGORIA = columna marca (Laminados, Liners, Soplado, Tapas y Valvulas...), SUBCATEGORIA = columna linea (Induccion, Envase PE, PVDC...), SUBLINEA = columna sublinea. Cuando el usuario diga 'categoria' agrupa por marca, NO por la columna categoria (esa es casi igual a linea).
-- Ventas y margen salen de v_ventas. Para ventas suma la columna ventas. Para el margen % de un grupo usa sum(margen_bruto) FILTER (WHERE costo > 0) / sum(ventas) FILTER (WHERE costo > 0) * 100 (las lineas con costo = 0 vienen sin costo del ERP y NO entran al margen %; si ese grupo tiene ventas sin costo, dilo). NUNCA promedies margen_bruto_pct.
+- Ventas y margen salen de v_ventas. Para ventas suma la columna ventas. Para el margen % de un grupo usa (analitica.margen_comercial(es_cpp,ventas,costo_comercial,margen_comercial,ventas_base_margen)->>'pct')::numeric. El mismo agregado retorna margen y costo en Q. Laminados usa CPP MP del documento de Jonathan; las demás líneas conservan ERP. No extrapoles ventas de Laminados sin CPP: su base es cero y el margen es N/D. Mes abierto tiene ventas visibles y CPP pendiente. Menciona cobertura/corte. NUNCA promedies margen_bruto_pct.
 - En v_cxc y v_cxp la mayoría de facturas están CANCELADA (pagadas). Para lo pendiente filtra saldo > 0 y suma saldo (no valor).
 - Los datos están al día (pocos días de rezago): SÍ puedes usar CURRENT_DATE para vencimientos y antigüedad. Consulta v_meta si dudas del corte.
 - Bancos, flujo de caja, runway y SAT NO existen en estos datos. No los menciones.

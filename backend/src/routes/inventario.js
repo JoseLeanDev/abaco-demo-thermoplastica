@@ -4,6 +4,15 @@ const db = require('../../database/connection');
 const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
 
+// Rentabilidad realizada de Laminados en el período; la valuación física del
+// inventario sigue usando el costo del ERP. No mezclar ambas medidas.
+function margenInventario(articulo, original, P) {
+  return `(CASE WHEN EXISTS(SELECT 1 FROM thermoplastica.dim_articulo l WHERE l.articulo_id=${articulo} AND l.marca='Laminados')
+    THEN (SELECT ${M.pct('mv')} FROM thermoplastica.v_ventas_costeadas mv WHERE mv.articulo_id=${articulo}
+      AND mv.es_cpp AND mv.tipo_doc='FACT' AND mv.fecha_emision BETWEEN ${P.D} AND ${P.H})
+    ELSE ${original} END)`;
+}
+
 // El stock es la foto más reciente del ERP (no hay historia de snapshots). El filtro
 // de fechas aplica al MOVIMIENTO: ventas y compras del período, rotación y artículos
 // con stock que no se vendieron en la ventana.
@@ -31,7 +40,7 @@ router.get('/', async (req, res) => {
     const mov = await db.getAsync(`
       WITH vend AS (
         SELECT articulo_id, SUM(unidades) AS unidades, ${M.costo()} AS costo
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}
         GROUP BY articulo_id
       )
@@ -56,9 +65,10 @@ router.get('/', async (req, res) => {
         COUNT(*) FILTER (WHERE stock_actual = 0)                                      AS articulos_sin_stock,
         COALESCE(SUM(valor_inventario), 0)                                            AS valor_total,
         COALESCE(SUM(stock_en_transito * COALESCE(costo_promedio, 0)), 0)             AS valor_transito,
-        COUNT(*) FILTER (WHERE margen_bruto_pct IS NOT NULL AND margen_bruto_pct > 0) AS articulos_con_margen,
-        AVG(margen_bruto_pct) FILTER (WHERE margen_bruto_pct > 0)                     AS margen_bruto_promedio
-      FROM thermoplastica.fact_inventario_snapshot
+        COUNT(*) FILTER (WHERE margen_periodo IS NOT NULL AND margen_periodo > 0) AS articulos_con_margen,
+        AVG(margen_periodo) FILTER (WHERE margen_periodo > 0)                     AS margen_bruto_promedio
+      FROM (SELECT inv.*, ${margenInventario('inv.articulo_id','inv.margen_bruto_pct',P)} AS margen_periodo
+        FROM thermoplastica.fact_inventario_snapshot inv) x
     `);
 
     // Distribución por categoría y subcategoría, con el movimiento del período.
@@ -67,7 +77,7 @@ router.get('/', async (req, res) => {
     const porGrupo = (expr, filtroSql, params) => db.allAsync(`
       WITH vend AS (
         SELECT articulo_id, ${M.costo()} AS costo
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}
         GROUP BY articulo_id
       )
@@ -99,7 +109,7 @@ router.get('/', async (req, res) => {
              p.nombre AS proveedor,
              i.stock_actual, i.stock_en_transito,
              i.costo_promedio, i.precio_venta_1,
-             i.valor_inventario, i.margen_bruto_pct
+             i.valor_inventario, ${margenInventario('i.articulo_id','i.margen_bruto_pct',P)} AS margen_bruto_pct
       FROM thermoplastica.fact_inventario_snapshot i
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = i.articulo_id
       LEFT JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = i.proveedor_id
@@ -144,7 +154,7 @@ router.get('/', async (req, res) => {
           articulos_sin_stock: parseInt(kpis.articulos_sin_stock) || 0,
           valor_total: total,
           valor_transito: parseFloat(kpis.valor_transito) || 0,
-          margen_bruto_promedio: parseFloat(kpis.margen_bruto_promedio) || 0,
+          margen_bruto_promedio: kpis.margen_bruto_promedio === null ? null : parseFloat(kpis.margen_bruto_promedio),
           articulos_con_margen: parseInt(kpis.articulos_con_margen) || 0,
         },
         categoria_sel: categoriaSel || null,
@@ -165,7 +175,7 @@ router.get('/', async (req, res) => {
           costo_promedio: parseFloat(r.costo_promedio) || 0,
           precio_venta_1: parseFloat(r.precio_venta_1) || 0,
           valor_inventario: parseFloat(r.valor_inventario) || 0,
-          margen_bruto_pct: parseFloat(r.margen_bruto_pct) || 0,
+          margen_bruto_pct: r.margen_bruto_pct === null ? null : parseFloat(r.margen_bruto_pct),
         })),
         top_proveedores: topProveedores.map(r => ({
           codigo: r.codigo, proveedor: r.proveedor,
@@ -194,7 +204,7 @@ router.get('/detalle', async (req, res) => {
     const vendCte = `
       WITH vend AS (
         SELECT articulo_id, SUM(unidades) AS unidades, SUM(total_sin_iva) AS ventas
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE tipo_doc = 'FACT' AND fecha_emision BETWEEN ${P.D} AND ${P.H}
         GROUP BY articulo_id
       )`;
@@ -234,7 +244,7 @@ router.get('/detalle', async (req, res) => {
         i.stock_actual, i.stock_en_transito,
         i.costo_promedio, i.costo_ultimo,
         i.precio_venta_1, i.precio_venta_2, i.precio_venta_3, i.precio_venta_4, i.precio_venta_5,
-        i.valor_inventario, i.margen_bruto_pct,
+        i.valor_inventario, ${margenInventario('i.articulo_id','i.margen_bruto_pct',P)} AS margen_bruto_pct,
         COALESCE(v.unidades, 0) AS unidades_vendidas_periodo,
         COALESCE(v.ventas, 0)   AS ventas_periodo
       FROM thermoplastica.fact_inventario_snapshot i
@@ -337,18 +347,18 @@ router.get('/analitica', async (req, res) => {
           SELECT * FROM thermoplastica.fact_inventario_snapshot
           WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_inventario_snapshot)
         ), g AS (
-          SELECT ${M.pct('f', enP)} AS pct FROM thermoplastica.fact_ventas_linea f WHERE f.tipo_doc = 'FACT'
+          SELECT ${M.pct('f', enP)} AS pct FROM thermoplastica.v_ventas_costeadas f WHERE f.tipo_doc = 'FACT'
         ), v AS (
           SELECT f.articulo_id,
                  COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${enP}), 0)  AS ventas,
                  COALESCE(SUM(f.unidades) FILTER (WHERE ${enP}), 0)       AS unidades,
                  COALESCE(${M.costo('f', enP)},
-                          SUM(f.total_sin_iva) FILTER (WHERE ${enP}) * (1 - (SELECT pct FROM g) / 100), 0) AS cogs,
+                          CASE WHEN BOOL_OR(f.es_cpp) THEN NULL ELSE SUM(f.total_sin_iva) FILTER (WHERE ${enP}) * (1 - (SELECT pct FROM g) / 100) END, 0) AS cogs,
                  COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${en90}), 0) AS ventas_90,
                  COUNT(DISTINCT DATE_TRUNC('month', f.fecha_emision))
                    FILTER (WHERE f.fecha_emision > CURRENT_DATE - 180)    AS meses_venta_6m,
                  MAX(f.fecha_emision)                                     AS ultima_venta
-          FROM thermoplastica.fact_ventas_linea f
+          FROM thermoplastica.v_ventas_costeadas f
           WHERE f.tipo_doc = 'FACT'
           GROUP BY f.articulo_id
         ), c AS (
@@ -384,7 +394,7 @@ router.get('/analitica', async (req, res) => {
                COALESCE(s.costo_promedio, 0) AS costo, COALESCE(s.costo_ultimo, 0) AS costo_ultimo,
                COALESCE(s.precio_venta_1, 0) AS precio,
                CASE WHEN s.stock_actual > 0 THEN COALESCE(s.valor_inventario, 0) ELSE 0 END AS valor,
-               s.margen_bruto_pct AS margen,
+               ${margenInventario('s.articulo_id','s.margen_bruto_pct',P)} AS margen,
                sa.clase, sa.estado,
                COALESCE(v.ventas, 0) AS ventas, COALESCE(v.unidades, 0) AS unidades_vendidas, COALESCE(v.cogs, 0) AS cogs,
                COALESCE(v.ventas_90, 0) AS ventas_90, COALESCE(v.meses_venta_6m, 0) AS meses_venta_6m, v.ultima_venta,

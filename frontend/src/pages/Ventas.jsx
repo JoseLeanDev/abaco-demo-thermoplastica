@@ -265,7 +265,7 @@ export default function Ventas() {
       )}
 
       <p className="text-xs text-[var(--text-muted)] italic">
-        {r.metodologia ? <>Margen sobre materia prima: ventas sin IVA menos kilos vendidos por CPP de compras. Compras hasta {r.metodologia.corte_cpp}; ventas hasta {r.metodologia.hasta_efectivo}. Las ventas sin CPP se excluyen del margen. <Leyenda k="margen_mp" /></> : <>Fuente: <code>vstFacturas_Devoluciones</code>. Margen = <em>total_sin_iva − (unidades × costo_promedio_facturado)</em>.</>}
+        {r.metodologia ? <>Margen sobre materia prima: ventas sin IVA menos kilos vendidos por CPP de compras. Compras hasta {r.metodologia.corte_cpp}; ventas hasta {r.metodologia.hasta_efectivo}. Las ventas sin CPP se excluyen del margen. Mes abierto: ventas visibles y CPP pendiente. <Leyenda k="margen_mp" /></> : <>Laminados: margen de materia prima con CPP de compras de meses cerrados. Las demás líneas conservan el costo del ERP. El total combina ambos métodos y excluye del margen las ventas de Laminados sin CPP.</>}
       </p>
     </div>
   )

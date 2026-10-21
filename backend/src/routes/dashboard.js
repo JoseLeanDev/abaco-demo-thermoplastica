@@ -20,9 +20,9 @@ router.get('/', async (req, res) => {
              EXTRACT(MONTH FROM fecha_emision)::int AS mes,
              COALESCE(SUM(total_sin_iva), 0)        AS ventas,
              ${M.margen()}         AS margen,
-             ${M.costo()} AS costo,
+             ${M.costo()} AS costo, ${M.pct()} AS margen_pct,
              COUNT(DISTINCT fact_num)               AS facturas
-      FROM thermoplastica.fact_ventas_linea
+      FROM thermoplastica.v_ventas_costeadas
       WHERE tipo_doc = 'FACT'
         AND fecha_emision BETWEEN (${P.D} - INTERVAL '1 year') AND ${P.H}
       GROUP BY 1, 2
@@ -38,12 +38,14 @@ router.get('/', async (req, res) => {
         COALESCE(SUM(total_sin_iva)         FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS ventas_previo,
         ${M.margen('', `fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS margen_actual,
         ${M.margen('', `fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}`)} AS margen_previo,
+        ${M.pct('', `fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS margen_pct_actual,
+        ${M.pct('', `fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}`)} AS margen_pct_previo,
         ${M.costo('', `fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS costo_actual,
         ${M.pctSinCosto('', `fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS pct_sin_costo,
         COUNT(DISTINCT fact_num)            FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H})    AS facturas_actual,
         COUNT(DISTINCT cliente_id)          FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H})    AS clientes_actual,
         COUNT(DISTINCT cliente_id)          FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH})    AS clientes_previo
-      FROM thermoplastica.fact_ventas_linea
+      FROM thermoplastica.v_ventas_costeadas
       WHERE tipo_doc = 'FACT'
     `);
 
@@ -201,7 +203,7 @@ router.get('/', async (req, res) => {
     const topLineas = await db.allAsync(`
       WITH tot AS (
         SELECT COALESCE(SUM(f.total_sin_iva), 0) AS total
-        FROM thermoplastica.fact_ventas_linea f
+        FROM thermoplastica.v_ventas_costeadas f
         WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
       )
       SELECT COALESCE(a.linea, 'Sin línea') AS linea,
@@ -211,7 +213,7 @@ router.get('/', async (req, res) => {
                   THEN ROUND(${M.pct('f')}::numeric, 1)
                   ELSE 0 END AS margen_pct,
              ROUND(100 * SUM(f.total_sin_iva) / NULLIF((SELECT total FROM tot), 0), 1) AS porcentaje
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
       WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
         AND a.codigo_articulo NOT IN ('GENARTICULO','GENARTICULOEXENTO','GENSERV','GENSERVICIO')
@@ -241,7 +243,7 @@ router.get('/', async (req, res) => {
     const topClienteVentas = await db.getAsync(`
       WITH tot AS (
         SELECT COALESCE(SUM(total_sin_iva), 0) AS total
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
       )
       SELECT c.codigo_cliente AS codigo, c.nombre AS cliente,
@@ -249,7 +251,7 @@ router.get('/', async (req, res) => {
              CASE WHEN (SELECT total FROM tot) > 0
                   THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
                   ELSE 0 END AS porcentaje
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
       WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
       GROUP BY c.codigo_cliente, c.nombre
@@ -259,7 +261,7 @@ router.get('/', async (req, res) => {
     const topVendedor = await db.getAsync(`
       WITH tot AS (
         SELECT COALESCE(SUM(total_sin_iva), 0) AS total
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE fecha_emision BETWEEN ${P.D} AND ${P.H} AND tipo_doc = 'FACT'
       )
       SELECT v.nombre AS vendedor, v.codigo_vendedor AS codigo,
@@ -271,7 +273,7 @@ router.get('/', async (req, res) => {
              CASE WHEN (SELECT total FROM tot) > 0
                   THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
                   ELSE 0 END AS porcentaje
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
       WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
       GROUP BY v.nombre, v.codigo_vendedor
@@ -290,8 +292,8 @@ router.get('/', async (req, res) => {
     const clientesAct12m  = parseInt(yoy.clientes_actual) || 0;
     const clientesPrev12m = parseInt(yoy.clientes_previo) || 0;
 
-    const margenRealPct   = ventas12m > 0     ? (margenReal12m / ventas12m * 100)     : null;
-    const margenPrevPct   = ventas12mPrev > 0 ? (margenPrev12m / ventas12mPrev * 100) : null;
+    const margenRealPct   = yoy.margen_pct_actual === null ? null : parseFloat(yoy.margen_pct_actual);
+    const margenPrevPct   = yoy.margen_pct_previo === null ? null : parseFloat(yoy.margen_pct_previo);
     const deltaVentasPct  = ventas12mPrev > 0 ? ((ventas12m - ventas12mPrev) / ventas12mPrev * 100) : null;
     const deltaMargenPp   = (margenRealPct !== null && margenPrevPct !== null) ? (margenRealPct - margenPrevPct) : null;
 
@@ -341,7 +343,7 @@ router.get('/', async (req, res) => {
         periodo: `${r.anio}-${String(r.mes).padStart(2, '0')}`,
         ventas: parseFloat(r.ventas) || 0,
         margen: parseFloat(r.margen) || 0,
-        margen_pct: parseFloat(r.ventas) > 0 ? Math.round(parseFloat(r.margen) / parseFloat(r.ventas) * 1000) / 10 : 0,
+        margen_pct: r.margen_pct === null ? null : Math.round(parseFloat(r.margen_pct)*10)/10,
         ventas_prev: prev ? parseFloat(prev.ventas) || 0 : null,
       };
     });

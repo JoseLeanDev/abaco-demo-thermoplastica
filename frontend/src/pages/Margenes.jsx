@@ -61,6 +61,8 @@ export default function Margenes() {
       <FiltroProducto value={producto} onChange={setProducto} />
       {cpp && <p className="text-xs text-[var(--text-muted)]">Margen sobre materia prima · compras hasta {cpp.corte_cpp} · ventas hasta {cpp.hasta_efectivo}. Las ventas sin CPP no entran al margen. <Leyenda k="margen_mp" /></p>}
 
+      {!cpp && <p className="text-xs text-[var(--text-muted)]">El total integra Laminados con CPP de materia prima y las demás líneas con su cálculo ERP actual. Laminados sin CPP queda fuera del margen; sus ventas permanecen visibles.</p>}
+
       {error && <div className="card p-6 text-red-500">Error cargando datos: {error.message}</div>}
 
       {/* KPIs */}

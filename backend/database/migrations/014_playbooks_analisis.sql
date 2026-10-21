@@ -60,7 +60,7 @@ $prompt$Analiza el desempeno de ventas. Usa v_ventas_mensuales para tendencia la
 ),
 (
   'margenes', 'Margenes y rentabilidad', 'margenes', 3,
-$prompt$Analiza la rentabilidad (vista v_ventas). Regla clave: el margen % de cualquier grupo es sum(margen_bruto)/sum(ventas)*100, NUNCA el promedio de margen_bruto_pct. Cubre estos angulos y quedate con los de mayor impacto:
+$prompt$Analiza la rentabilidad (vista v_ventas). Regla clave: usar analitica.margen_comercial(es_cpp,ventas,costo_comercial,margen_comercial,ventas_base_margen), que retorna JSON con pct, margen y costo. Laminados usa CPP de materia prima, las demás líneas conservan ERP. No estimar utilidad para Laminados sin CPP. Leer v_meta.corte_cpp_laminados: para comparar márgenes mensuales utilizar meses cerrados; el mes abierto tiene ventas pero CPP pendiente. NUNCA promediar margen_bruto_pct. Cubre estos angulos y quedate con los de mayor impacto:
 
 - Margen bruto global (GTQ y %) del ultimo mes y su tendencia vs meses previos. Se esta erosionando el margen?
 - Clientes o lineas de ALTO VOLUMEN pero BAJO MARGEN: mucha venta que deja poco. Son la mayor oportunidad de repricing - nombralos con su venta y su margen %.

@@ -30,7 +30,7 @@ async function generateInsightsFromDB(db) {
     const top = await db.getAsync(`
       WITH v AS (
         SELECT cliente_id, SUM(total_sin_iva) AS ventas
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE tipo_doc = 'FACT' AND fecha_emision >= CURRENT_DATE - 90
         GROUP BY cliente_id
       )
@@ -84,7 +84,7 @@ async function generateInsightsFromDB(db) {
       SELECT DATE_TRUNC('month', fecha_emision) AS mes,
              SUM(total_sin_iva) AS ventas,
              ${M.pct()} AS margen_pct
-      FROM thermoplastica.fact_ventas_linea
+      FROM thermoplastica.v_ventas_costeadas
       WHERE tipo_doc = 'FACT' AND fecha_emision >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
       GROUP BY 1 ORDER BY 1 DESC
     `);
@@ -108,7 +108,7 @@ async function generateInsightsFromDB(db) {
   await regla('venta_cruzada', async () => {
     const r = await db.getAsync(`
       SELECT c.nombre, MIN(a.linea) AS linea, SUM(f.total_sin_iva) AS ventas
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
       JOIN thermoplastica.dim_cliente  c ON c.cliente_id  = f.cliente_id
       WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= CURRENT_DATE - INTERVAL '6 months'
@@ -158,7 +158,7 @@ async function generateInsightsFromDB(db) {
   await regla('tendencia_ventas', async () => {
     const meses = await db.allAsync(`
       SELECT DATE_TRUNC('month', fecha_emision) AS mes, SUM(total_sin_iva) AS total
-      FROM thermoplastica.fact_ventas_linea
+      FROM thermoplastica.v_ventas_costeadas
       WHERE tipo_doc = 'FACT'
         AND fecha_emision >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 months'
         AND fecha_emision <  DATE_TRUNC('month', CURRENT_DATE)
@@ -196,7 +196,7 @@ async function generateInsightsFromDB(db) {
     const r = await db.getAsync(`
       SELECT a.linea, SUM(f.total_sin_iva) AS ventas,
              ${M.pct('f')} AS margen
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
       WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= CURRENT_DATE - 90 AND a.linea IS NOT NULL
       GROUP BY a.linea
@@ -229,7 +229,7 @@ async function detectAnomaliesFromDB(db) {
       SELECT c.nombre,
              COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision >= CURRENT_DATE - 30), 0) AS actual,
              COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision <  CURRENT_DATE - 30), 0) AS anterior
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_cliente c ON c.cliente_id = f.cliente_id
       WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= CURRENT_DATE - 60
       GROUP BY c.nombre
@@ -754,7 +754,7 @@ async function capitalTrabajoPeriodo(db, P, ciclo) {
   const v = await db.getAsync(`
     SELECT coalesce(sum(total_sin_iva) FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}), 0)         AS actual,
            coalesce(sum(total_sin_iva) FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS previo
-    FROM thermoplastica.fact_ventas_linea
+    FROM thermoplastica.v_ventas_costeadas
     WHERE tipo_doc = 'FACT'
   `);
   const anual = (x) => Number(x) * 365 / P.dias;
@@ -1044,16 +1044,16 @@ async function salidaPorArticulo(db, P) {
     db.allAsync(`
       WITH g AS (
         SELECT ${M.pct('f', enP)} AS pct, ${M.pct('f', enPrev)} AS pct_prev
-        FROM thermoplastica.fact_ventas_linea f WHERE f.tipo_doc = 'FACT'
+        FROM thermoplastica.v_ventas_costeadas f WHERE f.tipo_doc = 'FACT'
       ), v AS (
         SELECT f.articulo_id,
           COALESCE(${M.costo('f', enP)},
-                   SUM(f.total_sin_iva) FILTER (WHERE ${enP}) * (1 - (SELECT pct FROM g) / 100), 0)          AS cogs,
+                   CASE WHEN BOOL_OR(f.es_cpp) THEN NULL ELSE SUM(f.total_sin_iva) FILTER (WHERE ${enP}) * (1 - (SELECT pct FROM g) / 100) END, 0)          AS cogs,
           COALESCE(${M.costo('f', enPrev)},
-                   SUM(f.total_sin_iva) FILTER (WHERE ${enPrev}) * (1 - (SELECT pct_prev FROM g) / 100), 0)  AS cogs_prev,
+                   CASE WHEN BOOL_OR(f.es_cpp) THEN NULL ELSE SUM(f.total_sin_iva) FILTER (WHERE ${enPrev}) * (1 - (SELECT pct_prev FROM g) / 100) END, 0)  AS cogs_prev,
           COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${enP}), 0) AS ventas,
           COUNT(*) > 0 AS alguna_venta
-        FROM thermoplastica.fact_ventas_linea f
+        FROM thermoplastica.v_ventas_costeadas f
         WHERE f.tipo_doc = 'FACT'
         GROUP BY f.articulo_id
       ), c AS (
@@ -1090,7 +1090,7 @@ async function salidaPorArticulo(db, P) {
       SELECT articulo_id, mes, SUM(cogs) AS cogs, SUM(compras) AS compras FROM (
         SELECT f.articulo_id, to_char(f.fecha_emision, 'YYYY-MM') AS mes,
                COALESCE(${M.costo('f')}, SUM(f.costo_total_facturado), 0) AS cogs, 0 AS compras
-        FROM thermoplastica.fact_ventas_linea f, m
+        FROM thermoplastica.v_ventas_costeadas f, m
         WHERE f.tipo_doc = 'FACT' AND f.fecha_emision >= m.desde AND f.fecha_emision <= ${P.H}
         GROUP BY 1, 2
         UNION ALL
@@ -1385,7 +1385,7 @@ router.get('/ventas-vs-compras', async (req, res) => {
                  SUM(f.total_sin_iva) FILTER (WHERE ${enAct('f.fecha_emision')})  AS ventas,
                  SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS ventas_prev,
                  ${M.costo('f', enAct('f.fecha_emision'))}                         AS costo_ventas
-          FROM thermoplastica.fact_ventas_linea f
+          FROM thermoplastica.v_ventas_costeadas f
           JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
           WHERE f.tipo_doc = 'FACT' AND f.fecha_emision BETWEEN '${prevDesde}' AND '${hasta}' ${filtro}
           GROUP BY 1
@@ -1412,7 +1412,7 @@ router.get('/ventas-vs-compras', async (req, res) => {
                  SUM(f.total_sin_iva) FILTER (WHERE ${enAct('f.fecha_emision')})  AS ventas,
                  SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS ventas_prev,
                  ${M.costo('f', enAct('f.fecha_emision'))}                         AS costo_ventas
-          FROM thermoplastica.fact_ventas_linea f
+          FROM thermoplastica.v_ventas_costeadas f
           JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
           WHERE f.tipo_doc = 'FACT' AND f.fecha_emision BETWEEN '${prevDesde}' AND '${hasta}' ${filtro}
           GROUP BY 1

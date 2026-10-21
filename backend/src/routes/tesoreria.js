@@ -313,7 +313,7 @@ const SQL_COMPRAS = (desde, hasta) => `
     ${M.pct('')}                      AS margen_pct,
     COUNT(DISTINCT fact_num)          AS facturas,
     COALESCE(SUM(unidades), 0)        AS unidades
-  FROM thermoplastica.fact_ventas_linea
+  FROM thermoplastica.v_ventas_costeadas
   WHERE cliente_id = $1 AND fecha_emision BETWEEN ${desde} AND ${hasta}`;
 
 const comportamiento = (r) => ({
@@ -438,7 +438,7 @@ router.get('/cxc/cliente/:id', async (req, res) => {
       db.getAsync(`
         WITH u AS (
           SELECT f.*, v.nombre AS vendedor, s.nombre AS sucursal
-          FROM thermoplastica.fact_ventas_linea f
+          FROM thermoplastica.v_ventas_costeadas f
           LEFT JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
           LEFT JOIN thermoplastica.dim_sucursal s ON s.sucursal_id = f.sucursal_id
           WHERE f.cliente_id = $1
@@ -499,7 +499,7 @@ router.get('/cxc/cliente/:id', async (req, res) => {
           (SELECT COALESCE(SUM(valor), 0) FROM fac WHERE saldo = 0 AND date_trunc('month', fecha_ultimo_cobro) = m.mes) AS cobrado,
           (SELECT SUM(valor * GREATEST(fecha_ultimo_cobro - fecha_emision, 0)) / NULLIF(SUM(valor), 0)
              FROM fac WHERE saldo = 0 AND date_trunc('month', fecha_ultimo_cobro) = m.mes) AS dias_pago,
-          (SELECT COALESCE(SUM(total_sin_iva), 0) FROM thermoplastica.fact_ventas_linea v
+          (SELECT COALESCE(SUM(total_sin_iva), 0) FROM thermoplastica.v_ventas_costeadas v
              WHERE v.cliente_id = $1 AND date_trunc('month', v.fecha_emision) = m.mes) AS compras
         FROM m ORDER BY m.mes`, p),
 
@@ -510,14 +510,14 @@ router.get('/cxc/cliente/:id', async (req, res) => {
       db.getAsync(`
         SELECT COUNT(DISTINCT fecha_emision) AS dias_con_compra,
                (MAX(fecha_emision) - MIN(fecha_emision))::numeric / NULLIF(COUNT(DISTINCT fecha_emision) - 1, 0) AS cada_dias
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE cliente_id = $1 AND fecha_emision > CURRENT_DATE - 365`, p),
 
       // Últimas facturas de venta con su detalle y estado de pago
       db.allAsync(`
         WITH ult AS (
           SELECT fact_num, MIN(fecha_emision) AS fecha
-          FROM thermoplastica.fact_ventas_linea WHERE cliente_id = $1
+          FROM thermoplastica.v_ventas_costeadas WHERE cliente_id = $1
           GROUP BY fact_num ORDER BY MIN(fecha_emision) DESC, fact_num DESC LIMIT 25
         )
         SELECT u.fact_num::text AS documento, ${fecha('u.fecha')} AS fecha,
@@ -533,7 +533,7 @@ router.get('/cxc/cliente/:id', async (req, res) => {
           ${fecha('MAX(fac.fecha_vencimiento)')} AS fecha_vencimiento,
           ${fecha('MAX(fac.fecha_ultimo_cobro)')} AS fecha_cobro
         FROM ult u
-        JOIN thermoplastica.fact_ventas_linea f ON f.fact_num = u.fact_num AND f.cliente_id = $1
+        JOIN thermoplastica.v_ventas_costeadas f ON f.fact_num = u.fact_num AND f.cliente_id = $1
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         LEFT JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
         LEFT JOIN thermoplastica.fact_cxc_factura fac ON fac.cliente_id = $1 AND fac.factura_num = u.fact_num
@@ -548,7 +548,7 @@ router.get('/cxc/cliente/:id', async (req, res) => {
           COALESCE(SUM(f.unidades) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS unidades,
           ${M.pct('f', `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS margen_pct,
           ${fecha('MAX(f.fecha_emision)')} AS ultima_compra
-        FROM thermoplastica.fact_ventas_linea f
+        FROM thermoplastica.v_ventas_costeadas f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         WHERE f.cliente_id = $1 AND (f.fecha_emision BETWEEN ${P.D} AND ${P.H} OR f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH})
         GROUP BY a.codigo_articulo
@@ -561,7 +561,7 @@ router.get('/cxc/cliente/:id', async (req, res) => {
           COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS ventas,
           COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS ventas_prev,
           ${M.pct('f', `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`)} AS margen_pct
-        FROM thermoplastica.fact_ventas_linea f
+        FROM thermoplastica.v_ventas_costeadas f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         WHERE f.cliente_id = $1 AND (f.fecha_emision BETWEEN ${P.D} AND ${P.H} OR f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH})
         GROUP BY 1

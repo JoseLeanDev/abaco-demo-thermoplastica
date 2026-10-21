@@ -170,3 +170,10 @@ test('una llave No Aplica no se presenta sin advertencia', () => {
   assert.ok(r.advertencias.includes('clave_totalmente_generica'));
   assert.equal(r.es_provisional, true);
 });
+
+test('no inventa el flete 2023 para respaldos históricos fuera de los años del PDF',()=>{
+ const c=crearCalculador([{fec_emis:'2023-11-01',linea:'Laminados',categoria:'Prueba',sublinea:'',color:'',unidades:100,total_sin_iva:1000,proveedor:'BESEL'}],{corte:'2026-09-30'});
+ const v=c.calcularVenta({fec_emis:'2024-01-01',linea:'Laminados',categoria:'Prueba',sublinea:'',color:'',unidades:1,total_sin_iva:20,cliente:'Externo'});
+ assert.equal(v.cpp,null);assert.equal(v.fuente_cpp,'datos_compra_pendientes');
+ assert.ok(v.motivos.includes('flete_anio_pendiente'));
+});

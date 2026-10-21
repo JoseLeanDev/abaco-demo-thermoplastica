@@ -41,9 +41,26 @@ async function leerLaminados(pool, { desde, hasta, corte, lineas = ['Laminados']
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await client.query("SET LOCAL statement_timeout = '20s'");
-    const ventas = (await client.query(consultaSnapshot('ventas_lineas', 'AND btrim(r.linea)=ANY($3::text[])'), [desde, hasta, lineas])).rows;
+    const publicado = (await client.query(`SELECT i.*,p.corte::text AS corte_publicado FROM thermoplastica.cpp_laminados_publicacion p
+        JOIN thermoplastica.cpp_laminados_importacion i ON i.id=p.importacion_id WHERE singleton`)).rows[0];
+    if (lineas.length === 1 && lineas[0] === 'Laminados') {
+      if (publicado) {
+        const articulos=(await client.query('SELECT articulo_id,codigo_articulo FROM thermoplastica.dim_articulo')).rows;
+        await client.query('ROLLBACK');
+        return { ventas:publicado.ventas.filter((r)=>r.fec_emis>=desde && r.fec_emis<=hasta),compras:publicado.compras,articulos,
+          metadata:[{importacion_id:publicado.id,desde_disponible:publicado.desde_ventas,ultima_carga:publicado.extraido_en,corte_publicado:publicado.corte_publicado}] };
+      }
+    }
+    let ventas = (await client.query(consultaSnapshot('ventas_lineas', 'AND btrim(r.linea)=ANY($3::text[])'), [desde, hasta, lineas])).rows;
     const categorias = [...new Set(ventas.map((r) => String(r.categoria ?? '').trim()))];
-    const compras = (await client.query(consultaSnapshot('compras_lineas', 'AND btrim(r.categoria)=ANY($3::text[])'), [`${Number(desde.slice(0, 4)) - 1}-01-01`, corte, categorias])).rows;
+    let compras = (await client.query(consultaSnapshot('compras_lineas', 'AND btrim(r.categoria)=ANY($3::text[])'), [`${Number(desde.slice(0, 4)) - 1}-01-01`, corte, categorias])).rows;
+    if (publicado && lineas.includes('Laminados')) {
+      ventas=[...ventas.filter((r)=>String(r.linea).trim()!=='Laminados'),...publicado.ventas.filter((r)=>r.fec_emis>=desde && r.fec_emis<=hasta)];
+      const cc=new Set(publicado.ventas.map((r)=>String(r.categoria??'').trim()));
+      const a=publicado.desde_compras.toISOString().slice(0,10),b=publicado.hasta.toISOString().slice(0,10);
+      compras=[...compras.filter((r)=>!cc.has(String(r.categoria??'').trim()) || r.fec_emis<a || r.fec_emis>b),
+        ...publicado.compras.filter((r)=>r.fec_emis<=corte && r.fec_emis>=`${Number(desde.slice(0,4))-1}-01-01`)];
+    }
     const articulos = (await client.query('SELECT articulo_id,codigo_articulo FROM thermoplastica.dim_articulo')).rows;
     const metadata = (await client.query(`SELECT source_view,min(window_from)::text AS desde_disponible,max(finished_at)::text AS ultima_carga
       FROM raw_thermoplastica.batches WHERE status='ok' AND finished_at IS NOT NULL

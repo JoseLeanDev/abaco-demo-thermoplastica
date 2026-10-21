@@ -26,7 +26,7 @@ const analista = require('../src/services/agenteAnalista');
 const dbAgente = require('../src/services/dbAgente');
 
 const EMPRESA_ID = parseInt(process.env.DEFAULT_EMPRESA_ID || '1', 10);
-const AGENT_VERSION = 'playbook-1.0';
+const AGENT_VERSION = 'playbook-1.1-cpp';
 const SQL_MIGRACION = path.join(__dirname, '..', 'database', 'migrations', '014_playbooks_analisis.sql');
 
 const args = process.argv.slice(2);

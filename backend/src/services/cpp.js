@@ -1,6 +1,6 @@
 // CPP comercial: Laminados según Jonathan; las otras tres líneas solo usan
 // compras del mismo artículo, según la indicación del usuario (21-oct-2026).
-// Cálculo puro: no consulta ni escribe en la base y todavía no sustituye margen.js.
+// Cálculo puro: lo usan la publicación de Laminados y su auditoría.
 // Las cantidades se conservan en la unidad del exporte. La compatibilidad entre
 // compras/ventas y entre artículos agrupados debe validarse antes de publicar.
 
@@ -37,6 +37,7 @@ function fleteCompra(r) {
   if (!porKg) return { por_unidad: 0, estado: 'no_aplica' };
   // El PDF acredita kilos para Laminados; no inferir kilos para otras líneas.
   if (limpiar(r.linea) !== 'Laminados') return { por_unidad: null, estado: 'unidad_flete_pendiente' };
+  if (![2024,2025,2026].includes(anio)) return { por_unidad:null,estado:'flete_anio_pendiente' };
   return { por_unidad: porKg, estado: 'flete_pdf' };
 }
 
@@ -65,7 +66,7 @@ function crearCalculador(compras, { corte } = {}) {
     }
     const cantidad = numero(r.unidades), importe = numero(r.total_sin_iva);
     const flete = fleteCompra(r);
-    const error = cantidad === null || importe === null ? 'compra_incompleta' : flete.estado === 'unidad_flete_pendiente' ? flete.estado : null;
+    const error = cantidad === null || importe === null ? 'compra_incompleta' : flete.por_unidad === null ? flete.estado : null;
     if (error) {
       incidencias.push({ motivo: error, factura: r.fact_num, articulo: r.codigo_articulo });
     }

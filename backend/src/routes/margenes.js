@@ -42,7 +42,7 @@ function filtroProducto(req) {
 // Líneas de venta facturadas del período (o del año anterior) con el filtro de
 // producto, como subconsulta con las columnas de fact_ventas_linea.
 function ventas(P, fp, anterior = false) {
-  return `(SELECT f.* FROM thermoplastica.fact_ventas_linea f
+  return `(SELECT f.* FROM thermoplastica.v_ventas_costeadas f
            JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
            WHERE f.tipo_doc = 'FACT' AND f.fecha_emision BETWEEN ${anterior ? P.prevD : P.D} AND ${anterior ? P.prevH : P.H}
            ${fp.and})`;
@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
                SUM(f.unidades)              AS unidades,
                SUM(f.total_sin_iva)         AS ventas,
                ${M.costo('f')} AS costo,
-               ${M.margen('f')}          AS margen
+               ${M.margen('f')} AS margen, ${M.base('f')} AS base_margen
         FROM ${ventas(P, fp)} f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         -- Excluir "articulo generico" y similares placeholders sin costo real
@@ -73,8 +73,8 @@ router.get('/', async (req, res) => {
         SELECT articulo_id,
                SUM(unidades)              AS unidades,
                SUM(total_sin_iva)         AS ventas,
-               ${M.margen()}          AS margen
-        FROM thermoplastica.fact_ventas_linea
+               ${M.margen()} AS margen, ${M.base()} AS base_margen
+        FROM thermoplastica.v_ventas_costeadas
         WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND tipo_doc = 'FACT'
           AND articulo_id IN (SELECT articulo_id FROM actual)
@@ -88,11 +88,11 @@ router.get('/', async (req, res) => {
         ${DIMS_PRODUCTO.subcategoria.replace(/a\./g, 'art.')}      AS subcategoria,
         ${DIMS_PRODUCTO.sublinea.replace(/a\./g, 'art.')}          AS sublinea,
         a.unidades                                                 AS unidades_12m,
-        a.ventas                                                   AS ventas_12m,
+        a.ventas AS ventas_12m, a.margen AS margen_q_real,
         CASE WHEN a.unidades > 0 THEN a.ventas / a.unidades ELSE NULL END          AS precio_actual,
         CASE WHEN a.unidades > 0 THEN a.costo  / a.unidades ELSE NULL END          AS costo_actual,
-        CASE WHEN a.ventas   > 0 THEN a.margen / a.ventas * 100 ELSE NULL END      AS margen_pct_actual,
-        CASE WHEN h.ventas   > 0 THEN h.margen / h.ventas * 100 ELSE NULL END      AS margen_pct_historico
+        CASE WHEN a.ventas   > 0 THEN a.margen / NULLIF(a.base_margen,0) * 100 ELSE NULL END      AS margen_pct_actual,
+        CASE WHEN h.ventas   > 0 THEN h.margen / NULLIF(h.base_margen,0) * 100 ELSE NULL END      AS margen_pct_historico
       FROM actual a
       JOIN thermoplastica.dim_articulo art ON art.articulo_id = a.articulo_id
       LEFT JOIN historico h                ON h.articulo_id   = a.articulo_id
@@ -132,7 +132,7 @@ router.get('/', async (req, res) => {
         subcategoria: r.subcategoria,
         sublinea: r.sublinea,
         ventas: Math.round(ventasQ),
-        margen_q: Math.round(ventasQ * margenAct / 100),
+        margen_q: Math.round(Number(r.margen_q_real)),
         precio_actual: Number(precio.toFixed(4)),
         costo_actual:  Number(costo.toFixed(4)),
         margen_pct_actual:    Number(margenAct.toFixed(2)),
@@ -144,17 +144,26 @@ router.get('/', async (req, res) => {
       };
     });
 
+    // Los productos Laminados del listado general conservan el CPP por kg
+    // elegible, N/D y semáforos del mismo contrato que su selección exclusiva.
+    if (!req.query.categoria) {
+      const lam = await require('../services/laminados').obtenerReporte({query:{...req.query,categoria:'Laminados'}},db.pool);
+      const otros = productos.filter((p)=>p.categoria!=='Laminados');
+      productos.splice(0,productos.length,...otros,...lam.data.productos);
+      productos.sort((a,b)=>b.ventas-a.ventas);
+    }
+
     // Resumen global (mismo filtro de producto), este período y el año anterior
     const totalRow = await db.getAsync(`
       SELECT COALESCE(SUM(total_sin_iva), 0)         AS ventas,
-             ${M.margen()}          AS margen,
+             ${M.margen()} AS margen, ${M.base()} AS base_margen,
              ${M.pctSinCosto()}     AS pct_sin_costo,
              (SELECT ${M.pct()} FROM ${ventas(P, fp, true)} x) AS margen_pct_prev
       FROM ${ventas(P, fp)} x
     `, [...fp.params, ...fp.params]);
     const totalVentas = parseFloat(totalRow.ventas) || 0;
     const totalMargen = parseFloat(totalRow.margen) || 0;
-    const margenGlobal = totalVentas > 0 ? (totalMargen / totalVentas * 100) : 0;
+    const margenGlobal = Number(totalRow.base_margen) > 0 ? totalMargen / Number(totalRow.base_margen) * 100 : null;
     const margenPrev = totalRow.margen_pct_prev !== null ? parseFloat(totalRow.margen_pct_prev) : null;
 
     res.json({
@@ -163,7 +172,7 @@ router.get('/', async (req, res) => {
       data: {
         resumen: {
           total_margen_bruto_q: Math.round(totalMargen),
-          margen_global_pct:    Number(margenGlobal.toFixed(1)),
+          margen_global_pct:    margenGlobal === null ? null : Number(margenGlobal.toFixed(1)),
           margen_global_pct_prev: margenPrev === null ? null : Number(margenPrev.toFixed(1)),
           total_ventas_q:       Math.round(totalVentas),
           pct_ventas_sin_costo: Math.round((parseFloat(totalRow.pct_sin_costo) || 0) * 10) / 10,
@@ -192,8 +201,8 @@ router.get('/producto/:id/detalle', async (req, res) => {
         SELECT SUM(unidades)              AS unidades,
                SUM(total_sin_iva)         AS ventas,
                ${M.costo()} AS costo,
-               ${M.margen()}          AS margen
-        FROM thermoplastica.fact_ventas_linea
+               ${M.margen()} AS margen, ${M.base()} AS base_margen
+        FROM thermoplastica.v_ventas_costeadas
         WHERE articulo_id = ? AND tipo_doc = 'FACT'
           AND fecha_emision BETWEEN ${P.D} AND ${P.H}
       )
@@ -201,7 +210,7 @@ router.get('/producto/:id/detalle', async (req, res) => {
              agg.unidades AS unidades_12m, agg.ventas AS ventas_12m,
              CASE WHEN agg.unidades > 0 THEN agg.ventas / agg.unidades ELSE NULL END AS precio_actual,
              CASE WHEN agg.unidades > 0 THEN agg.costo  / agg.unidades ELSE NULL END AS costo_actual,
-             CASE WHEN agg.ventas   > 0 THEN agg.margen / agg.ventas * 100 ELSE NULL END AS margen_pct_actual
+             CASE WHEN agg.ventas   > 0 THEN agg.margen / NULLIF(agg.base_margen,0) * 100 ELSE NULL END AS margen_pct_actual
       FROM thermoplastica.dim_articulo a
       LEFT JOIN agg ON true
       WHERE a.articulo_id = ?
@@ -217,7 +226,7 @@ router.get('/producto/:id/detalle', async (req, res) => {
              ${M.pct()} AS margen_pct,
              SUM(unidades)      AS unidades,
              SUM(total_sin_iva) AS ventas
-      FROM thermoplastica.fact_ventas_linea
+      FROM thermoplastica.v_ventas_costeadas
       WHERE articulo_id = ? AND tipo_doc = 'FACT'
         AND fecha_emision BETWEEN (${P.D} - INTERVAL '1 year') AND ${P.H}
       GROUP BY 1 ORDER BY 1
@@ -260,7 +269,7 @@ router.get('/vendedores', async (req, res) => {
       WITH actual AS (
         SELECT vendedor_id,
                SUM(total_sin_iva)         AS ventas,
-               ${M.margen()}          AS margen
+               ${M.margen()} AS margen, ${M.base()} AS base_margen
         FROM ${ventas(P, fp)} x
         WHERE vendedor_id IS NOT NULL
         GROUP BY vendedor_id
@@ -268,15 +277,15 @@ router.get('/vendedores', async (req, res) => {
       historico AS (
         SELECT vendedor_id,
                SUM(total_sin_iva) AS ventas,
-               ${M.margen()}  AS margen
+               ${M.margen()} AS margen, ${M.base()} AS base_margen
         FROM ${ventas(P, fp, true)} x
         WHERE vendedor_id IS NOT NULL
         GROUP BY vendedor_id
       )
       SELECT v.vendedor_id AS id, v.nombre,
              a.ventas AS ventas_12m,
-             CASE WHEN a.ventas > 0 THEN a.margen / a.ventas * 100 ELSE NULL END AS margen_pct_actual,
-             CASE WHEN h.ventas > 0 THEN h.margen / h.ventas * 100 ELSE NULL END AS margen_pct_historico
+             CASE WHEN a.ventas > 0 THEN a.margen / NULLIF(a.base_margen,0) * 100 ELSE NULL END AS margen_pct_actual,
+             CASE WHEN h.ventas > 0 THEN h.margen / NULLIF(h.base_margen,0) * 100 ELSE NULL END AS margen_pct_historico
       FROM actual a
       JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = a.vendedor_id
       LEFT JOIN historico h ON h.vendedor_id = a.vendedor_id
@@ -314,21 +323,21 @@ router.get('/clientes', async (req, res) => {
       WITH actual AS (
         SELECT cliente_id,
                SUM(total_sin_iva) AS ventas,
-               ${M.margen()}  AS margen
+               ${M.margen()} AS margen, ${M.base()} AS base_margen
         FROM ${ventas(P, fp)} x
         GROUP BY cliente_id
       ),
       historico AS (
         SELECT cliente_id,
                SUM(total_sin_iva) AS ventas,
-               ${M.margen()}  AS margen
+               ${M.margen()} AS margen, ${M.base()} AS base_margen
         FROM ${ventas(P, fp, true)} x
         GROUP BY cliente_id
       )
       SELECT c.cliente_id AS id, REGEXP_REPLACE(c.nombre, '^[A-Za-z]*[0-9][0-9A-Za-z]*-', '') AS nombre,
              a.ventas AS ventas_12m,
-             CASE WHEN a.ventas > 0 THEN a.margen / a.ventas * 100 ELSE NULL END AS margen_pct_actual,
-             CASE WHEN h.ventas > 0 THEN h.margen / h.ventas * 100 ELSE NULL END AS margen_pct_historico
+             CASE WHEN a.ventas > 0 THEN a.margen / NULLIF(a.base_margen,0) * 100 ELSE NULL END AS margen_pct_actual,
+             CASE WHEN h.ventas > 0 THEN h.margen / NULLIF(h.base_margen,0) * 100 ELSE NULL END AS margen_pct_historico
       FROM actual a
       JOIN thermoplastica.dim_cliente c ON c.cliente_id = a.cliente_id
       LEFT JOIN historico h ON h.cliente_id = a.cliente_id
@@ -368,8 +377,8 @@ router.get('/lineas', async (req, res) => {
         SELECT a.linea       AS linea,
                SUM(f.unidades)      AS unidades,
                SUM(f.total_sin_iva) AS ventas,
-               ${M.margen('f')}  AS margen
-        FROM thermoplastica.fact_ventas_linea f
+               ${M.margen('f')} AS margen, ${M.base('f')} AS base_margen
+        FROM thermoplastica.v_ventas_costeadas f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H} AND f.tipo_doc = 'FACT'
           AND a.linea IS NOT NULL
@@ -378,8 +387,8 @@ router.get('/lineas', async (req, res) => {
       historico AS (
         SELECT a.linea       AS linea,
                SUM(f.total_sin_iva) AS ventas,
-               ${M.margen('f')}  AS margen
-        FROM thermoplastica.fact_ventas_linea f
+               ${M.margen('f')} AS margen, ${M.base('f')} AS base_margen
+        FROM thermoplastica.v_ventas_costeadas f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}
           AND f.tipo_doc = 'FACT' AND a.linea IS NOT NULL
@@ -388,8 +397,8 @@ router.get('/lineas', async (req, res) => {
       SELECT a.linea AS nombre,
              a.unidades AS unidades_12m,
              a.ventas   AS ventas_12m,
-             CASE WHEN a.ventas > 0 THEN a.margen / a.ventas * 100 ELSE NULL END AS margen_pct_actual,
-             CASE WHEN h.ventas > 0 THEN h.margen / h.ventas * 100 ELSE NULL END AS margen_pct_historico
+             CASE WHEN a.ventas > 0 THEN a.margen / NULLIF(a.base_margen,0) * 100 ELSE NULL END AS margen_pct_actual,
+             CASE WHEN h.ventas > 0 THEN h.margen / NULLIF(h.base_margen,0) * 100 ELSE NULL END AS margen_pct_historico
       FROM actual a
       LEFT JOIN historico h ON h.linea = a.linea
       ORDER BY a.ventas DESC

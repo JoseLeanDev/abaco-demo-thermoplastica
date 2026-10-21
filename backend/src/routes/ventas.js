@@ -21,7 +21,8 @@ router.get('/', async (req, res) => {
         COALESCE(SUM(total_sin_iva), 0)                                            AS ventas_sin_iva,
         COALESCE(SUM(total_con_iva), 0)                                            AS ventas_con_iva,
         ${M.costo()}                                    AS costo_total,
-        ${M.margen()}                                             AS margen_bruto,
+        ${M.margen()} AS margen_bruto,
+        ${M.pct()} AS margen_pct,
         ${M.pctSinCosto()}                                        AS pct_sin_costo,
         COALESCE(SUM(iva), 0)                                                      AS iva_debito,
         COUNT(DISTINCT fact_num)                                                   AS facturas,
@@ -35,7 +36,8 @@ router.get('/', async (req, res) => {
       SELECT TO_CHAR(fecha_emision, 'YYYY-MM')     AS periodo,
              COALESCE(SUM(total_sin_iva), 0)       AS ventas,
              ${M.costo()} AS costo,
-             ${M.margen()}         AS margen,
+             ${M.margen()} AS margen,
+             ${M.pct()} AS margen_pct,
              COUNT(DISTINCT fact_num)               AS facturas
       FROM ${V.from} fv
       GROUP BY 1 ORDER BY 1
@@ -53,7 +55,7 @@ router.get('/', async (req, res) => {
     const ventas = parseFloat(kpis.ventas_sin_iva) || 0;
     const costo  = parseFloat(kpis.costo_total)   || 0;
     const margen = parseFloat(kpis.margen_bruto)  || 0;
-    const margenPct = ventas > 0 ? (margen / ventas * 100) : null;
+    const margenPct = kpis.margen_pct === null ? null : parseFloat(kpis.margen_pct);
     const ticketProm = (parseInt(kpis.facturas) || 0) > 0 ? ventas / parseInt(kpis.facturas) : 0;
 
     res.json({
@@ -84,7 +86,7 @@ router.get('/', async (req, res) => {
           ventas: parseFloat(m.ventas) || 0,
           costo: parseFloat(m.costo) || 0,
           margen: parseFloat(m.margen) || 0,
-          margen_pct: parseFloat(m.ventas) > 0 ? (parseFloat(m.margen) / parseFloat(m.ventas) * 100) : 0,
+          margen_pct: m.margen_pct === null ? null : parseFloat(m.margen_pct),
           facturas: parseInt(m.facturas) || 0,
         })),
       },
@@ -157,7 +159,7 @@ router.get('/lineas', async (req, res) => {
     const rows = await db.allAsync(`
       WITH tot AS (
         SELECT COALESCE(SUM(total_sin_iva), 0) AS total
-        FROM thermoplastica.fact_ventas_linea
+        FROM thermoplastica.v_ventas_costeadas
         WHERE fecha_emision BETWEEN ? AND ? AND tipo_doc = 'FACT'
       )
       SELECT
@@ -176,7 +178,7 @@ router.get('/lineas', async (req, res) => {
         CASE WHEN (SELECT total FROM tot) > 0
              THEN ROUND(100 * SUM(f.total_sin_iva) / (SELECT total FROM tot), 1)
              ELSE 0 END                          AS porcentaje
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
       WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
       GROUP BY a.linea
@@ -216,7 +218,7 @@ router.get('/serie-lineas', async (req, res) => {
     const rows = await db.allAsync(`
       WITH top_l AS (
         SELECT a.linea
-        FROM thermoplastica.fact_ventas_linea f
+        FROM thermoplastica.v_ventas_costeadas f
         JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
         WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT' AND a.linea IS NOT NULL
         GROUP BY a.linea
@@ -226,7 +228,7 @@ router.get('/serie-lineas', async (req, res) => {
       SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM') AS periodo,
              a.linea AS linea,
              COALESCE(SUM(f.total_sin_iva), 0) AS ventas
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
       JOIN top_l tl ON tl.linea = a.linea
       WHERE f.fecha_emision BETWEEN ? AND ? AND f.tipo_doc = 'FACT'
@@ -296,9 +298,9 @@ router.get('/detalle', async (req, res) => {
         a.codigo_articulo, a.descripcion AS articulo, a.linea, a.sublinea,
         f.unidades, f.total_sin_iva, f.total_con_iva, f.iva, f.saldo,
         f.costo_promedio_facturado, f.costo_total_facturado,
-        f.margen_bruto, f.margen_bruto_pct,
+        f.margen_bruto, f.margen_bruto_pct,f.es_cpp,
         f.tipo_cliente
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_cliente  c ON c.cliente_id  = f.cliente_id
       JOIN thermoplastica.dim_sucursal s ON s.sucursal_id = f.sucursal_id
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
@@ -310,7 +312,7 @@ router.get('/detalle', async (req, res) => {
 
     const totalRow = await db.getAsync(`
       SELECT COUNT(*) AS total, COALESCE(SUM(f.total_sin_iva), 0) AS suma
-      FROM thermoplastica.fact_ventas_linea f
+      FROM thermoplastica.v_ventas_costeadas f
       JOIN thermoplastica.dim_cliente  c ON c.cliente_id  = f.cliente_id
       LEFT JOIN thermoplastica.dim_vendedor v ON v.vendedor_id = f.vendedor_id
       JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
@@ -346,11 +348,12 @@ router.get('/detalle', async (req, res) => {
           iva: parseFloat(r.iva) || 0,
           saldo: parseFloat(r.saldo) || 0,
           costo_promedio_facturado: parseFloat(r.costo_promedio_facturado) || 0,
-          costo_total_facturado: parseFloat(r.costo_total_facturado) || 0,
+          costo_total_facturado: r.costo_total_facturado === null ? null : parseFloat(r.costo_total_facturado),
+          es_cpp:r.es_cpp,
           // Línea sin costo en el ERP: su margen es desconocido, no 100%.
-          sin_costo: !(parseFloat(r.costo_total_facturado) > 0),
-          margen_bruto: parseFloat(r.costo_total_facturado) > 0 ? parseFloat(r.margen_bruto) || 0 : null,
-          margen_bruto_pct: parseFloat(r.costo_total_facturado) > 0 && r.margen_bruto_pct !== null ? parseFloat(r.margen_bruto_pct) : null,
+          sin_costo: r.es_cpp ? r.costo_total_facturado === null : !(parseFloat(r.costo_total_facturado) > 0),
+          margen_bruto: (r.es_cpp ? r.costo_total_facturado !== null : parseFloat(r.costo_total_facturado) > 0) ? parseFloat(r.margen_bruto) : null,
+          margen_bruto_pct: (r.es_cpp ? r.costo_total_facturado !== null : parseFloat(r.costo_total_facturado) > 0) && r.margen_bruto_pct !== null ? parseFloat(r.margen_bruto_pct) : null,
           tipo_cliente: r.tipo_cliente,
         })),
       },
@@ -381,7 +384,7 @@ const DIMS = {
   tipo_cliente: { expr: limpio(`REGEXP_REPLACE(f.tipo_cliente, '^\\s*\\d+\\s*-\\s*', '')`, 'Sin tipo'), label: null },
 };
 const JOINS = `
-  FROM thermoplastica.fact_ventas_linea f
+  FROM thermoplastica.v_ventas_costeadas f
   JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
   JOIN thermoplastica.dim_cliente  c ON c.cliente_id  = f.cliente_id
   JOIN thermoplastica.dim_sucursal s ON s.sucursal_id = f.sucursal_id
@@ -458,7 +461,8 @@ async function calcularDesglose(req, dim) {
         COUNT(DISTINCT f.cliente_id)  FILTER (WHERE ${act})           AS clientes,
         COUNT(DISTINCT f.cliente_id)  FILTER (WHERE ${prev})          AS clientes_prev,
         COUNT(DISTINCT f.articulo_id) FILTER (WHERE ${act})           AS skus,
-        ${M.margen('f', act)}                                         AS margen,
+        ${M.margen('f', act)} AS margen,
+        BOOL_OR(f.es_cpp) AS es_cpp,
         ${M.pct('f', act)}                                            AS margen_pct,
         ${M.pct('f', prev)}                                           AS margen_pct_prev,
         ${M.pctSinCosto('f', act)}                                    AS pct_sin_costo,
@@ -497,6 +501,7 @@ async function calcularDesglose(req, dim) {
     return {
       clave: r.clave,
       nombre: r.nombre,
+      es_cpp: r.es_cpp,
       extra: r.extra,
       ventas: v,
       ventas_prev: vp,
@@ -700,7 +705,7 @@ router.get('/matriz', async (req, res) => {
     const rows = await db.allAsync(`
       WITH base AS (
         SELECT ${F.expr} AS fk, ${nom(F)} AS fn, ${C.expr} AS ck, ${nom(C)} AS cn,
-               f.total_sin_iva, f.margen_bruto, f.costo_total_facturado
+               f.total_sin_iva, f.margen_bruto, f.costo_total_facturado,f.es_cpp,f.ventas_base_margen
         ${JOINS}
         WHERE ${where}
       ),
@@ -710,8 +715,7 @@ router.get('/matriz', async (req, res) => {
              CASE WHEN rc.rk <= ${topC} THEN rc.cn ELSE 'Otros' END AS columna,
              MIN(rf.rk) AS frk, MIN(rc.rk) AS crk,
              SUM(b.total_sin_iva) AS ventas,
-             SUM(b.margen_bruto) FILTER (WHERE b.costo_total_facturado > 0)
-               / NULLIF(SUM(b.total_sin_iva) FILTER (WHERE b.costo_total_facturado > 0), 0) * 100 AS margen_pct
+             ${M.pct('b')} AS margen_pct
       FROM base b JOIN rc USING (ck) JOIN rf USING (fk)
       GROUP BY 1, 2
     `, params);

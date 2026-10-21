@@ -160,8 +160,13 @@ function middlewareLaminados(modulo, pool, cargar = obtenerReporte) {
     const ruta = req.path;
     const esDetalle = modulo === 'margenes' && /^\/producto\/\d+\/detalle$/.test(ruta);
     const preview = modulo === 'margenes' && ruta === '/cpp-laminados';
-    if (req.method !== 'GET' || (!preview && req.query.categoria !== 'Laminados') || (!permitidas.includes(ruta) && !esDetalle)) return next();
+    if (req.method !== 'GET' || (!permitidas.includes(ruta) && !esDetalle)) return next();
     try {
+      let seleccionado = req.query.categoria === 'Laminados';
+      if (esDetalle && !req.query.categoria && pool) {
+        seleccionado = (await pool.query('SELECT EXISTS(SELECT 1 FROM thermoplastica.cpp_laminados_venta WHERE articulo_id=$1) AS ok',[Number(ruta.split('/')[2])])).rows[0].ok;
+      }
+      if (!preview && !seleccionado) return next();
       const reporte = await cargar({ query: { ...req.query, categoria: 'Laminados' } }, pool);
       const data = modulo === 'ventas' ? adaptarVentas(reporte, ruta, req.query) : adaptarMargenes(reporte, ruta);
       if (data === null) return res.status(404).json({ status: 'error', message: 'Artículo sin ventas en esta selección de Laminados.' });
