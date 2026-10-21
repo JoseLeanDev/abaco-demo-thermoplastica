@@ -33,6 +33,14 @@ export const LEYENDAS = {
       <Nota>El margen en Q aplica ese % a todas las ventas. Las ventas que vienen sin costo se informan aparte y no entran al %.</Nota>
     </>,
   },
+  margen_mp: {
+    titulo: 'Margen sobre materia prima',
+    texto: <>Ventas sin IVA menos kilos vendidos por el costo promedio ponderado de compras, con los fletes y respaldos definidos para Laminados. El porcentaje usa únicamente ventas con CPP disponible. Las ventas sin CPP se muestran aparte y no se les estima utilidad.</>,
+  },
+  costo_cpp: {
+    titulo: 'Costo promedio ponderado de compras',
+    texto: <>Costo de compras sin IVA más el flete aplicable, dividido entre kilos comprados. Laminados busca por categoría, sublínea y color, con los respaldos y costos especiales definidos para el reporte. Se utilizan compras de meses cerrados.</>,
+  },
   margen_pts: {
     titulo: 'Puntos de margen',
     texto: <>Diferencia en puntos porcentuales entre el margen % del período y el del mismo período del año anterior (p. ej. 35% → 38% = +3 pts).</>,

@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { LINEAS, UNIDADES, crearCalculador, resumir } = require('../src/services/cpp');
+const { consultaSnapshot, seleccionarSnapshot } = require('../src/services/cppDatos');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const i = a.indexOf('=');
@@ -37,24 +38,13 @@ async function leerPostgres() {
   try {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const inicioCompras = `${Number(args.desde.slice(0, 4)) - 1}-01-01`;
-    const campos = 'r.fact_num,r.fec_emis::text,r.tipo_doc,r.codigo_articulo,r.articulo,r.linea,r.categoria,r.sublinea,r.color,r.unidades,r.total_sin_iva';
-    // Las compras usan el año completo disponible hasta corte; no la ventana de ventas.
-    const baseRaw = (tabla, extra, filtro) => `
-      WITH ultimo AS (
-        SELECT DISTINCT ON (source_row_hash) source_row_hash,batch_id
-        FROM raw_thermoplastica.${tabla}
-        ORDER BY source_row_hash,ingested_at DESC,raw_id DESC
-      )
-      SELECT ${campos},${extra}
-      FROM raw_thermoplastica.${tabla} r JOIN ultimo u USING(source_row_hash,batch_id)
-      WHERE ${filtro}`;
-    const ventas = (await db.query(baseRaw('ventas_lineas', 'r.cliente,r.nombre_vendedor', 'r.fec_emis BETWEEN $1::date AND $2::date AND btrim(r.linea)=ANY($3::text[])'), [args.desde, args.hasta, LINEAS])).rows;
+    const ventas = (await db.query(consultaSnapshot('ventas_lineas', 'AND btrim(r.linea)=ANY($3::text[])'), [args.desde, args.hasta, LINEAS])).rows;
     const categorias = [...new Set(ventas.filter((r) => String(r.linea ?? '').trim() === 'Laminados').map((r) => String(r.categoria ?? '').trim()))];
     const articulos = [...new Set(ventas.filter((r) => String(r.linea ?? '').trim() !== 'Laminados').map((r) => String(r.codigo_articulo ?? '').trim()).filter(Boolean))];
     // Laminados conserva sus grupos de categoría. Las otras líneas recuperan
     // todo el historial de sus propios SKUs, incluso si cambió su clasificación.
-    const compras = (await db.query(baseRaw('compras_lineas', 'r.proveedor', `r.fec_emis <= $2::date AND
-      ((r.fec_emis >= $1::date AND btrim(r.categoria)=ANY($3::text[])) OR btrim(r.codigo_articulo)=ANY($4::text[]))`), [inicioCompras, args.corte, categorias, articulos])).rows;
+    const compras = (await db.query(consultaSnapshot('compras_lineas', `AND
+      ((r.fec_emis >= $5::date AND btrim(r.categoria)=ANY($3::text[])) OR btrim(r.codigo_articulo)=ANY($4::text[]))`), ['1900-01-01', args.corte, categorias, articulos, inicioCompras])).rows;
     const historial = (await db.query('SELECT min(fec_emis)::text AS primera_compra FROM raw_thermoplastica.compras_lineas')).rows[0];
     await db.query('ROLLBACK');
     return { compras, ventas, historial };
@@ -65,7 +55,12 @@ async function main() {
   let datos;
   if (args.datos) {
     const d = JSON.parse(fs.readFileSync(args.datos, 'utf8'));
-    datos = { compras: ultimoBatch(d[0]), ventas: ultimoBatch(d[1]), historial: null };
+    const batches = d.batches || d[3];
+    datos = batches ? {
+      compras: seleccionarSnapshot(d.compras || d[0], batches, 'vstCompras'),
+      ventas: seleccionarSnapshot(d.ventas || d[1], batches, 'vstFacturas_Devoluciones'), historial: null,
+    } : { compras: ultimoBatch(d[0]), ventas: ultimoBatch(d[1]), historial: null,
+      advertencia_snapshot: 'Archivo antiguo sin metadatos de cargas: no permite detectar bajas en la fuente. No usar para aprobar producción.' };
     datos.ventas = datos.ventas.filter((r) => LINEAS.includes(String(r.linea ?? '').trim()) && r.fec_emis.slice(0, 10) >= args.desde && r.fec_emis.slice(0, 10) <= args.hasta);
     const categorias = new Set(datos.ventas.filter((r) => String(r.linea ?? '').trim() === 'Laminados').map((r) => String(r.categoria ?? '').trim()));
     const articulos = new Set(datos.ventas.filter((r) => String(r.linea ?? '').trim() !== 'Laminados').map((r) => String(r.codigo_articulo ?? '').trim()).filter(Boolean));
@@ -92,6 +87,7 @@ async function main() {
     tipo: 'auditoria_cpp_sin_activar_en_produccion', creado_en: new Date().toISOString(),
     periodo_ventas: { desde: args.desde, hasta: args.hasta }, corte_compras: cpp.corte,
     primera_compra_disponible: datos.historial?.primera_compra || cpp.primeraCompra,
+    advertencia_snapshot: datos.advertencia_snapshot || null,
     criterio: 'Laminados conserva la jerarquía del PDF. Empaques, Tapas y Valvulas e Inyectables usan únicamente compras del mismo código: año de venta, luego años anteriores disponibles de más reciente a más antiguo, priorizando H2 antes del año completo.',
     pendiente: ['Confirmar la unidad de compra y venta por artículo en las tres líneas distintas de Laminados.', 'Completar el historial de compras propias anterior al inicio de la ingesta para los artículos que siguen sin CPP.', 'Revisar compras del mismo código que aparecen en varias líneas.', 'Resolver diferencias de alcance y datos de Laminados frente al reporte de referencia.'],
     resumen: resumir(filas), lineas: grupos, incidencias_compras: cpp.incidencias,

@@ -24,7 +24,7 @@ function Dato({ titulo, leyenda, valor, sub, tono = '' }) {
 // (período seleccionado + el año previo, para ver de dónde viene el cambio).
 export default function DetalleProducto({ producto: p, onClose }) {
   const { desde } = usePeriodo()
-  const { data, isLoading } = useMargenProductoDetalle(p.id)
+  const { data, isLoading } = useMargenProductoDetalle(p.id, p.es_cpp ? { categoria: 'Laminados', corte_cpp: p.corte_cpp } : {})
 
   useEffect(() => {
     const esc = (e) => e.key === 'Escape' && onClose()
@@ -61,7 +61,7 @@ export default function DetalleProducto({ producto: p, onClose }) {
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Dato titulo="Ventas" valor={fmtQ(p.ventas)} sub={`${fmtInt(p.unidades_12m)} unidades`} />
-            <Dato titulo="Margen bruto" leyenda="margen_bruto" valor={fmtQ(p.margen_q)} sub={`${fmtPct(p.margen_pct_actual)} sobre ventas`} />
+            <Dato titulo={p.es_cpp ? 'Margen sobre materia prima' : 'Margen bruto'} leyenda={p.es_cpp ? 'margen_mp' : 'margen_bruto'} valor={p.margen_q === null ? 'N/D' : fmtQ(p.margen_q)} sub={`${fmtPct(p.margen_pct_actual)} sobre ventas con costo`} />
             <Dato
               titulo="Margen año anterior"
               leyenda="vs_anio_anterior"
@@ -69,7 +69,7 @@ export default function DetalleProducto({ producto: p, onClose }) {
               sub={p.delta_puntos === null ? 'sin ventas el año anterior' : `${p.delta_puntos > 0 ? '+' : ''}${p.delta_puntos.toFixed(1)} pts`}
               tono={p.delta_puntos < -1 ? 'text-red-500' : ''}
             />
-            <Dato titulo="Precio / costo unitario" leyenda="costo_unitario" valor={fmtPrecio(p.precio_actual)} sub={`costo ${fmtPrecio(p.costo_actual)}`} />
+            <Dato titulo="Precio / costo unitario" leyenda={p.es_cpp ? 'costo_cpp' : 'costo_unitario'} valor={fmtPrecio(p.precio_actual)} sub={`costo ${p.costo_actual === null ? 'N/D' : fmtPrecio(p.costo_actual)}`} />
           </div>
 
           {subeSugerido && (

@@ -58,6 +58,7 @@ export default function MargenCategorias({ filtro, onFiltro }) {
       }
     })
   }, [data])
+  const cpp = Boolean(data?.data?.metodologia)
 
   const filas = useMemo(() => {
     const { col, dir } = orden
@@ -108,7 +109,7 @@ export default function MargenCategorias({ filtro, onFiltro }) {
                     <Th col="ventas">Ventas</Th>
                     <Th col="margen">Margen Q</Th>
                     <Th col="aporte" ayuda="aporte_margen">Aporte</Th>
-                    <Th col="margen_pct" ayuda="margen_bruto">Margen %</Th>
+                    <Th col="margen_pct" ayuda={cpp ? 'margen_mp' : 'margen_bruto'}>Margen %</Th>
                     <Th col="margen_pct_prev" ayuda="vs_anio_anterior">Año ant.</Th>
                     <Th col="delta" ayuda="margen_pts">Δ pts</Th>
                     <th className="pb-2"><Leyenda k="semaforo_categoria" /></th>

@@ -1,8 +1,51 @@
 # CPP comercial: preparación y auditoría
 
-Estado: calculador y auditoría local. Las rutas actuales de la aplicación todavía
-utilizan `margen.js`; estos archivos no cambian la base ni el cálculo publicado.
-Transformación queda fuera de este alcance.
+Estado: corrección local conectada al filtro `categoria=Laminados` de Ventas y
+Márgenes, con una sola fuente para resumen, artículos, detalle, vendedores,
+clientes, categorías, series y matriz. No publicada; no se modificaron datos
+ni servicios de producción. Transformación queda fuera de este alcance.
+
+El alcance actual es la selección explícita de Laminados. Los totales generales
+sin ese filtro, Dashboard, Tesorería y la capa SQL de IA conservan el criterio
+anterior y requieren integración antes de publicar una corrección de toda la
+aplicación. No presentar este avance como una migración global terminada.
+
+La conciliación actual y las diferencias del ERP se detallan en
+[conciliacion-laminados-2026-09.md](./conciliacion-laminados-2026-09.md).
+
+## Acuerdos y evidencia confirmados con el usuario
+
+- El costo promedio y el último costo ya vienen del ERP, pero no equivalen al
+  CPP del reporte. Se verificaron directamente en `vstFacturas_Devoluciones`:
+  ACLAR M097410110 trae ambos en Q22.56845 frente al CPP Q226.04979778 de
+  Jonathan; M097410155 trae ambos en Q212.78 frente al mismo CPP del reporte.
+  Cambiar de un campo de costo al otro no resuelve la discrepancia.
+- Las nueve vistas visibles para `usrDasboard` en SQL Server TP_A no exponen
+  unidad de medida ni factor de conversión. Se revisaron sus columnas, incluidas
+  `vst_Articulos`, `vstCompras` y `vstFacturas_Devoluciones`. Esto no prueba que
+  el ERP carezca del dato en sus tablas internas, a las que no tenemos acceso.
+- `Unidades` es cantidad numérica. Algunas ventas tienen anotaciones en `aux02`
+  como `5*400` para cantidad 2 o `24*450` para 10.80. Son indicios de millares
+  para esos artículos, no una unidad maestra confirmada; las compras revisadas
+  no traen esas anotaciones. `aux01` está en cero en las compras revisadas.
+- Laminados ya tiene `Unidades = kg` acreditado en el PDF (página 3). No se
+  necesita esperar una nueva columna de unidad para avanzar con Laminados.
+- Para Empaques, Tapas y Valvulas e Inyectables, el usuario definió usar compras
+  del mismo artículo y sus compras anteriores, sin promediar otros productos.
+  No queda pendiente pedir aprobación a Jonathan sobre esa regla.
+- El usuario confirmó que ya envió al grupo de Héctor y Jonathan la solicitud
+  para identificar la unidad de cada artículo en compras y ventas y, si es
+  posible, agregarla a las dos vistas. No se presupone que haya respuesta.
+- Cantidad y unidad bastan cuando compras y ventas están en la misma medida.
+  Un factor solo es necesario si efectivamente difieren; no pedirlo como
+  requisito universal ni convertir de nuevo cantidades ya normalizadas.
+- Transformación se trabajará después. No mezclar con CPP su fórmula prevista:
+  `(ventas - compras + inventario_final - inventario_inicial) / ventas`.
+
+Los datos del Excel y el PDF son fuentes para analizar. Las decisiones del usuario
+en esta sección son las instrucciones de alcance. La revisión actual de Laminados
+debe conservar trazabilidad de diferencias de datos, sin forzar coincidencias con
+ajustes manuales que no estén documentados por Jonathan.
 
 ## Alcance
 
@@ -65,16 +108,34 @@ npm run audit:cpp -- --desde=2026-01-01 --hasta=2026-09-30 --corte=2026-09-30 --
 ```
 
 La auditoría abre una transacción READ ONLY con snapshot consistente. Trabaja
-con la última versión recibida de cada factura/artículo, conservando sus filas
-partidas dentro del mismo batch. Exporta trazabilidad, cobertura, alertas y CPP
-por SKU. No ejecuta migraciones ni activa el cálculo en los endpoints.
+con la última carga completa exitosa que cubre cada fecha, conservando sus filas
+partidas. Una factura que desaparece de esa carga ya no se rescata de un hash
+antiguo. Exporta trazabilidad, cobertura, alertas y CPP por SKU. No ejecuta
+migraciones ni modifica datos.
 
 Para las tres líneas por artículo, la consulta recupera todo el historial propio
 disponible en Postgres, sin filtrar por la categoría actual ni solo por A−1.
 
-Para repetir sobre datos raw extraídos previamente, agregar `--datos=/ruta/source.json`.
-Ese archivo debe contener `[compras_raw, ventas_raw]`, con identificador de batch,
-hash y timestamp de ingesta. No se deben versionar exportes de datos del cliente.
+Para repetir sobre datos raw, agregar `--datos=/ruta/source.json` con un objeto
+`{compras, ventas, batches}`. Los metadatos de cargas son necesarios para detectar
+bajas. El formato antiguo de arrays sin batches se admite solo para diagnóstico
+y queda marcado como insuficiente para aprobar producción. No versionar exportes
+de datos del cliente.
+
+## Integración local de Laminados
+
+- `cppDatos.js`: lecturas de snapshots en transacción READ ONLY. Descarta cargas
+  fallidas/incompletas y versiones que fueron reemplazadas, incluso por cargas
+  vacías. No basta elegir el último registro de cada hash.
+- `laminados.js`: CPP único, período actual/anterior y agrupaciones sin
+  extrapolar márgenes ni promediar porcentajes. Corte explícito `corte_cpp` o
+  último mes cerrado según Guatemala. Las compras usan el año disponible hasta
+  el corte, aunque se filtre un mes, vendedor, cliente o producto.
+- `laminadosHttp.js`: adapta ese resultado a las rutas existentes de Ventas y
+  Márgenes cuando se selecciona Laminados. Incluye el detalle mensual y la matriz.
+  También permite revisar `GET /api/margenes/cpp-laminados` con autenticación.
+- La interfaz identifica el margen sobre materia prima y la fecha de corte;
+  conserva N/D cuando falta costo. El detalle usa el mismo corte que el resumen.
 
 ## Antes de activar
 
@@ -89,10 +150,15 @@ hash y timestamp de ingesta. No se deben versionar exportes de datos del cliente
    para nueve de los catorce artículos sin compras en Postgres (cuatro de
    Empaques y cinco de Tapas). Esos registros todavía no se ingieren ni se
    incluyen en los resultados de la auditoría a Postgres que siguen.
-5. Integrar una sola fuente de costo y base del margen en los módulos afectados,
-   incluyendo importes y porcentajes, una vez validados los puntos anteriores.
+5. Integrar la fuente CPP en los totales generales y módulos restantes, y definir
+   su presentación junto con las otras metodologías antes del despliegue global.
+6. Refrescar ventanas históricas completas: compras de septiembre y ventas de
+   junio cambiaron después de su emisión. La ventana de siete días de compras y
+   noventa de ventas no garantiza capturar esos cambios retroactivos. La lectura
+   por snapshot resuelve bajas dentro de ventanas cargadas, pero no crea filas
+   que nunca fueron extraídas ni actualiza ventanas que ya dejaron de refrescarse.
 
-## Comprobación del 21-oct-2026
+## Comprobación inicial del 21-oct-2026 (antes de corregir la lectura de snapshots)
 
 Prueba de enero a septiembre de 2026 contra Postgres, con compras al 30-sep-2026:
 

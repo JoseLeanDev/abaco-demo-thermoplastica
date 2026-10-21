@@ -103,10 +103,10 @@ export const useMargenes = (filtros = {}) => {
   })
 }
 
-export const useMargenProductoDetalle = (id) => {
+export const useMargenProductoDetalle = (id, filtros = {}) => {
   const { params } = usePeriodo()
-  return useQuery(['margen-producto-detalle', id, params], () =>
-    endpoints.margenes.detalleProducto(id, params),
+  return useQuery(['margen-producto-detalle', id, params, filtros], () =>
+    endpoints.margenes.detalleProducto(id, { ...params, ...filtros }),
     { enabled: !!id }
   )
 }

@@ -8,6 +8,7 @@ const fmtPct = (n) => (n === null || n === undefined ? '—' : `${Number(n).toFi
 // Margen por vendedor o por cliente (respeta el filtro de producto de la página).
 // A la derecha, participación en ventas como barras: con 30 clientes un pie no se lee.
 export default function TabRanking({ icon, titulo, singular, items, isLoading, nota }) {
+  const cpp = items.some(i => i.es_cpp)
   const [orden, setOrden] = useState({ col: 'ventas_12m', dir: 'desc' })
   const [busqueda, setBusqueda] = useState('')
 
@@ -51,7 +52,7 @@ export default function TabRanking({ icon, titulo, singular, items, isLoading, n
                 <tr>
                   <Th col="nombre" orden={orden} setOrden={setOrden} align="left">{singular}</Th>
                   <Th col="ventas_12m" orden={orden} setOrden={setOrden}>Ventas</Th>
-                  <Th col="margen_pct_actual" orden={orden} setOrden={setOrden} leyenda="margen_bruto">Margen</Th>
+                  <Th col="margen_pct_actual" orden={orden} setOrden={setOrden} leyenda={cpp ? 'margen_mp' : 'margen_bruto'}>Margen</Th>
                   <Th col="margen_pct_historico" orden={orden} setOrden={setOrden} leyenda="vs_anio_anterior">Año ant.</Th>
                   <Th col="delta_puntos" orden={orden} setOrden={setOrden} leyenda="margen_pts">Δ pts</Th>
                   <th className="px-3 py-2.5" />
@@ -67,7 +68,7 @@ export default function TabRanking({ icon, titulo, singular, items, isLoading, n
                     <td className={`${td} text-right tabular-nums text-[var(--text-muted)]`}>{fmtPct(r.margen_pct_historico)}</td>
                     <td className={`${td} text-right tabular-nums font-medium`}>
                       <span className={r.delta_puntos < -1 ? 'text-red-500' : r.delta_puntos > 1 ? 'text-emerald-600' : 'text-[var(--text-secondary)]'}>
-                        {r.delta_puntos > 0 ? '+' : ''}{Number(r.delta_puntos).toFixed(1)}
+                        {r.delta_puntos === null ? '—' : `${r.delta_puntos > 0 ? '+' : ''}${Number(r.delta_puntos).toFixed(1)}`}
                       </span>
                     </td>
                     <td className={`${td} text-center`}><Semaforo s={r.semaforo} /></td>

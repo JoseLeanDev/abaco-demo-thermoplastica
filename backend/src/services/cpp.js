@@ -155,6 +155,7 @@ function crearCalculador(compras, { corte } = {}) {
       venta, cantidad, costo_mp: costo, margen_mp: margen,
       margen_mp_pct: venta > 0 && margen !== null ? margen / venta * 100 : null,
       nombre_vendedor: cliente.includes('COLGATE') ? 'Gerencia Laminados' : r.nombre_vendedor,
+      codigo_vendedor: cliente.includes('COLGATE') ? null : r.codigo_vendedor,
     };
   }
   return { buscar, calcularVenta, corte, primeraCompra, incidencias };

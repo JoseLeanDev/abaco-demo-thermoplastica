@@ -265,7 +265,7 @@ export default function Ventas() {
       )}
 
       <p className="text-xs text-[var(--text-muted)] italic">
-        Fuente: <code>vstFacturas_Devoluciones</code>. Margen = <em>total_sin_iva − (unidades × costo_promedio_facturado)</em>.
+        {r.metodologia ? <>Margen sobre materia prima: ventas sin IVA menos kilos vendidos por CPP de compras. Compras hasta {r.metodologia.corte_cpp}; ventas hasta {r.metodologia.hasta_efectivo}. Las ventas sin CPP se excluyen del margen. <Leyenda k="margen_mp" /></> : <>Fuente: <code>vstFacturas_Devoluciones</code>. Margen = <em>total_sin_iva − (unidades × costo_promedio_facturado)</em>.</>}
       </p>
     </div>
   )
@@ -302,10 +302,10 @@ function KPIs({ r, loading }) {
         </p>
       </div>
       <div className="kpi-card">
-        <span className="kpi-label flex items-center gap-1">Margen bruto <Leyenda k="margen_bruto" /></span>
+        <span className="kpi-label flex items-center gap-1">{r.metodologia ? 'Margen sobre materia prima' : 'Margen bruto'} <Leyenda k={r.metodologia ? 'margen_mp' : 'margen_bruto'} /></span>
         <p className={`kpi-value ${margenTone(r.margen_bruto_pct)}`}>{v(fmtPct(r.margen_bruto_pct))}</p>
         <p className="text-xs text-[var(--text-muted)] mt-1">
-          {fmtM(r.margen_bruto)}
+          {r.margen_bruto === null ? 'N/D' : fmtM(r.margen_bruto)}
           {deltaMargen !== null && (
             <> · <span className={deltaMargen >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>{deltaMargen >= 0 ? '+' : ''}{deltaMargen.toFixed(1)} pts</span> vs año ant. <Leyenda k="margen_pts" /></>
           )}

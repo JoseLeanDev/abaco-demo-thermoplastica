@@ -22,6 +22,7 @@ const MAX_FILAS = 200
 // Todos los productos con ventas en el período (respetan el filtro de producto
 // de la página): búsqueda por nombre o código, semáforo y detalle en panel.
 export default function TabProductos({ productos, semaforo, setSemaforo }) {
+  const cpp = productos.some(p => p.es_cpp)
   const [busqueda, setBusqueda] = useState('')
   const [orden, setOrden] = useState({ col: 'ventas', dir: 'desc' })
   const [seleccion, setSeleccion] = useState(null)
@@ -108,8 +109,8 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
                 <Th col="nombre" orden={orden} setOrden={setOrden} align="left">Producto</Th>
                 <Th col="ventas" orden={orden} setOrden={setOrden}>Ventas</Th>
                 <Th col="precio_actual" orden={orden} setOrden={setOrden}>Precio</Th>
-                <Th col="costo_actual" orden={orden} setOrden={setOrden} leyenda="costo_unitario">Costo</Th>
-                <Th col="margen_pct_actual" orden={orden} setOrden={setOrden} leyenda="margen_bruto">Margen</Th>
+                <Th col="costo_actual" orden={orden} setOrden={setOrden} leyenda={cpp ? 'costo_cpp' : 'costo_unitario'}>Costo</Th>
+                <Th col="margen_pct_actual" orden={orden} setOrden={setOrden} leyenda={cpp ? 'margen_mp' : 'margen_bruto'}>Margen</Th>
                 <Th col="margen_pct_historico" orden={orden} setOrden={setOrden} leyenda="vs_anio_anterior">Año ant.</Th>
                 <Th col="delta_puntos" orden={orden} setOrden={setOrden} leyenda="margen_pts">Δ pts</Th>
                 <th className="px-3 py-2.5" />
@@ -129,7 +130,7 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
                   </td>
                   <td className={`${td} text-right tabular-nums`}>{fmtQ(p.ventas)}</td>
                   <td className={`${td} text-right tabular-nums`}>{fmtPrecio(p.precio_actual)}</td>
-                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{fmtPrecio(p.costo_actual)}</td>
+                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{p.costo_actual === null ? 'N/D' : fmtPrecio(p.costo_actual)}</td>
                   <td className={`${td} text-right tabular-nums font-semibold`}>{fmtPct(p.margen_pct_actual)}</td>
                   <td className={`${td} text-right tabular-nums text-[var(--text-muted)]`}>{fmtPct(p.margen_pct_historico)}</td>
                   <td className={`${td} text-right tabular-nums font-medium`}>

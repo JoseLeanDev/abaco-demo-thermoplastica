@@ -4,7 +4,7 @@
   "description": "abaco Backend API - Thermoplástica Demo",
   "main": "src/index.js",
   "scripts": {
-    "test:cpp": "node --test test/cpp.test.js",
+    "test:cpp": "node --test test/cpp.test.js test/laminados.test.js",
     "audit:cpp": "node scripts/auditar-cpp.js",
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",

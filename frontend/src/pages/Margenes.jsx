@@ -37,8 +37,9 @@ export default function Margenes() {
   const { data: clientesData, isLoading: cLoading } = useMargenClientes(prodParams)
 
   const resumen = data?.data?.resumen
+  const cpp = data?.data?.metodologia
   const productos = data?.data?.productos || []
-  const delta = resumen && resumen.margen_global_pct_prev !== null ? resumen.margen_global_pct - resumen.margen_global_pct_prev : null
+  const delta = resumen && resumen.margen_global_pct !== null && resumen.margen_global_pct_prev !== null ? resumen.margen_global_pct - resumen.margen_global_pct_prev : null
 
   const verAjuste = () => { setActiveTab('productos'); setSemaforo('rojo') }
 
@@ -58,6 +59,7 @@ export default function Margenes() {
 
       {/* Filtro de producto: aplica a KPIs y a todas las pestañas */}
       <FiltroProducto value={producto} onChange={setProducto} />
+      {cpp && <p className="text-xs text-[var(--text-muted)]">Margen sobre materia prima · compras hasta {cpp.corte_cpp} · ventas hasta {cpp.hasta_efectivo}. Las ventas sin CPP no entran al margen. <Leyenda k="margen_mp" /></p>}
 
       {error && <div className="card p-6 text-red-500">Error cargando datos: {error.message}</div>}
 
@@ -67,9 +69,9 @@ export default function Margenes() {
       ) : resumen && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="card p-5">
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">Margen bruto <Leyenda k="margen_bruto" /></p>
-            <p className="text-2xl font-bold text-emerald-600">{formatGTQ(resumen.total_margen_bruto_q)}</p>
-            <p className="text-xs text-[var(--text-muted)]">{formatNum(resumen.margen_global_pct)}% sobre ventas</p>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">{cpp ? 'Margen sobre materia prima' : 'Margen bruto'} <Leyenda k={cpp ? 'margen_mp' : 'margen_bruto'} /></p>
+            <p className="text-2xl font-bold text-emerald-600">{resumen.total_margen_bruto_q === null ? 'N/D' : formatGTQ(resumen.total_margen_bruto_q)}</p>
+            <p className="text-xs text-[var(--text-muted)]">{resumen.margen_global_pct === null ? 'N/D' : `${formatNum(resumen.margen_global_pct)}% sobre ventas con costo`}</p>
             {resumen.pct_ventas_sin_costo >= 1 && (
               <p className="text-[10px] text-[var(--text-muted)] mt-0.5 flex items-center gap-1">
                 {formatNum(resumen.pct_ventas_sin_costo)}% de ventas sin costo, excluidas del % <Leyenda k="pct_sin_costo" />
@@ -79,7 +81,7 @@ export default function Margenes() {
           <div className="card p-5">
             <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">Margen % vs año anterior <Leyenda k="vs_anio_anterior" /></p>
             <div className="flex items-baseline gap-2">
-              <p className="text-2xl font-bold">{formatNum(resumen.margen_global_pct)}%</p>
+              <p className="text-2xl font-bold">{resumen.margen_global_pct === null ? 'N/D' : `${formatNum(resumen.margen_global_pct)}%`}</p>
               {delta !== null && (
                 <p className={`text-sm font-semibold ${delta < -1 ? 'text-red-500' : delta > 1 ? 'text-emerald-600' : 'text-[var(--text-secondary)]'}`}>
                   {delta > 0 ? '+' : ''}{delta.toFixed(1)} pts

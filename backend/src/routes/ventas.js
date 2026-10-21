@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../database/connection');
 const M = require('../services/margen');
+const { middlewareLaminados } = require('../services/laminadosHttp');
+router.use(middlewareLaminados('ventas', db.pool));
 
 // Ventana default: año en curso (ver services/periodo.js).
 const { parsePeriodo: parseWindow } = require('../services/periodo');

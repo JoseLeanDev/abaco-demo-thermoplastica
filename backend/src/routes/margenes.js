@@ -3,6 +3,8 @@ const router = express.Router();
 const db = require('../../database/connection');
 const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
+const { middlewareLaminados } = require('../services/laminadosHttp');
+router.use(middlewareLaminados('margenes', db.pool));
 
 // -------------------------------------------------------------------
 // Semáforo: margen del período del filtro global vs el mismo período un año antes.
