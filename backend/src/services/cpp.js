@@ -9,9 +9,11 @@ const LINEAS = Object.freeze([
 ]);
 const UNIDADES = Object.freeze({
   Laminados: { unidad: 'kg', estado: 'documentada_pdf' },
-  'Empaques para alimentos': { unidad: 'unidad_erp', estado: 'pendiente_confirmacion' },
-  'Tapas y Valvulas': { unidad: 'unidad_erp', estado: 'pendiente_confirmacion' },
-  Inyectables: { unidad: 'unidad_erp', estado: 'pendiente_confirmacion' },
+  // Confirmación comunicada por el usuario el 22-oct-2026. Las cantidades
+  // originales ya representan millares; no volver a convertir por 1,000.
+  'Empaques para alimentos': { unidad: 'millar', estado: 'confirmada_usuario' },
+  'Tapas y Valvulas': { unidad: 'millar', estado: 'confirmada_usuario' },
+  Inyectables: { unidad: 'millar', estado: 'confirmada_usuario' },
 });
 const MANUALES = Object.freeze({
   'Aluminio Impreso': 82,
@@ -152,7 +154,7 @@ function crearCalculador(compras, { corte } = {}) {
     const advertencias = [...(cpp.advertencias || [])];
     if (linea === 'Laminados' && ['categoria', 'sublinea', 'color'].every((k) => ['', 'NO APLICA'].includes(normalizar(r[k])))) advertencias.push('clave_totalmente_generica');
     return {
-      ...base, ...cpp, advertencias, es_provisional: base.estado_unidad !== 'documentada_pdf' || advertencias.length > 0,
+      ...base, ...cpp, advertencias, es_provisional: !['documentada_pdf', 'confirmada_usuario'].includes(base.estado_unidad) || advertencias.length > 0,
       venta, cantidad, costo_mp: costo, margen_mp: margen,
       margen_mp_pct: venta > 0 && margen !== null ? margen / venta * 100 : null,
       nombre_vendedor: cliente.includes('COLGATE') ? 'Gerencia Laminados' : r.nombre_vendedor,

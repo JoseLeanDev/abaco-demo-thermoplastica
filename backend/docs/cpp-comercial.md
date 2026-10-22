@@ -3,7 +3,12 @@
 **Estado al 22-oct-2026:** el histórico y la integración general de Laminados se
 implementaron y publicaron el 21-oct-2026. Solo Laminados tiene activa la
 corrección. Empaques para alimentos, Tapas y Valvulas e Inyectables conservan
-su método anterior mientras se confirman unidades y se valida su histórico.
+su método anterior en producción mientras se completa y valida su histórico.
+El usuario comunicó el 22-oct-2026 que esas tres líneas se miden en millares;
+el calculador y la auditoría ya registran `millar` / `confirmada_usuario`, sin
+convertir nuevamente las cantidades originales por 1,000. La referencia del
+usuario a Laminados en millares contradice los kilos del PDF y queda por aclarar;
+Laminados conserva su cálculo y unidad actuales durante esa aclaración.
 Transformación queda para después. Estado, diferencias documentadas y criterio
 de conservar las ventas del ERP en
 [operacion-cpp-laminados.md](operacion-cpp-laminados.md).
@@ -49,7 +54,13 @@ La conciliación actual y las diferencias del ERP se detallan en
   No queda pendiente pedir aprobación a Jonathan sobre esa regla.
 - El usuario confirmó que ya envió al grupo de Héctor y Jonathan la solicitud
   para identificar la unidad de cada artículo en compras y ventas y, si es
-  posible, agregarla a las dos vistas. No se presupone que haya respuesta.
+  posible, agregarla a las dos vistas. El 22-oct comunicó que Empaques, Tapas y
+  Valvulas e Inyectables se miden en millares de unidades. Se registra como
+  confirmación transmitida por el usuario, no como una columna nueva del ERP.
+- Esa misma respuesta dice «igual que Laminados, en millares de unidades».
+  Se solicitó aclarar si cambia también Laminados, dado que el PDF documenta
+  kilos. Esa aclaración sigue pendiente; no se cambia silenciosamente Laminados
+  ni se traslada su flete por kilo a las cantidades en millares.
 - Cantidad y unidad bastan cuando compras y ventas están en la misma medida.
   Un factor solo es necesario si efectivamente difieren; no pedirlo como
   requisito universal ni convertir de nuevo cantidades ya normalizadas.
@@ -65,8 +76,11 @@ ajustes manuales que no estén documentados por Jonathan.
 
 Laminados, Empaques para alimentos, Tapas y Valvulas e Inyectables, con los nombres
 del ERP. El documento de Jonathan del 21 de octubre de 2026 acredita kilos para
-Laminados. Las otras tres líneas conservan la cantidad original como `unidad_erp`
-y el estado `pendiente_confirmacion`: no se presume que sean kilos o piezas.
+Laminados, sujeto a la aclaración posterior indicada arriba. Las otras tres líneas
+conservan la cantidad original como millares, con `unidad = millar` y
+`estado_unidad = confirmada_usuario`. Si compras y ventas están en esa misma
+medida, `CPP = importe comprado / cantidad en millares` da Q por millar;
+`cantidad vendida en millares × CPP` da el costo total sin otro factor de 1,000.
 
 El CPP puede expresarse por kilo, pieza o millar. Lo necesario es que la cantidad
 de compras y ventas use la misma unidad. Para Laminados también deben ser
@@ -208,6 +222,7 @@ de la metodología comercial del reporte y debe confirmarse al definir el alcanc
 Un ejemplo material es I110NBB38 (vial de 3 ml): la búsqueda por artículo toma
 su compra de noviembre de 2025, CPP Q594.64468776 por unidad exportada, y produce
 27.77% de margen. Ya no usa el CPP Q114.42886641 de otros Viales que generaba
-86.10%. Todos los resultados de las tres líneas quedan provisionales hasta
-confirmar unidades. Si faltan compras propias, se muestra N/D y no se sustituye
+86.10%. En esa auditoría inicial, los resultados de las tres líneas quedaban
+provisionales hasta confirmar unidades; la confirmación posterior del usuario
+se registra al inicio de este documento. Si faltan compras propias, se muestra N/D y no se sustituye
 con el costo de otros productos.

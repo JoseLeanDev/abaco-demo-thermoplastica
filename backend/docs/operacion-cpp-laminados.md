@@ -226,11 +226,53 @@ devoluciones con la extracción antes de atribuir la causa o cambiar datos.
 | Línea | Estado de la corrección |
 |---|---|
 | Laminados | Implementada, publicada e integrada. Validación del período y límites descritos arriba. |
-| Empaques para alimentos | Regla por compras del mismo artículo preparada; falta confirmar unidades de compras/ventas, completar histórico propio y validar antes de activar. |
-| Tapas y Valvulas | Mismo estado: compras propias, incluidas anteriores; pendiente unidades, histórico y activación validada. |
-| Inyectables | Regla por artículo preparada; pendiente confirmar unidades y validar cobertura histórica y resultados antes de activar. |
+| Empaques para alimentos | Millares confirmados por el usuario el 22-oct. Regla por compras del mismo artículo preparada; falta completar histórico propio y validar antes de activar. |
+| Tapas y Valvulas | Millares confirmados por el usuario el 22-oct. Compras propias, incluidas anteriores; pendiente histórico y activación validada. |
+| Inyectables | Millares confirmados por el usuario el 22-oct. Regla por artículo preparada; pendiente validar cobertura histórica y resultados antes de activar. |
 | Líneas de transformación | Pendiente: `(ventas - compras + inventario_final - inventario_inicial) / ventas`, con alcance de líneas por confirmar. |
 
 El orden previsto conserva primero las tres líneas comerciales restantes y
 después transformación. No usar promedios de otros productos para las tres
-líneas por artículo ni asumir que compras y ventas están en la misma medida.
+líneas por artículo. La confirmación recibida para esas tres líneas es millares
+de unidades; las cantidades se conservan sin una segunda conversión por 1,000.
+
+## Confirmación de unidades y preparación de las otras líneas — 22-oct-2026
+
+El usuario comunicó que las tres líneas pendientes se miden en millares de
+unidades. `cpp.js` identifica esa unidad y su procedencia como confirmación del
+usuario. No se habilitan nuevas líneas en la publicación de Laminados por
+cambiar ese metadato: la restricción del publicador a Laminados se conserva.
+Se añadieron casos de prueba con fracciones de millar para detectar conversiones
+erróneas por 1,000. Los fletes por kilo del PDF siguen reservados a Laminados.
+
+Hay una aclaración abierta: la frase recibida también equipara Laminados a
+millares, mientras el PDF lo define en kilos. Se pidió precisar ese alcance;
+Laminados conserva kilos y el cálculo ya conciliado mientras se obtiene respuesta.
+
+La nueva auditoría de solo lectura a Postgres, enero–septiembre de 2026 y compras
+al 30-sept, confirma el estado previo a recuperar las compras antiguas:
+
+| Línea | SKUs vendidos | Ventas con CPP encontrado | SKUs sin CPP |
+|---|---:|---:|---:|
+| Empaques para alimentos | 12 | 92.42% | 4 |
+| Tapas y Valvulas | 50 | 96.36% | 10 |
+| Inyectables | 26 | 100% | 0 |
+
+Estas coberturas no significan corrección activada ni validación completa del
+histórico. La unidad confirmada resuelve el pendiente de medida de esas tres
+líneas; la recuperación y validación de compras propias sigue pendiente.
+
+La consulta directa y de solo lectura al ERP del 22-oct recuperó en un expediente
+local 129 filas de compras anteriores al 18-sept-2024 para nueve de los catorce
+SKUs pendientes: los cuatro de Empaques y cinco de Tapas. Al aplicar esas compras
+propias en una simulación, Empaques alcanza 100% de ventas con CPP y Tapas 97.28%
+para enero–septiembre de 2026. Son resultados de preparación: esas filas no se
+han cargado a la publicación de producción ni constituyen todavía un snapshot
+completo de las tres líneas. Quedan cinco artículos de Tapas sin compra propia
+en la fuente consultada; conservar N/D, sin sustituirlos por otros artículos.
+
+Validación del cambio de metadatos: pasan 43 pruebas de CPP/adaptadores. La
+auditoría real a Postgres antes y después conserva exactamente ventas, costos,
+márgenes y porcentajes de las cuatro líneas; confirmar millares no altera por
+sí solo los cálculos. No se modificaron datos ni se activaron nuevas líneas en
+producción en esta preparación.

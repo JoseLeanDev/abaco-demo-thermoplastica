@@ -76,11 +76,27 @@ test('normaliza espacios y nulos de las llaves sin cambiar su significado', () =
   const c = engine([compra({ color: null, sublinea: '250 micras  ' })]);
   assert.equal(c.buscar(venta({ color: '' })).fuente_cpp, 'L1');
 });
-test('las unidades no confirmadas quedan visibles y no se aplica el método a transformación', () => {
+test('la confirmación de millares no cambia la unidad de Laminados ni activa transformación', () => {
   const c = engine([compra({ linea: 'Inyectables' })]);
-  assert.equal(c.calcularVenta(venta({ linea: 'Inyectables' })).estado_unidad, 'pendiente_confirmacion');
+  assert.equal(c.calcularVenta(venta()).unidad, 'kg');
+  assert.equal(c.calcularVenta(venta()).estado_unidad, 'documentada_pdf');
+  assert.equal(c.calcularVenta(venta({ linea: 'Inyectables' })).estado_unidad, 'confirmada_usuario');
   assert.equal(c.calcularVenta(venta({ linea: 'Soplado' })).excluida, true);
 });
+for (const linea of ['Empaques para alimentos', 'Tapas y Valvulas', 'Inyectables']) {
+  test(`${linea}: pondera compras y ventas en millares sin convertir otra vez por 1,000`, () => {
+    const c = engine([
+      compra({ linea, unidades: 2.5, total_sin_iva: 2500 }),
+      compra({ linea, unidades: 7.5, total_sin_iva: 8250 }),
+    ]);
+    const r = c.calcularVenta(venta({ linea, unidades: 0.4, total_sin_iva: 600 }));
+    assert.equal(r.unidad, 'millar');
+    assert.equal(r.estado_unidad, 'confirmada_usuario');
+    assert.equal(r.es_provisional, false);
+    close(r.cantidad, 0.4); close(r.cpp, 1075); close(r.costo_mp, 430);
+    close(r.margen_mp, 170); close(r.margen_mp_pct, 170 / 600 * 100);
+  });
+}
 test('excluye ventas internas sin tildes y reasigna Colgate', () => {
   const c = engine([compra()]);
   assert.equal(c.calcularVenta(venta({ cliente: '5779022-Thermoplástica S.A.' })).motivo, 'venta_interna');
@@ -114,7 +130,7 @@ for (const linea of ['Empaques para alimentos', 'Tapas y Valvulas', 'Inyectables
     assert.equal(r.fuente_cpp, 'SKU_H2_ANTERIOR');
     assert.equal(r.fuente.nivel, 'articulo');
     assert.deepEqual(r.fuente.llave, ['SKU1']);
-    assert.equal(r.es_provisional, true);
+    assert.equal(r.es_provisional, false);
   });
 }
 test('por artículo pondera solo sus compras actuales aunque cambie su categoría', () => {

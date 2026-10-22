@@ -94,7 +94,7 @@ async function main() {
     primera_compra_disponible: datos.historial?.primera_compra || cpp.primeraCompra,
     advertencia_snapshot: datos.advertencia_snapshot || null,
     criterio: 'Laminados conserva la jerarquía del PDF. Empaques, Tapas y Valvulas e Inyectables usan únicamente compras del mismo código: año de venta, luego años anteriores disponibles de más reciente a más antiguo, priorizando H2 antes del año completo.',
-    pendiente: ['Confirmar la unidad de compra y venta por artículo en las tres líneas distintas de Laminados.', 'Completar el historial de compras propias anterior al inicio de la ingesta para los artículos que siguen sin CPP.', 'Revisar compras del mismo código que aparecen en varias líneas.', 'Resolver diferencias de alcance y datos de Laminados frente al reporte de referencia.'],
+    pendiente: ['Completar el historial de compras propias anterior al inicio de la ingesta para los artículos que siguen sin CPP.', 'Revisar compras del mismo código que aparecen en varias líneas.', 'Aclarar la referencia del usuario a Laminados en millares frente a los kilos documentados en el PDF; conservar Laminados sin cambios mientras se aclara.', 'Mantener documentadas las diferencias de alcance y datos de Laminados frente al reporte de referencia.'],
     resumen: resumir(filas), lineas: grupos, incidencias_compras: cpp.incidencias,
     excluidas: filas.filter((r) => r.excluida).reduce((a, r) => { a[r.motivo] = (a[r.motivo] || 0) + 1; return a; }, {}),
   };
