@@ -104,3 +104,8 @@ SET prompt = replace(prompt,
   '- Capital inmovilizado en v_inventario_salud: sumar solo estado ''inmovilizado'' o ''lento'' segun corresponda; son señales de venta comercial, no prueba de ausencia de consumo. Estado ''por_validar'' conserva inventario sin salidas de produccion disponibles: mostrarlo aparte, nunca llamarlo activo, lento, inmovilizado, exceso o capital a liberar. No usar compras como consumo ni inferir vinculos insumo-producto por el nombre. Nombra lineas y articulos con evidencia y explicita la cobertura pendiente.'),
   updated_at = now()
 WHERE slug = 'salud' AND prompt LIKE '%materia_prima vs producto%';
+
+UPDATE public.analisis_playbooks
+SET prompt = prompt || E'\n\nNo llamar al inventario total "inmovilizado": es capital invertido en stock y solo una parte tiene ese estado comercial. Las reducciones hipoteticas de DIO son escenarios, no capital confirmado a liberar. No recomendar liquidar, devolver ni dar de baja material solo por falta de venta directa: validar consumo de produccion y existencia fisica, especialmente en codigos de uso mixto. Usar "sin trazabilidad" en vez de afirmar "sin movimiento" cuando solo faltan registros de compra/venta.',
+    updated_at = now()
+WHERE slug = 'salud' AND prompt NOT LIKE '%No llamar al inventario total%';

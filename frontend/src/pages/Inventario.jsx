@@ -84,7 +84,7 @@ export default function Inventario() {
               <p className="text-sm text-[var(--text-muted)]">
                 {cargando && !d ? 'Cargando…' : `${fmtInt(tot.skus)} artículos con stock · ${fmtInt(d?.catalogo)} en catálogo · foto del ${fmtFecha(d?.fecha_corte)}`}
               </p>
-              <PeriodoActivo nota="stock a hoy; salida (ventas y consumo), cobertura y ABC del período" className="mt-1" />
+              <PeriodoActivo nota="stock a hoy; salida comercial, cobertura y ABC del período; consumo de producción pendiente" className="mt-1" />
             </div>
           </div>
         </div>
@@ -160,7 +160,7 @@ export default function Inventario() {
             titulo={`Exceso sobre ${objetivo} días`} leyenda="inv_exceso"
             valor={tot.skus_evaluables > 0 ? fmtM(tot.exceso) : 'N/D'}
             onClick={() => setTab('accion')}
-            sub={`${tot.pct_exceso}% del stock · ${fmtInt(tot.skus_exceso)} SKUs`}
+            sub={tot.skus_evaluables > 0 ? `${tot.pct_exceso}% del stock · ${fmtInt(tot.skus_exceso)} SKUs` : 'Consumo de producción pendiente'}
           />
           <Kpi
             titulo="Quiebres de stock" leyenda="inv_quiebre"

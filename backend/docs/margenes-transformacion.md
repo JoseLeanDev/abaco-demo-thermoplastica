@@ -222,3 +222,30 @@ Expediente: `/tmp/thermo-inventario-transformacion-20261022/`, con respaldo de
 vista/comentario/prompt/insights previos. Recuperación: restaurar la definición y
 comentario respaldados de `v_inventario_salud` y el prompt de salud junto al código
 anterior; no modificar las fuentes ni publicaciones CPP.
+
+Las ocho rutas HTTP revisadas contra la base real responden 200: inventario
+quieto general, filtro pendiente, filtro inmovilizado, búsqueda IS30A, inventario
+analítico, salud, rotación de materia prima y margen de Laminados. IS30A conserva
+Q469,034 y queda completamente por validar, sin capital quieto ni activo.
+El margen de Laminados enero–septiembre conserva Q8,966,039.37. La conexión real
+`agente_ia` lee los cuatro estados con los mismos importes de Postgres.
+
+Se regeneraron los cuatro insights de salud. Los anteriores que proponían
+liquidar materias primas por falta de venta/recompra quedaron resueltos y se
+conservan en historial. El prompt vigente prohíbe llamar inmovilizado al total
+del inventario o recomendar bajas sin validar consumo y existencia física.
+Costo de las dos corridas de verificación: USD 0.08774; la segunda reemplaza a
+la primera porque esta aún usaba «inmovilizado» para todo el valor del stock.
+
+Publicación de código `e6e763d`: Render confirmó el servicio web como exitoso a
+las 16:46:52 UTC del 22-oct-2026, despliegue `dep-dbd3rbjncjis73ecajkg`.
+
+El scheduler también publicó el mismo código: 16:46:13 UTC, despliegue
+`dep-dbd3rbjncjis73ecak90`. Salud HTTP 200. Comprobación visual con sesión activa:
+Capital inmovilizado muestra Q22.0M por validar / 713 artículos y 224 artículos
+quietos (no 937, que antes incluía los pendientes). Búsqueda IS30A: Q469k por
+validar, Q0 quieto, sin cobertura estimada. En Inventario, filtro Materia prima:
+Q20.1M conservados, exceso N/D, quiebres 0 y detalle con estado pendiente.
+Evidencia visual: `entregables/inventario-consumo-por-validar-2026-10-22.png` en
+el workspace superior. Se verificaron las columnas exportables por código; no
+se afirma descarga y conciliación de todos los archivos Excel desde el navegador.
