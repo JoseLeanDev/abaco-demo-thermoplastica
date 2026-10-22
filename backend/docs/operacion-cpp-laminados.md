@@ -231,7 +231,7 @@ devoluciones con la extracción antes de atribuir la causa o cambiar datos.
 | Empaques para alimentos | Publicada el 22-oct con compras propias en millares, incluido histórico; cobertura 100% de ventas enero–septiembre 2026. |
 | Tapas y Valvulas | Publicada el 22-oct con compras propias en millares; cobertura 97.28%. Cinco SKUs sin compras propias permanecen N/D. |
 | Inyectables | Publicada el 22-oct con compras propias en millares; cobertura 100% de ventas enero–septiembre 2026. |
-| Líneas de transformación | Pendiente: `(ventas - compras + inventario_final - inventario_inicial) / ventas`, con alcance de líneas por confirmar. |
+| Líneas de transformación | Método pendiente: `(ventas - compras + inventario_final - inventario_inicial) / ventas`. Procesos comunicados y faltantes de cierres/asignación documentados en [margenes-transformacion.md](margenes-transformacion.md). |
 
 Las cuatro líneas comerciales ya están integradas; transformación sigue pendiente.
 No usar promedios de otros productos para las tres

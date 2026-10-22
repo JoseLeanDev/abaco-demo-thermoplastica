@@ -9,7 +9,8 @@ convertir nuevamente las cantidades originales por 1,000. La referencia del
 usuario a Laminados se aclaró con la captura de la respuesta de Jonathan:
 la consulta y la confirmación corresponden solo a las otras tres líneas.
 Laminados conserva su cálculo en kilos según el PDF.
-Transformación queda para después. Estado, diferencias documentadas y criterio
+Transformación está en revisión de fuentes; procesos, método y faltantes en
+[margenes-transformacion.md](margenes-transformacion.md). Estado, diferencias documentadas y criterio
 de conservar las ventas del ERP en
 [operacion-cpp-laminados.md](operacion-cpp-laminados.md). Operación, cobertura y
 cinco productos de Tapas sin compras propias en
