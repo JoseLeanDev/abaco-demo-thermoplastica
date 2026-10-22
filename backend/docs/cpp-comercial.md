@@ -1,6 +1,18 @@
 # CPP comercial: preparación y auditoría
 
-**Actualización:** el histórico y la integración general de Laminados se implementaron el 21-oct-2026. Estado y operación en [operacion-cpp-laminados.md](operacion-cpp-laminados.md). Las secciones de auditoría inicial conservan sus cifras históricas.
+**Estado al 22-oct-2026:** el histórico y la integración general de Laminados se
+implementaron y publicaron el 21-oct-2026. Solo Laminados tiene activa la
+corrección. Empaques para alimentos, Tapas y Valvulas e Inyectables conservan
+su método anterior mientras se confirman unidades y se valida su histórico.
+Transformación queda para después. Estado, diferencias documentadas y criterio
+de conservar las ventas del ERP en
+[operacion-cpp-laminados.md](operacion-cpp-laminados.md).
+
+## Antecedente: estado local antes de la publicación del 21-oct-2026
+
+Los siguientes párrafos describen la fase previa; no representan el estado
+publicado actual. Las secciones de auditoría inicial conservan sus cifras
+históricas.
 
 Estado: corrección local conectada al filtro `categoria=Laminados` de Ventas y
 Márgenes, con una sola fuente para resumen, artículos, detalle, vendedores,
@@ -139,7 +151,10 @@ de datos del cliente.
 - La interfaz identifica el margen sobre materia prima y la fecha de corte;
   conserva N/D cuando falta costo. El detalle usa el mismo corte que el resumen.
 
-## Antes de activar
+## Pendientes registrados antes de la publicación del 21-oct-2026
+
+Esta lista es histórica: el documento de operación indica lo resuelto para
+Laminados y el estado actual de las tres líneas todavía no activadas.
 
 1. Confirmar la unidad correspondiente a `Unidades` en compras y ventas por
    artículo de las otras tres líneas. La regla de usar solo compras propias,

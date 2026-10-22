@@ -3,6 +3,13 @@
 Implementación del 21 de octubre de 2026, autorizada por José para recuperar el
 histórico y extender únicamente Laminados al resto de la aplicación.
 
+**Estado al 22-oct-2026:** la corrección de Laminados está implementada y publicada,
+con histórico recuperado e integración en totales generales y módulos. La
+conciliación contra el Excel fue validada para enero–septiembre de 2026 con las
+excepciones documentadas abajo; no significa coincidencia del 100% con el archivo.
+Empaques para alimentos, Tapas y Valvulas e Inyectables siguen sin activar su CPP.
+Transformación se trabajará por separado.
+
 ## Datos recuperados y alcance
 
 - Ventas originales de Laminados desde el 1 de enero de 2024 hasta la fecha.
@@ -181,3 +188,49 @@ Conclusión de esta revisión: el CPP de los productos contrastados coincide;
 la conciliación monetaria completa sigue abierta por los dos casos de ventas
 y por las diferencias de alcance y selección descritas. No hubo cambios de
 datos ni de código de producción durante esta comprobación.
+
+## Decisión sobre las diferencias — 22 de octubre de 2026
+
+El usuario indicó documentar las diferencias y continuar tomando el ERP como
+fuente principal para ventas e importes de facturas. Esta decisión no sustituye
+la metodología CPP del PDF por los campos de costo promedio o último costo del
+ERP: la fuente de ventas y la regla de cálculo de costos son decisiones distintas.
+
+Registro de diferencias para enero–septiembre de 2026, comparando el mismo
+alcance comercial del Excel (incluye Almacén General/Flexografía):
+
+| Caso | Referencia Excel | Fuente ERP usada por la aplicación | Diferencia Excel menos fuente | Tratamiento |
+|---|---:|---:|---:|---|
+| ACLAR, categoría; diferencia localizada en ALTIAN | Q2,866,730.19 de ventas | Q2,802,645.99 de ventas | Q64,084.20 | Conservar la fuente ERP. Falta el detalle de facturas que explique la diferencia. |
+| Factura 1092096, aluminio | Q82,851.96 | Q78,916.50 | Q3,935.46 | Conservar el importe ERP recibido. La causa del cambio no está confirmada. |
+| **Total de diferencias de ventas** | — | — | **Q68,019.66** | No crear ventas ni compensar costos para igualar el archivo. |
+
+La diferencia de costo total en ACLAR es Q48,001.67; los CPP unitarios
+contrastados coinciden. No se registra como una nueva discrepancia de CPP ni
+como una tercera diferencia de ventas. La causa de las diferencias permanece
+sin resolver: no está demostrado que el Excel esté equivocado, ni que haya una
+anulación, devolución o modificación posterior concreta.
+
+El alcance adicional del Excel, su selección de movimientos con margen menor
+al 25% y el 100% mostrado para PVC impreso sin costo se mantienen como diferencias
+de criterio, según la sección anterior. No se suman a los Q68,019.66.
+
+Para seguir operando Laminados se conserva el snapshot ERP vigente, su trazabilidad
+y el CPP acordado. Los dos casos quedan como excepciones abiertas de conciliación,
+sin bloquear por sí solos el trabajo en las líneas siguientes. Si se obtiene el
+detalle documental, contrastar fecha, artículo, importe, estado y posibles
+devoluciones con la extracción antes de atribuir la causa o cambiar datos.
+
+## Trabajo restante por línea
+
+| Línea | Estado de la corrección |
+|---|---|
+| Laminados | Implementada, publicada e integrada. Validación del período y límites descritos arriba. |
+| Empaques para alimentos | Regla por compras del mismo artículo preparada; falta confirmar unidades de compras/ventas, completar histórico propio y validar antes de activar. |
+| Tapas y Valvulas | Mismo estado: compras propias, incluidas anteriores; pendiente unidades, histórico y activación validada. |
+| Inyectables | Regla por artículo preparada; pendiente confirmar unidades y validar cobertura histórica y resultados antes de activar. |
+| Líneas de transformación | Pendiente: `(ventas - compras + inventario_final - inventario_inicial) / ventas`, con alcance de líneas por confirmar. |
+
+El orden previsto conserva primero las tres líneas comerciales restantes y
+después transformación. No usar promedios de otros productos para las tres
+líneas por artículo ni asumir que compras y ventas están en la misma medida.
