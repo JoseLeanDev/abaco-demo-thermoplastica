@@ -249,3 +249,9 @@ Q20.1M conservados, exceso N/D, quiebres 0 y detalle con estado pendiente.
 Evidencia visual: `entregables/inventario-consumo-por-validar-2026-10-22.png` en
 el workspace superior. Se verificaron las columnas exportables por código; no
 se afirma descarga y conciliación de todos los archivos Excel desde el navegador.
+
+Ajuste final `d734674`: copy de consumo pendiente y protección adicional del
+prompt. Web publicado 16:53:05 UTC (`dep-dbd3u9mk1f9s738ku16g`); scheduler
+16:52:22 UTC (`dep-dbd3u9mk1f9s738ku1r0`). Se comprobó la leyenda nueva desde
+la sesión autenticada y se dejó abierta Capital inmovilizado. Captura resumida:
+`entregables/inventario-consumo-verificado-2026-10-22.png` en el workspace superior.
