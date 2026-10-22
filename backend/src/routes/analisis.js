@@ -5,6 +5,7 @@ const router = express.Router();
 const CFOAICore = require('../agents');
 const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
+const { resumirInv, esQuieto } = require('../services/inventarioSalud');
 
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
@@ -867,7 +868,7 @@ async function inventarioSalud(db) {
     t: Date.now(),
     corte: corte?.f,
     filas: filas.map(r => {
-      const dias = r.clase === 'producto' ? num(r.dias_sin_venta) : r.clase === 'materia_prima' ? num(r.dias_sin_compra) : null;
+      const dias = r.clase === 'producto' ? num(r.dias_sin_venta) : null;
       return {
         ...r,
         valor: Number(r.valor_inventario) || 0,
@@ -875,7 +876,7 @@ async function inventarioSalud(db) {
         dias_cobertura: num(r.dias_cobertura),
         dias_sin_venta: num(r.dias_sin_venta),
         dias_sin_compra: num(r.dias_sin_compra),
-        // Días desde el último movimiento relevante: venta (producto) o compra (materia prima)
+        // Solo conocemos la salida comercial; la compra no acredita consumo de producción.
         dias_sin_mov: dias,
       };
     }),
@@ -883,30 +884,6 @@ async function inventarioSalud(db) {
   return cacheInv;
 }
 
-function resumirInv(filas) {
-  const suma = (f) => filas.reduce((s, r) => s + (f(r) ? r.valor : 0), 0);
-  const total = suma(() => true);
-  const lento = suma(r => r.estado === 'lento');
-  const inmovilizado = suma(r => r.estado === 'inmovilizado');
-  // Cobertura del grupo = valor / consumo diario (consumo implícito = valor / días de cobertura)
-  const consumo = filas.reduce((s, r) => s + (r.dias_cobertura > 0 ? r.valor / r.dias_cobertura : 0), 0);
-  const r1 = (x) => Math.round(x * 10) / 10;
-  const uds = (f) => Math.round(filas.reduce((s, r) => s + (f(r) ? (r.stock_actual || 0) : 0), 0));
-  return {
-    articulos: filas.length,
-    unidades: uds(() => true),
-    unidades_quietas: uds(r => r.estado !== 'activo'),
-    articulos_quietos: filas.filter(r => r.estado !== 'activo').length,
-    total: Math.round(total),
-    activo: Math.round(total - lento - inmovilizado),
-    lento: Math.round(lento),
-    inmovilizado: Math.round(inmovilizado),
-    quieto: Math.round(lento + inmovilizado),
-    pct_quieto: total > 0 ? r1((lento + inmovilizado) / total * 100) : 0,
-    pct_inmovilizado: total > 0 ? r1(inmovilizado / total * 100) : 0,
-    dias_cobertura: consumo > 0 ? Math.round(total / consumo) : null,
-  };
-}
 
 const TRAMOS_INV = [
   { id: '0_90', hasta: 90 }, { id: '91_180', hasta: 180 }, { id: '181_365', hasta: 365 },
@@ -973,7 +950,7 @@ router.get('/inventario-quieto', async (req, res) => {
 
     const porClase = [];
     for (const clase of ['materia_prima', 'producto', 'sin_movimiento']) {
-      for (const estado of ['activo', 'lento', 'inmovilizado']) {
+      for (const estado of ['activo', 'lento', 'inmovilizado', 'por_validar']) {
         const rs = filas.filter(r => r.clase === clase && r.estado === estado);
         if (rs.length) porClase.push({ clase, estado, articulos: rs.length, valor: Math.round(rs.reduce((s, r) => s + r.valor, 0)) });
       }
@@ -981,9 +958,9 @@ router.get('/inventario-quieto', async (req, res) => {
 
     // Artículos de la selección, de mayor valor. Sin estado: los quietos, salvo que
     // se esté buscando un artículo (entonces todos los que coinciden).
-    const estado = ['inmovilizado', 'lento', 'activo'].includes(req.query.estado) ? req.query.estado : null;
+    const estado = ['inmovilizado', 'lento', 'activo', 'por_validar'].includes(req.query.estado) ? req.query.estado : null;
     const articulos = filas
-      .filter(r => (estado ? r.estado === estado : palabras.length > 0 || r.estado !== 'activo'))
+      .filter(r => (estado ? r.estado === estado : palabras.length > 0 || esQuieto(r)))
       .sort((x, y) => y.valor - x.valor)
       .slice(0, 100)
       .map(r => ({
@@ -1113,23 +1090,23 @@ function resumirRot(rs, anual) {
   const inventario = suma('inventario');
   const salida = suma('salida');
   const cogs = suma('cogs');
-  const sinSalida = rs.filter(r => r.inventario > 0 && r.salida <= 0);
+  const sinSalida = rs.filter(r => r.clase === 'producto' && r.inventario > 0 && r.salida <= 0);
+  const inventarioEvaluable = rs.filter(r => r.clase === 'producto').reduce((s, r) => s + r.inventario, 0);
   const rot = (sal, inv) => (inv > 0 ? Math.round(sal * anual / inv * 100) / 100 : null);
   const dias = (sal, inv) => (sal > 0 && inv > 0 ? Math.round(inv / (sal * anual / 365)) : null);
-  // Costo de ventas si el grupo vende algo; si solo tiene materia prima, su consumo (compras)
-  const consumo = suma('consumo_mp');
-  const base = cogs > 0 ? 'costo_ventas' : consumo > 0 ? 'consumo' : null;
-  const flujo = base === 'costo_ventas' ? cogs : base === 'consumo' ? consumo : 0;
+  const base = cogs > 0 ? 'costo_ventas' : null;
+  const flujo = cogs;
   return {
     articulos: rs.filter(r => r.inventario > 0).length,
     inventario: Math.round(inventario),
     inventario_hoy: Math.round(suma('inventario_hoy')),
     cogs: Math.round(cogs),
     cogs_prev: Math.round(suma('cogs_prev')),
-    consumo_mp: Math.round(consumo),
+    consumo_mp: null,
+    consumo_por_validar: Math.round(inventario - inventarioEvaluable),
     base_rotacion: base,
-    rotacion: base ? rot(flujo, inventario) : (inventario > 0 ? 0 : null),
-    dias: dias(flujo, inventario),
+    rotacion: base ? rot(flujo, inventarioEvaluable) : null,
+    dias: dias(flujo, inventarioEvaluable),
     // Salida artículo por artículo (costo de ventas o consumo de materia prima)
     salida: Math.round(salida),
     sin_salida_valor: Math.round(sinSalida.reduce((s, r) => s + r.inventario, 0)),
@@ -1183,9 +1160,9 @@ router.get('/rotacion-inventario', async (req, res) => {
       // Misma clasificación que capital inmovilizado; sin stock hoy, se deduce de la historia
       const clase = r.clase || (r.alguna_venta ? 'producto' : r.compras > 0 || r.compras_prev > 0 ? 'materia_prima' : 'sin_movimiento');
       const inventario = base.usa_inventario_hoy ? r.inventario_hoy : (promedio.get(r.articulo_id) || 0);
-      const salida = clase === 'producto' ? r.cogs : clase === 'materia_prima' ? r.compras : 0;
-      const salida_prev = clase === 'producto' ? r.cogs_prev : clase === 'materia_prima' ? r.compras_prev : 0;
-      return { ...r, clase, inventario, salida, salida_prev, consumo_mp: clase === 'materia_prima' ? r.compras : 0 };
+      const salida = clase === 'producto' ? r.cogs : null;
+      const salida_prev = clase === 'producto' ? r.cogs_prev : null;
+      return { ...r, clase, inventario, salida, salida_prev, consumo_mp: null };
     }).filter(r => r.inventario > 0 || r.salida > 0);
 
     // Filtros de producto, búsqueda y tipo
@@ -1280,8 +1257,8 @@ router.get('/rotacion-inventario', async (req, res) => {
         return {
           codigo_articulo: r.codigo_articulo, articulo: r.articulo, clase: r.clase,
           categoria: r.categoria, subcategoria: r.subcategoria, sublinea: r.sublinea,
-          stock_actual: r.stock_actual, inventario: Math.round(r.inventario), salida: Math.round(r.salida),
-          rotacion: r.inventario > 0 ? Math.round(r.salida * anual / r.inventario * 100) / 100 : null,
+          stock_actual: r.stock_actual, inventario: Math.round(r.inventario), salida: r.salida === null ? null : Math.round(r.salida),
+          rotacion: r.clase === 'producto' && r.inventario > 0 ? Math.round(r.salida * anual / r.inventario * 100) / 100 : null,
           dias: d === null ? null : Math.round(d),
           ultima_venta: r.ultima_venta, ultima_compra: r.ultima_compra,
         };

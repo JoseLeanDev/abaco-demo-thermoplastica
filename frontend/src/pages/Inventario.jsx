@@ -148,7 +148,7 @@ export default function Inventario() {
           <Kpi
             titulo="Días de inventario" leyenda="inv_dias"
             valor={tot.dias_inventario !== null ? fmtInt(tot.dias_inventario) : '—'}
-            sub={tot.rotacion ? `Rota ${tot.rotacion}× al año${tot.base === 'consumo' ? ' · por consumo' : ''}` : 'Sin salida en el período'}
+            sub={tot.rotacion ? `Rota ${tot.rotacion}× al año${tot.base === 'consumo' ? ' · por consumo' : ''}` : 'Sin salida comercial medida'}
           />
           <Kpi
             titulo="Capital quieto" leyenda="inv_quieto"
@@ -158,7 +158,7 @@ export default function Inventario() {
           />
           <Kpi
             titulo={`Exceso sobre ${objetivo} días`} leyenda="inv_exceso"
-            valor={fmtM(tot.exceso)}
+            valor={tot.skus_evaluables > 0 ? fmtM(tot.exceso) : 'N/D'}
             onClick={() => setTab('accion')}
             sub={`${tot.pct_exceso}% del stock · ${fmtInt(tot.skus_exceso)} SKUs`}
           />
@@ -168,6 +168,15 @@ export default function Inventario() {
             onClick={() => setTab('accion')}
             sub={tot.quiebres > 0 ? `Movían ${fmtM(tot.salida_quiebres / dias * 30)}/mes y están en cero` : 'Sin artículos recurrentes en cero'}
           />
+        </div>
+      )}
+
+      {tot.por_validar > 0 && (
+        <div className="rounded-lg border border-slate-300 bg-slate-50 dark:bg-slate-900/30 p-4 text-sm text-[var(--text-secondary)]">
+          <strong>{fmtM(tot.por_validar)} · Consumo por validar.</strong>{' '}
+          Las vistas disponibles no muestran sus salidas a producción. Este stock sigue dentro del inventario,
+          pero no se considera activo, lento, inmovilizado ni exceso por falta de venta o recompra.
+          <button className="ml-2 underline" onClick={() => irDetalle({ rapido: 'estado_por_validar' })}>Ver artículos</button>
         </div>
       )}
 

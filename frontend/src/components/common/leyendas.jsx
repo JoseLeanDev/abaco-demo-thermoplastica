@@ -275,8 +275,8 @@ export const LEYENDAS = {
     texto: <>Compras sin IVA del período de artículos con categoría “Gastos de Operación” en el ERP. % = gastos ÷ ventas del período.</>,
   },
   rotacion_inventario: {
-    titulo: 'Rotaciones al año',
-    texto: <>365 ÷ días de inventario (DIO): cuántas veces al año se renueva el stock al ritmo de venta del período.</>,
+    titulo: 'Rotación comercial de inventarios',
+    texto: <>Costo vendido anualizado ÷ inventario de artículos con venta directa observada. El stock sin consumo trazable sigue en el total, pero no se infiere rotación cero ni consumo a partir de compras.</>,
   },
   mix_lineas: {
     titulo: 'Mix de líneas',
@@ -551,41 +551,19 @@ export const LEYENDAS = {
   },
   inv_tipo_articulo: {
     titulo: 'Tipo de artículo',
-    texto: <>
-      Según su historia en el ERP:
-      <L>
-        <li><strong>Producto terminado:</strong> tiene alguna factura de venta.</li>
-        <li><strong>Materia prima:</strong> nunca se vendió pero se compra (se consume en producción).</li>
-        <li><strong>Sin movimiento:</strong> ni ventas ni compras registradas.</li>
-      </L>
-      <Nota>Mismo criterio que Capital inmovilizado y Rotación de inventarios.</Nota>
-    </>,
+    texto: <>Producto: venta directa observada. Materia prima / insumo: compras sin venta directa registrada. Sin trazabilidad: sin compras/ventas en las fuentes disponibles. La relación insumo-producto transformado todavía no está expuesta.</>,
   },
   inv_salida: {
-    titulo: 'Salida del período',
-    texto: <>
-      Lo que sale del inventario en el período, a costo:
-      <L>
-        <li><strong>Producto terminado:</strong> costo de ventas (mismo criterio que el margen del sitio).</li>
-        <li><strong>Materia prima:</strong> lo comprado sin IVA, como aproximación de lo consumido (lo que se consume se repone).</li>
-      </L>
-      <Nota>“Salida/mes” = salida del período ÷ días del período × 30.</Nota>
-    </>,
+    titulo: 'Salida comercial del período',
+    texto: <>Costo de ventas del artículo. Las salidas a producción no están disponibles y se muestran como pendientes; no se estiman a partir de las compras. Salida mensual = costo vendido ÷ días del período × 30.</>,
   },
   inv_dias: {
-    titulo: 'Días de inventario',
-    texto: <>
-      Valor en stock hoy ÷ salida diaria del período: cuántos días alcanza el inventario al ritmo actual.
-      Rotación = 365 ÷ días.
-      <Nota>Para un grupo se usa su costo de ventas; si el grupo es solo materia prima (no vende), lo comprado (“por consumo”). No se suman ambos para no contar dos veces la materia prima que ya va dentro del costo de ventas.</Nota>
-    </>,
+    titulo: 'Días de inventario comercial',
+    texto: <>Valor del stock de artículos con venta directa ÷ costo vendido diario. Se excluye de ambos lados el stock sin consumo trazable. Rotación = 365 ÷ días. El inventario total sigue incluyendo los materiales pendientes.</>,
   },
   inv_cobertura: {
     titulo: 'Cobertura por artículo',
-    texto: <>
-      Días que alcanza el stock de cada artículo: su valor ÷ su salida diaria del período.
-      “Sin salida” = tiene stock pero no se vendió ni compró en el período.
-    </>,
+    texto: <>Valor en stock ÷ salida comercial diaria del período. Sin salida comercial medida no equivale a falta de transformación. Para materiales sin consumo trazable, la cobertura está por validar.</>,
   },
   inv_objetivo: {
     titulo: 'Cobertura objetivo',
@@ -593,42 +571,19 @@ export const LEYENDAS = {
   },
   inv_quieto: {
     titulo: 'Capital quieto',
-    texto: <>
-      Stock en estado lento o inmovilizado (vista de salud del inventario):
-      <L>
-        <li><strong>Inmovilizado:</strong> producto sin venta en 180 días, materia prima sin compra en 365, o sin ningún movimiento.</li>
-        <li><strong>Lento:</strong> se mueve, pero su stock cubre más de 180 días de consumo.</li>
-        <li><strong>Activo:</strong> todo lo demás.</li>
-      </L>
-      <Nota>Mismo cálculo que Análisis › Capital inmovilizado.</Nota>
-    </>,
+    texto: <>Suma de estados lento e inmovilizado para artículos con venta directa observada. Los insumos sin consumo trazable se muestran como Consumo por validar y no se incluyen como activos ni quietos.</>,
   },
   inv_exceso: {
-    titulo: 'Exceso de inventario',
-    texto: <>
-      Por artículo: valor en stock − (salida diaria × días de cobertura objetivo), si es positivo. Un artículo sin salida en el período cuenta todo su valor como exceso.
-      <Nota>Es el capital que se liberaría dejando cada artículo en la cobertura objetivo (dejando de reponer, liquidando o devolviendo).</Nota>
-    </>,
+    titulo: 'Exceso de inventario comercial',
+    texto: <>Para artículos con venta directa: valor en stock − salida comercial diaria × objetivo, si es positivo. Los materiales sin salidas de producción disponibles no generan exceso automático. El inventario total conserva su valor.</>,
   },
   inv_quiebre: {
     titulo: 'Quiebre de stock',
-    texto: <>
-      Artículo en cero, sin nada en tránsito, con demanda recurrente: tuvo salida (venta o compra para consumo) en al menos 3 de los últimos 6 meses y alguna en los últimos 90 días.
-      <Nota>Mucho se fabrica contra pedido, así que un artículo en cero sin demanda recurrente no se cuenta. “Movían Q/mes” = salida mensual del período de esos artículos.</Nota>
-    </>,
+    texto: <>Artículo con venta directa recurrente, en cero, sin tránsito: ventas en al menos 3 de los últimos 6 meses y alguna en los últimos 90 días. Sin consumos de producción disponibles no se infiere quiebre de materia prima por sus compras.</>,
   },
   inv_abc: {
-    titulo: 'Clasificación ABC',
-    texto: <>
-      Pareto por valor de salida del período (ver “Salida”), sobre todos los artículos:
-      <L>
-        <li><strong>A:</strong> los que suman el primer 80% de la salida.</li>
-        <li><strong>B:</strong> el siguiente 15%.</li>
-        <li><strong>C:</strong> el último 5%.</li>
-        <li><strong>Sin salida:</strong> no se vendieron ni compraron en el período.</li>
-      </L>
-      <Nota>La clase no cambia al filtrar: un artículo A sigue siendo A dentro de su categoría.</Nota>
-    </>,
+    titulo: 'Clasificación ABC comercial',
+    texto: <>Pareto por costo vendido en el período: A suma el primer 80%, B el siguiente 15% y C el resto. Sin salida medida incluye artículos sin costo vendido y materiales cuyo consumo de producción no está disponible; no significa que no se utilicen.</>,
   },
   inv_matriz_abc: {
     titulo: 'Matriz ABC × cobertura',
@@ -639,8 +594,8 @@ export const LEYENDAS = {
     texto: <>Valor en stock, días de inventario, % en estado lento o inmovilizado, exceso sobre la cobertura objetivo y quiebres de cada grupo de la jerarquía Categoría › Subcategoría › Sublínea.</>,
   },
   inv_dias_sin_mov: {
-    titulo: 'Días sin movimiento',
-    texto: <>Días desde la última venta (producto terminado) o la última compra (materia prima).</>,
+    titulo: 'Tiempo desde la última venta directa',
+    texto: <>Días desde la última venta del artículo. Para materias primas o registros sin trazabilidad de salida, queda pendiente. La última compra se muestra por separado y no demuestra consumo.</>,
   },
   inv_proveedor: {
     titulo: 'Proveedor principal',
@@ -815,11 +770,8 @@ export const LEYENDAS = {
     </>,
   },
   dias_inventario_rot: {
-    titulo: 'Días de inventario',
-    texto: <>
-      365 ÷ rotación: para cuántos días alcanza lo que hay en bodega al ritmo de salida del período.
-      <Nota>Para toda la empresa es el mismo número que “Días de inventario” en el ciclo de caja de Análisis; puede variar unos días porque aquí se usa el inventario promedio.</Nota>
-    </>,
+    titulo: 'Días de inventario comercial',
+    texto: <>365 ÷ rotación comercial. Se calcula sobre artículos con venta directa observada. El DIO del ciclo de caja tiene otro alcance y no es necesariamente igual.</>,
   },
   costo_ventas_rot: {
     titulo: 'Costo de ventas',
@@ -837,18 +789,11 @@ export const LEYENDAS = {
   },
   rotacion_por_tipo: {
     titulo: 'Rotación por tipo',
-    texto: <>
-      <L>
-        <li><strong>Producto terminado:</strong> costo de ventas ÷ su inventario.</li>
-        <li><strong>Materia prima:</strong> no se vende, se consume en producción. Se mide con lo comprado en el período (lo que se consume se repone) ÷ su inventario.</li>
-        <li><strong>Sin movimiento:</strong> sin ventas ni compras registradas; no rota.</li>
-      </L>
-      <Nota>Por eso la rotación total no es el promedio de las tres: el costo de ventas ya incluye la materia prima consumida.</Nota>
-    </>,
+    texto: <>Costo de ventas para los artículos con venta directa. El consumo de materias primas está por validar; sus compras no sustituyen salidas de producción.</>,
   },
   salida_articulo: {
-    titulo: 'Salida del período',
-    texto: <>Producto terminado: costo de lo vendido. Materia prima: lo comprado en el período, como aproximación de lo consumido. Ambos a costo, sin IVA.</>,
+    titulo: 'Salida comercial por artículo',
+    texto: <>Costo vendido en el período. Sin consumos de producción disponibles, la salida de materia prima permanece pendiente, aunque haya compras.</>,
   },
   inventario_vs_costo: {
     titulo: 'Peso en inventario vs en costo de ventas',
@@ -858,16 +803,16 @@ export const LEYENDAS = {
     </>,
   },
   sin_salida: {
-    titulo: 'Sin salida',
-    texto: <>Inventario de artículos que no tuvieron ninguna venta (producto) ni compra (materia prima) en el período.</>,
+    titulo: 'Sin venta comercial medida',
+    texto: <>Artículos con venta directa en su historia pero sin costo vendido en el período. No incluye como inmovilizados los materiales con consumo por validar.</>,
   },
   distribucion_rotacion: {
-    titulo: 'Para cuánto alcanza',
-    texto: <>Cada artículo con stock se ubica según sus días de inventario (su inventario ÷ su salida diaria del período) y se suma su valor. “Sin salida”: no se vendió ni se compró en el período.</>,
+    titulo: 'Cobertura comercial',
+    texto: <>Stock según su costo vendido diario. Sin salida medida incluye códigos sin costo vendido y materiales con consumo de producción pendiente. No demuestra que no se transformen.</>,
   },
   salida_mensual: {
-    titulo: 'Salida mensual',
-    texto: <>Costo de ventas y compras sin IVA de los artículos de la selección, por mes. Muestra si se está comprando más de lo que se vende (el inventario crece).</>,
+    titulo: 'Ventas a costo y compras mensuales',
+    texto: <>Costo vendido y compras sin IVA de la selección. Las compras son entradas; la diferencia con ventas a costo no permite concluir por sí sola que el inventario crece.</>,
   },
   capital_trabajo: {
     titulo: 'Capital de trabajo',
@@ -935,39 +880,29 @@ export const LEYENDAS = {
     titulo: 'Inventario a costo',
     texto: <>Existencia actual × costo promedio del ERP, en la foto más reciente del inventario. Solo cuenta artículos con existencia mayor a cero.</>,
   },
+  por_validar: {
+    titulo: 'Consumo por validar',
+    texto: <>Stock conservado en el inventario total, sin trazabilidad de sus salidas a producción. No se clasifica como activo, lento, inmovilizado ni exceso usando ventas o recompras. Falta relacionar el insumo con el producto transformado y su consumo.</>,
+  },
   inmovilizado: {
     titulo: 'Inmovilizado',
-    texto: <>
-      Stock que no se ha movido en mucho tiempo:
-      <L>
-        <li><strong>Producto</strong> sin ventas en los últimos 180 días.</li>
-        <li><strong>Materia prima</strong> sin compras en los últimos 365 días.</li>
-        <li>Artículos <strong>sin ningún movimiento</strong> registrado.</li>
-      </L>
-    </>,
+    texto: <>Artículos con venta directa registrada, sin venta comercial en los últimos 180 días. No incluye insumos sin trazabilidad de consumo. Esta señal comercial no demuestra ausencia de uso en producción.</>,
   },
   lento: {
     titulo: 'Lento',
-    texto: <>Se sigue moviendo, pero hay de más: el stock alcanza para <strong>más de 180 días</strong> al ritmo actual, o no tuvo consumo en la ventana reciente. Ver “Cobertura” para cómo se mide el ritmo.</>,
+    texto: <>Artículos con venta directa observada cuyo stock supera 180 días al ritmo de costo vendido. Las compras no se utilizan como consumo de materias primas.</>,
   },
   activo: {
     titulo: 'Activo',
-    texto: <>Se mueve y su stock alcanza para 180 días o menos al ritmo actual.</>,
+    texto: <>Artículos con venta directa observada y cobertura comercial de hasta 180 días. El stock con consumo pendiente de validar se muestra por separado.</>,
   },
   quieto: {
     titulo: 'Capital quieto',
     texto: <>Capital quieto = inmovilizado + lento. <br />% quieto = capital quieto ÷ inventario a costo.</>,
   },
   cobertura: {
-    titulo: 'Cobertura (días)',
-    texto: <>
-      Cuántos días alcanza el stock al ritmo de consumo actual: valor del stock ÷ consumo diario.
-      <L>
-        <li><strong>Producto:</strong> costo vendido en los últimos 180 días ÷ 180.</li>
-        <li><strong>Materia prima:</strong> compras de los últimos 365 días ÷ 365 (no hay datos de consumo en producción; lo comprado se usa como aproximación).</li>
-      </L>
-      <Nota>En un grupo se suman el valor y el consumo de sus artículos; los que no tienen consumo suben la cobertura.</Nota>
-    </>,
+    titulo: 'Cobertura comercial (días)',
+    texto: <>Valor del stock evaluable ÷ costo vendido diario de los últimos 180 días. El stock sin salidas de producción disponibles no entra en esta cobertura. Las compras no equivalen a consumo.</>,
   },
   unidades: {
     titulo: 'Unidades en stock',
@@ -982,18 +917,11 @@ export const LEYENDAS = {
   },
   tipo: {
     titulo: 'Tipo de inventario',
-    texto: <>
-      Se clasifica por la historia de cada artículo:
-      <L>
-        <li><strong>Producto:</strong> se ha vendido alguna vez.</li>
-        <li><strong>Materia prima:</strong> nunca se ha vendido, pero se compra.</li>
-        <li><strong>Sin movimiento:</strong> no tiene ventas ni compras registradas.</li>
-      </L>
-    </>,
+    texto: <>Producto: tiene venta directa en los registros disponibles. Materia prima / insumo: tiene compras sin venta directa registrada; es una clasificación por actividad, pendiente de relacionar con producción. Sin trazabilidad: sin compras ni ventas en las fuentes disponibles; puede tener transformación no expuesta.</>,
   },
   antiguedad: {
-    titulo: 'Antigüedad',
-    texto: <>Días desde el último movimiento: la última <strong>venta</strong> para producto y la última <strong>compra</strong> para materia prima. “Sin registro” son artículos sin ventas ni compras.</>,
+    titulo: 'Tiempo desde la última venta directa',
+    texto: <>Días desde la última venta registrada del código. Para artículos sin venta directa, el consumo está por validar; la fecha de compra no se usa como fecha de salida ni como edad del stock.</>,
   },
   corte: {
     titulo: 'Foto al corte',

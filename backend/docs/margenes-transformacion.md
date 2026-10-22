@@ -1,8 +1,8 @@
 # Márgenes de transformación: método y suficiencia de datos
 
-Estado al 22-oct-2026: revisión de solo lectura de Postgres y de las vistas del
-ERP. Método pendiente de implementar. Las cuatro líneas comerciales conservan
-su CPP publicado; esta revisión no cambia cálculos ni datos de producción.
+Estado al 22-oct-2026: el margen de transformación sigue pendiente de trazabilidad.
+Se corrige por separado la clasificación de inventario mediante la migración 024.
+Las cuatro líneas comerciales conservan su CPP publicado.
 
 ## Proceso comunicado por el cliente
 
@@ -120,14 +120,13 @@ facturas únicas, y no equivalen a una conciliación de costo.
 
 ## Pendientes concretos de datos y asignación
 
-1. Obtener del ERP inventarios valorizados a cada cierre requerido, con fecha,
-   línea responsable y valor total en Q. El detalle por artículo y sus cantidades
-   ayuda a conciliar y asignar materiales, pero no es necesario convertir las
-   unidades de compra y venta si ya se recibe el valor correcto por línea.
-   Establecer el alcance de materias primas, proceso y producto terminado.
-   Para el acumulado enero–septiembre de 2026,
-   como mínimo 31-dic-2025 y 30-sept-2026; para meses y años anteriores, todos
-   sus límites. Conciliar la valorización con el reporte aceptado por el cliente.
+1. José confirma que el cliente no guarda inventarios históricos: las fotos
+   desde el 9-oct-2026 las empezamos a capturar nosotros. No seguir solicitando
+   cierres históricos como si existieran. La fórmula requiere esos límites,
+   pero no se puede publicar enero–septiembre de 2026 con el inventario de hoy.
+   Para períodos anteriores solo sería posible una reconstrucción sustentada
+   en movimientos completos y valorizados, si se consiguen; no se ha acreditado
+   esa fuente. Conservar las fotos para períodos futuros y conciliar su valor.
 2. Identificar los códigos y registros de compras/consumos que corresponden a
    cada línea, incluidas mangas de Maquila, resinas de Soplado/Termoformado,
    tintas y otros insumos de Serigrafía. Definir la asignación de insumos
@@ -177,3 +176,49 @@ FROM dbo.vstCompras
 WHERE fec_emis >= '20240101' AND fec_emis < '20261023'
 GROUP BY RTRIM(Linea);
 ```
+
+## Corrección de inventario sin trazabilidad — 22-oct-2026
+
+José solicita identificar la relación insumo → producto transformado y corregir
+el material que aparece como inmovilizado por no venderse directamente.
+La consulta nueva a SQL Server TP_A, usuario usrDasboard, vuelve a mostrar solo
+las nueve vistas documentadas. Ninguna expone orden/lote de producción con
+código de insumo y código de producto resultante. `Entradas` y `Salidas` del
+sell-through están agregadas por código/semana, sin vínculo entre códigos.
+`modelo` contiene referencias contables en muchos artículos, no una lista de
+materiales acreditada; no inferir relaciones por nombres, familias o prefijos.
+
+Necesidad para Héctor: exponer los registros de producción/transformación con
+referencia de orden/lote, fecha, código de insumo consumido, cantidad y unidad,
+código de producto resultante, cantidad y unidad, línea/almacén origen-destino
+y costo del material. La receta/lista de materiales puede identificar relaciones;
+los consumos reales por fecha permiten medir movimiento y asignar costos.
+Verificar qué registra el ERP antes de exigir un nombre de tabla concreto.
+
+La migración 024 deja artículos con compras pero sin venta directa y artículos
+sin compras/ventas disponibles en estado `por_validar`. Conserva el valor del
+inventario, sin clasificarlos como activos, lentos, inmovilizados ni exceso.
+No presume que ya se consumieron: falta la evidencia de producción. La falta de
+recompra no se utiliza como prueba de inmovilización y compras no son consumo.
+Los criterios de venta directa de productos se conservan como señales comerciales,
+no como prueba de ausencia de uso productivo de un código de uso mixto.
+
+El estado se integra en Capital inmovilizado, Análisis, Inventario, filtros,
+gráficas, detalle y columnas exportables. Cobertura, exceso, quiebres y ABC
+comerciales excluyen el flujo de compra usado antes como supuesto de consumo.
+Rotación separa el valor con consumo pendiente de su base comercial; el total
+contable del inventario y el DIO del ciclo de caja conservan su alcance.
+La vista semántica y el prompt de salud del analista explicitan el mismo límite.
+
+Antes/después en la foto del 22-oct: total Q32,416,849.30, sin cambio de stock ni
+valor por artículo. Q22,049,145.72 / 713 artículos quedan por validar; los 438
+artículos con venta directa conservan su estado anterior. Inmovilizado comercial:
+Q1,398,967.23; lento: Q7,077,881.47; activo: Q1,890,854.88. Esto corrige la
+interpretación de los datos; no libera físicamente stock ni demuestra el consumo.
+
+Validación: 4 pruebas nuevas (incluido SQL real con fuentes temporales que no
+reemplazan vistas productivas), 51 pruebas de regresión CPP/margen y build frontend.
+Expediente: `/tmp/thermo-inventario-transformacion-20261022/`, con respaldo de
+vista/comentario/prompt/insights previos. Recuperación: restaurar la definición y
+comentario respaldados de `v_inventario_salud` y el prompt de salud junto al código
+anterior; no modificar las fuentes ni publicaciones CPP.

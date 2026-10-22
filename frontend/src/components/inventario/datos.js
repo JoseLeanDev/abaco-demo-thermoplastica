@@ -6,7 +6,7 @@ import { NIVELES_PRODUCTO } from '../ventas/FiltroProducto'
 export const CLASES = [
   { id: 'producto',       label: 'Producto terminado', corto: 'Producto',       color: '#001639' },
   { id: 'materia_prima',  label: 'Materia prima',      corto: 'Materia prima',  color: '#3b82f6' },
-  { id: 'sin_movimiento', label: 'Sin movimiento',     corto: 'Sin movimiento', color: '#94a3b8' },
+  { id: 'sin_movimiento', label: 'Sin trazabilidad',   corto: 'Sin trazabilidad', color: '#94a3b8' },
 ]
 export const CLASE = Object.fromEntries(CLASES.map(c => [c.id, c]))
 
@@ -14,6 +14,7 @@ export const ESTADOS = [
   { id: 'activo',       label: 'Activo',       color: '#10b981', cls: 'text-emerald-600 bg-emerald-500/10 ring-emerald-500/30' },
   { id: 'lento',        label: 'Lento',        color: '#f59e0b', cls: 'text-amber-600 bg-amber-500/10 ring-amber-500/30' },
   { id: 'inmovilizado', label: 'Inmovilizado', color: '#f43f5e', cls: 'text-rose-600 bg-rose-500/10 ring-rose-500/30' },
+  { id: 'por_validar',  label: 'Consumo por validar', color: '#64748b', cls: 'text-slate-600 bg-slate-500/10 ring-slate-500/30' },
   { id: 'sin_stock',    label: 'Sin stock',    color: '#94a3b8', cls: 'text-slate-500 bg-slate-500/10 ring-slate-500/30' },
 ]
 export const ESTADO = Object.fromEntries(ESTADOS.map(e => [e.id, e]))
@@ -22,7 +23,7 @@ export const ABCS = [
   { id: 'A', label: 'A', desc: '80% de la salida',   color: '#001639' },
   { id: 'B', label: 'B', desc: 'siguiente 15%',      color: '#3b82f6' },
   { id: 'C', label: 'C', desc: 'último 5%',          color: '#7dd3fc' },
-  { id: 'N', label: 'Sin salida', desc: 'no se vendió ni compró en el período', color: '#cbd5e1' },
+  { id: 'N', label: 'Sin salida medida', desc: 'sin costo vendido; puede tener consumo de producción pendiente', color: '#cbd5e1' },
 ]
 export const ABC = Object.fromEntries(ABCS.map(a => [a.id, a]))
 
@@ -34,7 +35,7 @@ export const TRAMOS = [
   { id: 't180', label: '90–180',        hasta: 180,      color: '#3b82f6' },
   { id: 't365', label: '180–365',       hasta: 365,      color: '#6366f1' },
   { id: 'tmas', label: '> 1 año',       hasta: Infinity, color: '#8b5cf6' },
-  { id: 'tsin', label: 'Sin salida',    hasta: null,     color: '#94a3b8' },
+  { id: 'tsin', label: 'Sin salida medida', hasta: null,     color: '#94a3b8' },
 ]
 export function tramoDe(f) {
   if (!(f.valor > 0)) return null
@@ -56,9 +57,8 @@ export function hidratar(data) {
   })
 }
 
-// Exceso: valor por encima de `objetivo` días de cobertura. Sin salida = todo es exceso.
-export const excesoDe = (f, dias, objetivo) =>
-  f.valor > 0 ? Math.max(0, f.valor - (f.salida / dias) * objetivo) : 0
+export { excesoDe, resumir } from './metricas.mjs'
+import { resumir } from './metricas.mjs'
 
 // Texto comparable: minúsculas y sin tildes
 export const normalizar = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -72,43 +72,6 @@ export function filtrar(filas, { producto, clase, abc, proveedor, busqueda }) {
     (!proveedor || (proveedor.codigo ? f.proveedor_codigo === proveedor.codigo : !f.proveedor_codigo)) &&
     (!palabras.length || palabras.every(p => normalizar(`${f.codigo} ${f.descripcion} ${f.proveedor || ''}`).includes(p)))
   )
-}
-
-// Métricas de un grupo de artículos.
-// Días de inventario del grupo: valor ÷ costo de ventas diario; si el grupo no
-// vende nada (solo materia prima) se usa lo comprado (consumo). Igual que Rotación
-// de inventarios: no se suman ambos para no contar dos veces la materia prima.
-export function resumir(rs, dias, objetivo) {
-  let valor = 0, transito = 0, cogs = 0, consumo = 0, salida = 0, quieto = 0, inmovilizado = 0, lento = 0
-  let exceso = 0, skus = 0, quiebres = 0, salidaQuiebres = 0, skusExceso = 0
-  for (const f of rs) {
-    valor += f.valor
-    transito += f.valor_transito
-    cogs += f.cogs
-    consumo += f.consumo_mp
-    salida += f.salida
-    if (f.valor > 0) skus++
-    if (f.estado === 'lento') lento += f.valor
-    if (f.estado === 'inmovilizado') inmovilizado += f.valor
-    const e = excesoDe(f, dias, objetivo)
-    exceso += e
-    if (e > 0) skusExceso++
-    if (f.quiebre) { quiebres++; salidaQuiebres += f.salida }
-  }
-  quieto = lento + inmovilizado
-  const flujo = cogs > 0 ? cogs : consumo
-  const diasInv = flujo > 0 && valor > 0 ? Math.round(valor / (flujo / dias)) : null
-  return {
-    articulos: rs.length, skus, valor, transito, cogs, consumo, salida,
-    base: cogs > 0 ? 'costo_ventas' : consumo > 0 ? 'consumo' : null,
-    dias_inventario: diasInv,
-    rotacion: diasInv ? Math.round(365 / diasInv * 10) / 10 : null,
-    lento, inmovilizado, quieto,
-    pct_quieto: valor > 0 ? Math.round(quieto / valor * 1000) / 10 : 0,
-    exceso, skus_exceso: skusExceso,
-    pct_exceso: valor > 0 ? Math.round(exceso / valor * 1000) / 10 : 0,
-    quiebres, salida_quiebres: salidaQuiebres,
-  }
 }
 
 // Agrupa por una dimensión y resume cada grupo

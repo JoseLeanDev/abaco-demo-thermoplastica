@@ -427,28 +427,28 @@ router.get('/analitica', async (req, res) => {
       const ventas = num(r.ventas), compras = num(r.compras);
       // Sin stock hoy la vista de salud no trae clase: se deduce de la historia
       const clase = r.clase || (r.ultima_venta ? 'producto' : r.ultima_compra ? 'materia_prima' : 'sin_movimiento');
-      const salida = clase === 'producto' ? num(r.cogs) : clase === 'materia_prima' ? compras : 0;
-      const salida90 = clase === 'producto' ? num(r.ventas_90) : clase === 'materia_prima' ? num(r.compras_90) : 0;
+      const salida = clase === 'producto' ? num(r.cogs) : null;
+      const salida90 = clase === 'producto' ? num(r.ventas_90) : 0;
       const meses6m = parseInt(clase === 'producto' ? r.meses_venta_6m : r.meses_compra_6m) || 0;
       const valor = num(r.valor);
       const stock = num(r.stock);
-      const ultimaMov = clase === 'producto' ? r.ultima_venta : r.ultima_compra;
+      const ultimaMov = clase === 'producto' ? r.ultima_venta : null;
       return {
         codigo: r.codigo, descripcion: r.descripcion,
         categoria: r.categoria, subcategoria: r.subcategoria, sublinea: r.sublinea,
         proveedor_codigo: r.proveedor_codigo || null, proveedor: r.proveedor || null,
-        clase, estado: stock > 0 ? (r.estado || 'activo') : 'sin_stock',
+        clase, estado: stock > 0 ? (r.estado || 'por_validar') : 'sin_stock',
         stock, transito: num(r.transito), costo: num(r.costo), costo_ultimo: num(r.costo_ultimo), precio: num(r.precio),
         margen: r.margen !== null && r.margen !== undefined ? Math.round(num(r.margen) * 10) / 10 : null,
         valor: Math.round(valor * 100) / 100,
         valor_transito: Math.round(num(r.transito) * num(r.costo) * 100) / 100,
         ventas: Math.round(ventas), unidades_vendidas: num(r.unidades_vendidas),
         compras: Math.round(compras), unidades_compradas: num(r.unidades_compradas),
-        salida: Math.round(salida),
-        // Para la cobertura de un grupo: costo de ventas, o compras si el grupo es solo materia prima
+        salida: salida === null ? null : Math.round(salida),
+        // Sin consumos de producción no se estima salida a partir de compras.
         cogs: clase === 'producto' ? Math.round(num(r.cogs)) : 0,
-        consumo_mp: clase === 'materia_prima' ? Math.round(compras) : 0,
-        meses_demanda_6m: meses6m,
+        consumo_mp: null,
+        meses_demanda_6m: clase === 'producto' ? meses6m : null,
         dias_cobertura: salida > 0 ? Math.round(valor / (salida / P.dias)) : null,
         // Mucho se fabrica contra pedido (stock 0 es normal): solo cuenta como quiebre si la
         // demanda es recurrente (≥ 3 de los últimos 6 meses), hubo salida en 90 días y no hay tránsito

@@ -209,12 +209,13 @@ function CicloCaja({ ciclo, mensual }) {
 const CLASES = [
   { id: 'materia_prima', nombre: 'Materia prima' },
   { id: 'producto', nombre: 'Producto' },
-  { id: 'sin_movimiento', nombre: 'Sin movimiento' },
+  { id: 'sin_movimiento', nombre: 'Sin trazabilidad' },
 ]
 const ESTADOS = [
   { id: 'activo', nombre: 'Activo', color: '#059669' },
   { id: 'lento', nombre: 'Lento (>180 días)', color: '#F59E0B' },
   { id: 'inmovilizado', nombre: 'Inmovilizado', color: '#DC2626' },
+  { id: 'por_validar', nombre: 'Consumo por validar', color: '#64748b' },
 ]
 
 function CapitalInmovilizado({ inventario, ciclo }) {
@@ -254,8 +255,9 @@ function CapitalInmovilizado({ inventario, ciclo }) {
           <div>
             <p className="text-sm text-[var(--text-secondary)] mb-3">
               <strong>{fmtM(inmov + lento)}</strong> del inventario están quietos <Leyenda k="quieto" />: <strong className="text-[var(--danger)]">{fmtM(inmov)}</strong> inmovilizados <Leyenda k="inmovilizado" />
-              (producto sin ventas en 180 días, materia prima que no se recompra hace un año o sin ningún movimiento) y{' '}
+              (artículos con venta directa registrada y sin venta comercial en 180 días) y{' '}
               <strong className="text-[var(--warning)]">{fmtM(lento)}</strong> de rotación lenta (stock para más de 180 días) <Leyenda k="lento" />.
+              {' '}Otros <strong>{fmtM(sumar(inventario.por_clase_estado.filter(r => r.estado === 'por_validar')))}</strong> tienen consumo por validar y siguen incluidos en el inventario total <Leyenda k="por_validar" />.
             </p>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={porClase} layout="vertical" margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
@@ -292,6 +294,7 @@ function CapitalInmovilizado({ inventario, ciclo }) {
                         <div style={{ width: `${(c.inmovilizado / c.total) * 100}%`, background: '#DC2626' }} />
                         <div style={{ width: `${(c.lento / c.total) * 100}%`, background: '#F59E0B' }} />
                         <div style={{ width: `${(c.activo / c.total) * 100}%`, background: '#059669' }} />
+                        <div style={{ width: `${(c.por_validar / c.total) * 100}%`, background: '#64748b' }} />
                       </div>
                     </td>
                     <td className="py-1.5 text-right tabular-nums text-[var(--danger)]">{fmtM(c.quieto)}</td>

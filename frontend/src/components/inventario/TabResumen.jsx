@@ -50,6 +50,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
     { label: 'SKUs con stock', get: g => g.skus },
     { label: 'Días de inventario', get: g => g.dias_inventario ?? '' },
     { label: 'Rotación anual', get: g => g.rotacion ?? '' },
+    { label: 'Consumo por validar (Q)', get: g => g.por_validar.toFixed(2) },
     { label: 'Capital quieto', get: g => g.quieto.toFixed(2) },
     { label: '% quieto', get: g => g.pct_quieto },
     { label: `Exceso sobre ${objetivo} días`, get: g => g.exceso.toFixed(2) },

@@ -14,6 +14,7 @@ export const RAPIDOS = [
   { id: 'quieto',              label: 'Capital quieto (lento + inmovilizado)', fn: f => f.estado === 'lento' || f.estado === 'inmovilizado' },
   { id: 'estado_activo',       label: 'Estado: activo',                 fn: f => f.estado === 'activo' },
   { id: 'estado_lento',        label: 'Estado: lento',                  fn: f => f.estado === 'lento' },
+  { id: 'estado_por_validar', label: 'Consumo por validar', fn: f => f.estado === 'por_validar' },
   { id: 'estado_inmovilizado', label: 'Estado: inmovilizado',           fn: f => f.estado === 'inmovilizado' },
   { id: 'transito',            label: 'Con stock en tránsito',          fn: f => f.transito > 0 },
   { id: 'sin_precio',          label: 'Con stock y sin precio de venta', fn: f => f.valor > 0 && f.clase === 'producto' && !(f.precio > 0) },
@@ -33,10 +34,10 @@ export const COLUMNAS_DETALLE = (dias, objetivo) => [
   { label: 'En tránsito', get: f => f.transito },
   { label: 'Costo promedio', get: f => f.costo },
   { label: 'Valor en stock', get: f => f.valor.toFixed(2) },
-  { label: 'Salida del período', get: f => f.salida },
-  { label: 'Salida mensual', get: f => (f.salida / dias * 30).toFixed(2) },
+  { label: 'Salida del período', get: f => f.salida ?? '' },
+  { label: 'Salida mensual', get: f => f.salida === null ? '' : (f.salida / dias * 30).toFixed(2) },
   { label: 'Días de cobertura', get: f => f.dias_cobertura ?? '' },
-  { label: `Exceso sobre ${objetivo} días`, get: f => excesoDe(f, dias, objetivo).toFixed(2) },
+  { label: `Exceso sobre ${objetivo} días`, get: f => excesoDe(f, dias, objetivo)?.toFixed(2) ?? '' },
   { label: 'Quiebre', get: f => (f.quiebre ? 'Sí' : '') },
   { label: 'Precio de venta 1', get: f => f.precio || '' },
   { label: 'Margen de lista %', get: f => f.margen ?? '' },
@@ -161,7 +162,7 @@ export default function TabDetalle({ filas, dias, objetivo, vista, setVista }) {
                 <td className={`${td} text-right tabular-nums font-semibold`}>{f.valor > 0 ? fmtM(f.valor) : '—'}</td>
                 <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{f.salida > 0 ? fmtM(f.salida_mes) : '—'}</td>
                 <td className={`${td} text-right tabular-nums font-medium ${colorDias(f.dias_cobertura)}`}>
-                  {f.valor > 0 ? (f.dias_cobertura === null ? 'sin salida' : fmtDias(f.dias_cobertura)) : '—'}
+                  {f.valor > 0 ? (f.dias_cobertura === null ? (f.estado === 'por_validar' ? 'por validar' : 'sin venta medida') : fmtDias(f.dias_cobertura)) : '—'}
                 </td>
                 <td className={`${td} text-right tabular-nums ${f.exceso > 0 ? 'text-amber-600 font-semibold' : 'text-[var(--text-muted)]'}`}>{f.exceso > 0 ? fmtM(f.exceso) : '—'}</td>
                 <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{fmtDias(f.dias_sin_mov)}</td>

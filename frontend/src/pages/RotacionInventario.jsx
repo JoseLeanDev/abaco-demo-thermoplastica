@@ -43,8 +43,8 @@ const NIVELES = [
   { dim: 'sublinea',     singular: 'Sublínea',     plural: 'Sublíneas' },
   { dim: 'articulo',     singular: 'Artículo',     plural: 'Artículos' },
 ]
-const CLASES = { producto: 'Producto terminado', materia_prima: 'Materia prima', sin_movimiento: 'Sin movimiento' }
-const TIPOS = [['', 'Todo'], ['producto', 'Producto terminado'], ['materia_prima', 'Materia prima'], ['sin_movimiento', 'Sin movimiento']]
+const CLASES = { producto: 'Producto terminado', materia_prima: 'Materia prima', sin_movimiento: 'Sin trazabilidad' }
+const TIPOS = [['', 'Todo'], ['producto', 'Producto terminado'], ['materia_prima', 'Materia prima'], ['sin_movimiento', 'Sin trazabilidad']]
 const TRAMOS = [
   { id: 'd30',        nombre: '≤ 1 mes',     color: '#059669' },
   { id: 'd60',        nombre: '1–2 meses',   color: '#22c55e' },
@@ -52,7 +52,7 @@ const TRAMOS = [
   { id: 'd180',       nombre: '3–6 meses',   color: '#F59E0B' },
   { id: 'd365',       nombre: '6–12 meses',  color: '#f97316' },
   { id: 'mas_365',    nombre: '> 1 año',     color: '#DC2626' },
-  { id: 'sin_salida', nombre: 'Sin salida',  color: '#94a3b8' },
+  { id: 'sin_salida', nombre: 'Sin salida medida',  color: '#94a3b8' },
 ]
 
 const fmtInt = (n) => Number(n || 0).toLocaleString('es-GT')
@@ -224,6 +224,8 @@ export default function RotacionInventario() {
 
       {isError && <div className="card p-8 text-center text-sm text-[var(--text-muted)]">No se pudo calcular la rotación. Intenta de nuevo.</div>}
 
+      {t?.consumo_por_validar > 0 && <p className="rounded-lg border border-[var(--border-default)] p-4 text-sm text-[var(--text-secondary)]">{fmtM(t.consumo_por_validar)} de inventario tiene consumo de producción por validar. Se conserva en el total y se excluye del cálculo de rotación comercial.</p>}
+
       {/* KPIs */}
       <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 ${isPreviousData ? 'opacity-60' : ''}`}>
         {cargando || !t ? [0, 1, 2, 3].map(i => (
@@ -240,11 +242,11 @@ export default function RotacionInventario() {
               <p className={`kpi-value ${tonoDias(t.dias)}`}>{fmtDias(t.dias)}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">365 ÷ rotación</p>
             </div>
-            {t.base_rotacion === 'consumo' ? (
+            {!t.base_rotacion && t.consumo_por_validar > 0 ? (
               <div className="kpi-card">
-                <span className="kpi-label flex items-center gap-1">Consumo estimado del período <Leyenda k="salida_articulo" /></span>
-                <p className="kpi-value">{fmtM(t.consumo_mp)}</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">materia prima comprada para reponer</p>
+                <span className="kpi-label flex items-center gap-1">Consumo por validar <Leyenda k="salida_articulo" /></span>
+                <p className="kpi-value">N/D</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Faltan salidas a producción; las compras no equivalen a consumo</p>
               </div>
             ) : (
             <div className="kpi-card">
@@ -273,14 +275,14 @@ export default function RotacionInventario() {
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
             {t.rotacion > 0 ? <>
               El inventario{titulo ? <> de <strong>{titulo}</strong></> : ''} se renueva <strong>{fmtRot(t.rotacion)} al año</strong>: lo que hay en bodega alcanza para <strong>{fmtDias(t.dias)}</strong> al ritmo del período.
-            </> : <>El inventario{titulo ? <> de <strong>{titulo}</strong></> : ''} no tuvo salida en el período.</>}
+            </> : <>No hay salida comercial suficiente para calcular la rotación{titulo ? <> de <strong>{titulo}</strong></> : ''}. El consumo en producción puede estar pendiente.</>}
             {!tipo && tipoProd?.rotacion > 0 && tipoMP?.rotacion > 0 && (
               <> El producto terminado rota {fmtRot(tipoProd.rotacion)} ({fmtDias(tipoProd.dias)}) y la materia prima {fmtRot(tipoMP.rotacion)} ({fmtDias(tipoMP.dias)}).</>
             )}
             {lento && (
               <> <strong>{lento.nombre}</strong> tiene el {lento.pct_inventario}% del inventario pero el {lento.pct_cogs}% del {flujo}: rota {fmtRot(lento.rotacion)} ({fmtDias(lento.dias)}).</>
             )}
-            {t.sin_salida_valor > 0 && <> {fmtM(t.sin_salida_valor)} están en {fmtInt(t.sin_salida_articulos)} artículos sin ninguna salida en el período.</>}
+            {t.sin_salida_valor > 0 && <> {fmtM(t.sin_salida_valor)} están en {fmtInt(t.sin_salida_articulos)} artículos sin venta comercial medida en el período.</>}
           </p>
         </div>
       )}
@@ -304,7 +306,7 @@ export default function RotacionInventario() {
                   <tr key={x.clase}>
                     <td className="py-2.5 pr-2">
                       <button onClick={() => setTipo(x.clase)} className="font-medium hover:underline text-left">{CLASES[x.clase]}</button>
-                      <p className="text-[11px] text-[var(--text-muted)]">{x.clase === 'producto' ? 'costo de ventas' : x.clase === 'materia_prima' ? 'compras del período (consumo estimado)' : 'sin ventas ni compras registradas'}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{x.clase === 'producto' ? 'costo de ventas' : 'consumo de producción por validar'}</p>
                     </td>
                     <td className="py-2.5 px-2 text-right tabular-nums">
                       {fmtM(x.inventario)} <span className="text-xs text-[var(--text-muted)]">· {t.inventario > 0 ? Math.round(x.inventario / t.inventario * 100) : 0}%</span>
@@ -389,7 +391,7 @@ export default function RotacionInventario() {
                       </td>
                       <td className="py-2.5 px-2"><Peso inv={it.pct_inventario} cogs={it.pct_cogs} flujo={flujo} /></td>
                       <td className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap">
-                        {it.cogs > 0 ? fmtM(it.cogs) : it.consumo_mp > 0 ? <span className="text-[var(--text-muted)]" title="Materia prima: compras del período como consumo">{fmtM(it.consumo_mp)}*</span> : '—'}
+                        {it.cogs > 0 ? fmtM(it.cogs) : '—'}
                       </td>
                       <td className={`py-2.5 px-2 text-right tabular-nums font-semibold ${tonoDias(it.dias)}`}>{fmtRot(it.rotacion)}</td>
                       <td className={`py-2.5 px-2 text-right tabular-nums whitespace-nowrap ${tonoDias(it.dias)}`}>{fmtDias(it.dias)}</td>
@@ -445,7 +447,7 @@ export default function RotacionInventario() {
               <Bar dataKey="compras" name="Compras" fill="#001639" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-          <p className="text-xs text-[var(--text-muted)] mt-2">Si las compras quedan por encima del costo de ventas mes a mes, el inventario crece y la rotación baja.</p>
+          <p className="text-xs text-[var(--text-muted)] mt-2">Las compras son entradas; las salidas de producción todavía no están disponibles para conciliar la variación del inventario.</p>
         </Seccion>
       )}
 
@@ -503,7 +505,7 @@ export default function RotacionInventario() {
                     <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtM(a.inventario)}</td>
                     <td className="py-2 px-2 text-right tabular-nums hidden sm:table-cell text-[var(--text-secondary)]">{a.salida > 0 ? fmtM(a.salida) : '—'}</td>
                     <td className={`py-2 px-2 text-right tabular-nums font-semibold ${tonoDias(a.dias)}`}>{fmtRot(a.rotacion)}</td>
-                    <td className={`py-2 pl-2 text-right tabular-nums whitespace-nowrap ${tonoDias(a.dias)}`}>{a.dias === null ? 'sin salida' : fmtDias(a.dias)}</td>
+                    <td className={`py-2 pl-2 text-right tabular-nums whitespace-nowrap ${tonoDias(a.dias)}`}>{a.dias === null ? (a.clase === 'producto' ? 'sin venta medida' : 'por validar') : fmtDias(a.dias)}</td>
                   </tr>
                 ))}
               </tbody>

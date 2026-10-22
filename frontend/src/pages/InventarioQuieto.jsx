@@ -24,11 +24,8 @@ import { exportarExcel } from '../services/excel'
  * (página secundaria de Análisis). Es la foto del stock al corte, no
  * depende del filtro de período.
  *
- * Estados (vista analitica.v_inventario_salud):
- *  - Inmovilizado: producto sin ventas en 180 días, materia prima sin compras en
- *    un año, o artículo sin ningún movimiento registrado.
- *  - Lento: se mueve, pero el stock alcanza para más de 180 días al ritmo actual.
- *  - Activo: el resto.
+ * Estados comerciales: inmovilizado/lento/activo solo con venta directa observada.
+ * Sin salidas de producción: consumo por validar, sin inferirlo desde compras.
  */
 
 const NIVELES = [
@@ -38,18 +35,19 @@ const NIVELES = [
   { dim: 'articulo',     singular: 'Artículo',     plural: 'Artículos' },
 ]
 const ESTADOS = {
-  activo:       { nombre: 'Activo',       color: '#059669', ayuda: 'Se vende o se consume a buen ritmo' },
+  activo:       { nombre: 'Activo',       color: '#059669', ayuda: 'Venta comercial observada y cobertura de hasta 180 días' },
   lento:        { nombre: 'Lento',        color: '#F59E0B', ayuda: 'Se mueve, pero el stock alcanza para más de 180 días' },
-  inmovilizado: { nombre: 'Inmovilizado', color: '#DC2626', ayuda: 'Producto sin ventas en 180 días, materia prima sin compras en un año o sin ningún movimiento' },
+  por_validar:  { nombre: 'Consumo por validar', color: '#64748b', ayuda: 'Sin salidas de producción disponibles; no se infiere consumo por las compras' },
+  inmovilizado: { nombre: 'Inmovilizado', color: '#DC2626', ayuda: 'Artículo con venta directa registrada y sin venta comercial en 180 días' },
 }
-const CLASES = { materia_prima: 'Materia prima', producto: 'Producto', sin_movimiento: 'Sin movimiento' }
+const CLASES = { materia_prima: 'Materia prima', producto: 'Producto', sin_movimiento: 'Sin trazabilidad' }
 const TRAMOS = [
   { id: '0_90',         nombre: '≤ 3 meses',   color: '#059669' },
   { id: '91_180',       nombre: '3–6 meses',   color: '#84cc16' },
   { id: '181_365',      nombre: '6–12 meses',  color: '#F59E0B' },
   { id: '366_730',      nombre: '1–2 años',    color: '#f97316' },
   { id: 'mas_730',      nombre: '> 2 años',    color: '#DC2626' },
-  { id: 'sin_registro', nombre: 'Sin registro', color: '#94a3b8' },
+  { id: 'sin_registro', nombre: 'Sin salida trazable', color: '#94a3b8' },
 ]
 
 const fmtInt = (n) => Number(n || 0).toLocaleString('es-GT')
@@ -77,10 +75,11 @@ function Seccion({ icon: Icon, titulo, subtitulo, accion, children }) {
 function BarraEstado({ r, max }) {
   const w = (v) => `${(v / max) * 100}%`
   return (
-    <div className="flex h-2.5 rounded-sm overflow-hidden bg-[var(--bg-tertiary)]" style={{ width: w(r.total) }} title={`Activo ${fmtQ(r.activo)} · Lento ${fmtQ(r.lento)} · Inmovilizado ${fmtQ(r.inmovilizado)}`}>
+    <div className="flex h-2.5 rounded-sm overflow-hidden bg-[var(--bg-tertiary)]" style={{ width: w(r.total) }} title={`Activo ${fmtQ(r.activo)} · Lento ${fmtQ(r.lento)} · Inmovilizado ${fmtQ(r.inmovilizado)} · Por validar ${fmtQ(r.por_validar)}`}>
       <div style={{ width: `${(r.inmovilizado / r.total) * 100}%`, background: ESTADOS.inmovilizado.color }} />
       <div style={{ width: `${(r.lento / r.total) * 100}%`, background: ESTADOS.lento.color }} />
       <div style={{ width: `${(r.activo / r.total) * 100}%`, background: ESTADOS.activo.color }} />
+      <div style={{ width: `${(r.por_validar / r.total) * 100}%`, background: ESTADOS.por_validar.color }} />
     </div>
   )
 }
@@ -97,8 +96,7 @@ function Estado({ estado }) {
 
 function ultimoMovimiento(a) {
   if (a.clase === 'producto') return a.dias_sin_mov !== null ? `Venta hace ${fmtDias(a.dias_sin_mov)}` : 'Sin ventas'
-  if (a.clase === 'materia_prima') return a.dias_sin_mov !== null ? `Compra hace ${fmtDias(a.dias_sin_mov)}` : 'Sin compras'
-  return 'Sin movimiento registrado'
+  return 'Consumo por validar'
 }
 
 export default function InventarioQuieto() {
@@ -213,8 +211,8 @@ export default function InventarioQuieto() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {cargando || !t ? [0, 1, 2, 3].map(i => (
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {cargando || !t ? [0, 1, 2, 3, 4].map(i => (
           <div key={i} className="kpi-card"><span className="block h-3 w-24 rounded bg-[var(--bg-tertiary)] animate-pulse" /><span className="block h-7 w-28 mt-3 rounded bg-[var(--bg-tertiary)] animate-pulse" /></div>
         )) : (
           <>
@@ -234,6 +232,11 @@ export default function InventarioQuieto() {
               <p className="text-xs text-[var(--text-muted)] mt-1">{t.total > 0 ? ((t.lento / t.total) * 100).toFixed(1) : 0}% del inventario</p>
             </div>
             <div className="kpi-card">
+              <span className="kpi-label flex items-center gap-1">Consumo por validar <Leyenda k="por_validar" /></span>
+              <p className="kpi-value" style={{ color: ESTADOS.por_validar.color }}>{fmtM(t.por_validar)}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(t.articulos_por_validar)} artículos · {t.pct_por_validar}% del inventario</p>
+            </div>
+            <div className="kpi-card">
               <span className="kpi-label flex items-center gap-1">Cobertura <Leyenda k="cobertura" /></span>
               <p className="kpi-value">{fmtDias(t.dias_cobertura)}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(t.articulos_quietos)} de {fmtInt(t.articulos)} artículos quietos</p>
@@ -249,6 +252,7 @@ export default function InventarioQuieto() {
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
             De los <strong>{fmtM(t.total)}</strong> en inventario{path.length ? <> de <strong>{titulo}</strong></> : ''},{' '}
             <strong>{fmtM(t.quieto)} ({t.pct_quieto}%)</strong> están quietos <Leyenda k="quieto" />: {fmtM(t.inmovilizado)} inmovilizados y {fmtM(t.lento)} de rotación lenta.
+            {' '}Otros <strong>{fmtM(t.por_validar)} ({t.pct_por_validar}%)</strong> tienen el consumo por validar: faltan las salidas de producción. Ese valor sigue incluido en inventario y no se clasifica como activo ni quieto.
             {!esHoja && filas[0] && filas[0].quieto > 0 && (
               <> La {nivel.singular.toLowerCase()} con más capital quieto es <strong>{filas[0].nombre}</strong> ({fmtM(filas[0].quieto)}, {filas[0].participacion_quieto}% del total quieto)
               {filas[0].dias_cobertura ? <>, con stock para {fmtDias(filas[0].dias_cobertura)}</> : ''}.</>
@@ -264,7 +268,7 @@ export default function InventarioQuieto() {
         subtitulo={esHoja ? 'Artículos con stock de la selección' : `Haz clic en una fila para ver sus ${siguiente.plural.toLowerCase()}`}
         accion={
           <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
-            {['inmovilizado', 'lento', 'activo'].map(e => (
+            {['inmovilizado', 'lento', 'activo', 'por_validar'].map(e => (
               <span key={e} className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: ESTADOS[e].color }} />{ESTADOS[e].nombre}
                 <Leyenda k={e} />
@@ -304,6 +308,7 @@ export default function InventarioQuieto() {
                     {!esHoja && <>
                       <Th col="inmovilizado" ayuda="inmovilizado">Inmovilizado</Th>
                       <Th col="lento" ayuda="lento">Lento</Th>
+                      <Th col="por_validar" ayuda="por_validar">Por validar</Th>
                       <Th col="pct_quieto" ayuda="quieto">% quieto</Th>
                     </>}
                     <Th col="dias_cobertura" ayuda="cobertura">Cobertura</Th>
@@ -334,6 +339,7 @@ export default function InventarioQuieto() {
                       {!esHoja && <>
                         <td className="py-2.5 px-2 text-right tabular-nums" style={{ color: it.inmovilizado ? ESTADOS.inmovilizado.color : undefined }}>{it.inmovilizado ? fmtM(it.inmovilizado) : '—'}</td>
                         <td className="py-2.5 px-2 text-right tabular-nums" style={{ color: it.lento ? '#b45309' : undefined }}>{it.lento ? fmtM(it.lento) : '—'}</td>
+                        <td className="py-2.5 px-2 text-right tabular-nums text-slate-500">{it.por_validar ? fmtM(it.por_validar) : '—'}</td>
                         <td className={`py-2.5 px-2 text-right tabular-nums font-semibold ${it.pct_quieto >= 80 ? 'text-[var(--danger)]' : it.pct_quieto >= 50 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>{it.pct_quieto}%</td>
                       </>}
                       <td className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap">{fmtDias(it.dias_cobertura)}</td>
@@ -362,10 +368,10 @@ export default function InventarioQuieto() {
       {/* Antigüedad + tipo */}
       {!cargando && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Seccion icon={ClockIcon} titulo="¿Hace cuánto no se mueve?" subtitulo={<>Valor del stock según su última venta (producto) o compra (materia prima) <Leyenda k="antiguedad" /></>}>
+          <Seccion icon={ClockIcon} titulo="Tiempo desde la última venta directa" subtitulo={<>Valor del stock según su última venta; consumo de producción pendiente por separado <Leyenda k="antiguedad" /></>}>
             <Antiguedad data={d.antiguedad} />
           </Seccion>
-          <Seccion icon={CubeIcon} titulo="¿Qué tipo de inventario es?" subtitulo={<>Producto que se vende, materia prima que se compra, o sin movimiento registrado <Leyenda k="tipo" /></>}>
+          <Seccion icon={CubeIcon} titulo="¿Qué tipo de inventario es?" subtitulo={<>Venta directa observada, compras sin venta directa o trazabilidad pendiente <Leyenda k="tipo" /></>}>
             <PorClase data={d.por_clase_estado} />
           </Seccion>
         </div>
@@ -375,12 +381,12 @@ export default function InventarioQuieto() {
       {!cargando && !esHoja && (
         <Seccion
           icon={CubeIcon}
-          titulo={`Artículos ${estadoLista ? ESTADOS[estadoLista].nombre.toLowerCase() + 's' : q ? 'que coinciden' : 'quietos'} de mayor valor${path.length ? ` · ${titulo}` : ''}`}
+          titulo={`Artículos ${estadoLista === 'por_validar' ? 'con consumo por validar' : estadoLista ? ESTADOS[estadoLista].nombre.toLowerCase() + 's' : q ? 'que coinciden' : 'quietos'} de mayor valor${path.length ? ` · ${titulo}` : ''}`}
           subtitulo={`${fmtInt(d.articulos.length)}${d.articulos.length === 100 ? ' (máximo)' : ''} artículos, ordenados por valor`}
           accion={
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex rounded-md border border-[var(--border-default)] overflow-hidden text-xs">
-                {[['', q ? 'Todos' : 'Quietos'], ['inmovilizado', 'Inmovilizados'], ['lento', 'Lentos'], ['activo', 'Activos']].map(([id, label]) => (
+                {[['', q ? 'Todos' : 'Quietos'], ['inmovilizado', 'Inmovilizados'], ['lento', 'Lentos'], ['activo', 'Activos'], ['por_validar', 'Consumo por validar']].map(([id, label]) => (
                   <button key={id} onClick={() => setEstadoLista(id)} className={`px-2 py-1 ${estadoLista === id ? 'bg-[#001639] text-white' : 'hover:bg-[var(--bg-secondary)]'}`}>{label}</button>
                 ))}
               </div>
@@ -445,8 +451,9 @@ export default function InventarioQuieto() {
       )}
 
       <p className="text-xs text-[var(--text-muted)]">
-        Inmovilizado: producto sin ventas en 180 días, materia prima sin compras en un año o artículo sin ningún movimiento registrado.
-        Lento: se mueve, pero el stock alcanza para más de 180 días al ritmo de los últimos 6 meses (producto) o 12 meses (materia prima).
+        Inmovilizado: artículo con venta directa registrada, sin venta comercial en 180 días.
+        Lento: cobertura comercial superior a 180 días. Sin consumo de producción disponible: consumo por validar.
+        Las compras no se usan como consumo; una falta de venta directa no demuestra falta de transformación.
         Es la foto del inventario al corte; no depende del filtro de período.
       </p>
     </div>
@@ -475,7 +482,7 @@ function PorClase({ data }) {
   const filas = Object.entries(CLASES).map(([id, nombre]) => {
     const f = { clase: nombre }
     for (const e of Object.keys(ESTADOS)) f[e] = data.filter(x => x.clase === id && x.estado === e).reduce((s, x) => s + x.valor, 0)
-    f.total = f.activo + f.lento + f.inmovilizado
+    f.total = f.activo + f.lento + f.inmovilizado + f.por_validar
     return f
   }).filter(f => f.total > 0)
   return (
@@ -485,7 +492,7 @@ function PorClase({ data }) {
         <XAxis type="number" tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
         <YAxis type="category" dataKey="clase" tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={105} />
         <Tooltip contentStyle={tooltipStyle} formatter={(v, k) => [fmtQ(v), ESTADOS[k]?.nombre]} />
-        {['inmovilizado', 'lento', 'activo'].map(e => <Bar key={e} dataKey={e} stackId="c" fill={ESTADOS[e].color} />)}
+        {['inmovilizado', 'lento', 'activo', 'por_validar'].map(e => <Bar key={e} dataKey={e} stackId="c" fill={ESTADOS[e].color} />)}
       </BarChart>
     </ResponsiveContainer>
   )
