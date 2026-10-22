@@ -7,7 +7,9 @@ histórico y extender únicamente Laminados al resto de la aplicación.
 con histórico recuperado e integración en totales generales y módulos. La
 conciliación contra el Excel fue validada para enero–septiembre de 2026 con las
 excepciones documentadas abajo; no significa coincidencia del 100% con el archivo.
-Empaques para alimentos, Tapas y Valvulas e Inyectables siguen sin activar su CPP.
+El 22-oct se activó también CPP por compras propias para Empaques para alimentos,
+Tapas y Valvulas e Inyectables, sin alterar Laminados. Estado y pendientes en
+[operacion-cpp-articulos.md](operacion-cpp-articulos.md).
 Transformación se trabajará por separado.
 
 ## Datos recuperados y alcance
@@ -221,22 +223,22 @@ sin bloquear por sí solos el trabajo en las líneas siguientes. Si se obtiene e
 detalle documental, contrastar fecha, artículo, importe, estado y posibles
 devoluciones con la extracción antes de atribuir la causa o cambiar datos.
 
-## Trabajo restante por línea
+## Estado por línea
 
 | Línea | Estado de la corrección |
 |---|---|
 | Laminados | Implementada, publicada e integrada. Validación del período y límites descritos arriba. |
-| Empaques para alimentos | Millares confirmados por el usuario el 22-oct. Regla por compras del mismo artículo preparada; falta completar histórico propio y validar antes de activar. |
-| Tapas y Valvulas | Millares confirmados por el usuario el 22-oct. Compras propias, incluidas anteriores; pendiente histórico y activación validada. |
-| Inyectables | Millares confirmados por el usuario el 22-oct. Regla por artículo preparada; pendiente validar cobertura histórica y resultados antes de activar. |
+| Empaques para alimentos | Publicada el 22-oct con compras propias en millares, incluido histórico; cobertura 100% de ventas enero–septiembre 2026. |
+| Tapas y Valvulas | Publicada el 22-oct con compras propias en millares; cobertura 97.28%. Cinco SKUs sin compras propias permanecen N/D. |
+| Inyectables | Publicada el 22-oct con compras propias en millares; cobertura 100% de ventas enero–septiembre 2026. |
 | Líneas de transformación | Pendiente: `(ventas - compras + inventario_final - inventario_inicial) / ventas`, con alcance de líneas por confirmar. |
 
-El orden previsto conserva primero las tres líneas comerciales restantes y
-después transformación. No usar promedios de otros productos para las tres
+Las cuatro líneas comerciales ya están integradas; transformación sigue pendiente.
+No usar promedios de otros productos para las tres
 líneas por artículo. La confirmación recibida para esas tres líneas es millares
 de unidades; las cantidades se conservan sin una segunda conversión por 1,000.
 
-## Confirmación de unidades y preparación de las otras líneas — 22-oct-2026
+## Antecedente de preparación antes de publicar las otras líneas — 22-oct-2026
 
 El usuario comunicó que las tres líneas pendientes se miden en millares de
 unidades. `cpp.js` identifica esa unidad y su procedencia como confirmación del

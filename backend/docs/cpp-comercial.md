@@ -1,9 +1,8 @@
 # CPP comercial: preparación y auditoría
 
-**Estado al 22-oct-2026:** el histórico y la integración general de Laminados se
-implementaron y publicaron el 21-oct-2026. Solo Laminados tiene activa la
-corrección. Empaques para alimentos, Tapas y Valvulas e Inyectables conservan
-su método anterior en producción mientras se completa y valida su histórico.
+**Estado al 22-oct-2026:** las cuatro líneas comerciales tienen activa la
+corrección. Laminados se publicó el 21-oct; Empaques para alimentos, Tapas y
+Valvulas e Inyectables se publicaron el 22-oct tras recuperar y validar su histórico.
 El usuario comunicó el 22-oct-2026 que esas tres líneas se miden en millares;
 el calculador y la auditoría ya registran `millar` / `confirmada_usuario`, sin
 convertir nuevamente las cantidades originales por 1,000. La referencia del
@@ -12,7 +11,9 @@ la consulta y la confirmación corresponden solo a las otras tres líneas.
 Laminados conserva su cálculo en kilos según el PDF.
 Transformación queda para después. Estado, diferencias documentadas y criterio
 de conservar las ventas del ERP en
-[operacion-cpp-laminados.md](operacion-cpp-laminados.md).
+[operacion-cpp-laminados.md](operacion-cpp-laminados.md). Operación, cobertura y
+cinco productos de Tapas sin compras propias en
+[operacion-cpp-articulos.md](operacion-cpp-articulos.md).
 
 ## Antecedente: estado local antes de la publicación del 21-oct-2026
 

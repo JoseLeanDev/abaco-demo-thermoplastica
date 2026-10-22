@@ -1,7 +1,8 @@
 # CPP de Empaques, Tapas y válvulas e Inyectables
 
-Preparación del 22-oct-2026. La publicación y su comprobación final se registran
-al terminar el despliegue. Transformación permanece fuera de este cambio.
+Corrección publicada y comprobada el 22-oct-2026. Las cuatro líneas comerciales
+tienen CPP activo; Laminados conserva su método anterior y las otras tres usan
+compras propias en millares. Transformación permanece fuera de este cambio.
 
 ## Confirmación comercial
 
@@ -70,6 +71,11 @@ ejecuta `/backfill`. Una extracción incompleta no reemplaza el snapshot válido
 El publicador del web service revisa novedades al iniciar y cada cinco minutos.
 El healthcheck del worker vigila extracción/publicación de ambas fuentes CPP.
 
+Los totales generales combinan las cuatro líneas con CPP conocido y las líneas
+que conservan su método ERP. No se aplica el porcentaje de un bloque a ventas
+sin CPP de las cuatro líneas comerciales. La clasificación de `tpFood` coincide
+con Empaques en el catálogo para todos los SKUs contrastados del período.
+
 ## Verificación y recuperación
 
 - 46 pruebas del calculador y adaptadores; incluyen millares fraccionarios,
@@ -78,6 +84,12 @@ El healthcheck del worker vigila extracción/publicación de ambas fuentes CPP.
   agregado SQL coinciden; Laminados y registros fuera del alcance permanecen iguales.
 - 58 rutas HTTP con la base real, más tres detalles de producto: todas HTTP 200.
 - Compilación frontend correcta; conserva avisos previos de tamaño y claves duplicadas.
+- Cinco pruebas SQL del agregado en READ ONLY, sin fallos.
+- Comprobación autenticada en producción: Empaques Q423,426 y 43.0%; Tapas
+  Q3,391,964 y 59.9%, con cinco SKUs N/D; Inyectables Q966,606 y 48.5%.
+  Laminados conserva Q8,966,039 y 30.2%. Importes y porcentajes redondeados en UI.
+  Esta comprobación visual corresponde a Márgenes; no acredita revisión visual
+  individual de todas las pantallas ni del Excel exportado.
 
 Comprobaciones de solo lectura desde `backend`:
 
@@ -92,3 +104,29 @@ se respaldaron en el expediente local `respaldo-final.json`. El instalador del
 worker respalda ETL y Dockerfile antes de modificarlos. Revertir requiere
 restaurar la vista/prompt, código anterior y worker; no borrar fuentes ERP ni
 recalcular sus costos originales. Los snapshots nuevos permanecen para auditoría.
+
+## Publicación comprobada
+
+Commit `8542430`, desplegado desde `main`. El proveedor registró `success` para
+el servicio web a las 15:49:38 UTC del 22-oct-2026 y para el scheduler a las
+15:49:00 UTC. Identificadores de despliegue: web `dep-dbd30kvavr4c73d99cag`;
+scheduler `dep-dbd30kvavr4c73d99d50`. Se cargó en el navegador la versión nueva
+con sesión autenticada, leyendas de millares y los resultados indicados arriba.
+
+La migración 023 se aplicó en dos etapas: tablas/fuente preparada y, después
+del despliegue, unión canónica de costos. Se conservaron las fuentes originales.
+El healthcheck del worker confirmó `overall_healthy=true`, importación 2 de
+artículos publicada y Laminados saludable. La segunda extracción ejecutó el
+módulo instalado en el contenedor y volvió a recuperar 6,226 ventas y 1,317 compras.
+El respaldo del worker está en
+`/opt/thermoplastica/respaldo-cpp-articulos-20261022T154856Z`.
+
+Los validadores de artículos y Laminados coinciden con Postgres y no encuentran
+ventas duplicadas ni diferencias en las líneas fuera del alcance. La huella
+de los registros de Laminados se conservó al activar la unión. Se verificó
+también el acceso real de `dbAgente.ejecutarSQL`, con sus credenciales de solo
+lectura y guardia SQL: los agregados de las cuatro líneas coinciden con el
+calculador y las pantallas. Se regeneraron
+cuatro insights del playbook de márgenes con la nueva fuente; costo de esa
+ejecución US$0.0669. Los cinco códigos de Tapas sin compras propias siguen
+pendientes de información de origen, no de sustitución por costos ajenos.
