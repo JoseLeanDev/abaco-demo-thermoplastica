@@ -1,4 +1,4 @@
-const { crearCalculador, resumir } = require('./cpp');
+const { crearCalculador, resumir, LINEAS, UNIDADES } = require('./cpp');
 const { leerLaminados } = require('./cppDatos');
 const { parsePeriodo } = require('./periodo');
 const trim = (s) => String(s ?? '').trim();
@@ -30,7 +30,7 @@ function metricas(rows) {
 }
 
 const DIMENSIONES = {
-  categoria: (r) => 'Laminados', subcategoria: (r) => trim(r.categoria) || 'Sin subcategoría',
+  categoria: (r) => trim(r.linea), subcategoria: (r) => trim(r.categoria) || 'Sin subcategoría',
   sublinea: (r) => trim(r.sublinea) || 'Sin sublínea', articulo: (r) => trim(r.codigo_articulo),
   cliente: (r) => trim(r.codigo_cliente), vendedor: (r) => trim(r.nombre_vendedor) || 'Sin vendedor',
   sucursal: (r) => trim(r.sucursal) || 'Sin sucursal', tipo_cliente: (r) => trim(r.tipo_cliente_desc || r.tipo_cliente).replace(/^\d+\s*-\s*/, '') || 'Sin tipo',
@@ -49,11 +49,12 @@ function agrupar(rows, dim) {
 }
 
 function construirReporte(datos, P, { corte, query = {} }) {
+  const linea = LINEAS.includes(query.categoria) ? query.categoria : 'Laminados';
   const c = crearCalculador(datos.compras, { corte });
   const ids = new Map((datos.articulos || []).map((r) => [trim(r.codigo_articulo), Number(r.articulo_id)]));
   const inicio = P.desde < P.prevDesde ? P.desde : P.prevDesde;
   const fin = P.hasta > P.prevHasta ? P.hasta : P.prevHasta;
-  const filas = datos.ventas.filter((r) => trim(r.linea) === 'Laminados' && r.fec_emis.slice(0, 10) >= inicio && r.fec_emis.slice(0, 10) <= fin).map((r) => c.calcularVenta({ ...r, codigo_articulo: trim(r.codigo_articulo), codigo_cliente: trim(r.codigo_cliente) }))
+  const filas = datos.ventas.filter((r) => trim(r.linea) === linea && r.fec_emis.slice(0, 10) >= inicio && r.fec_emis.slice(0, 10) <= fin).map((r) => c.calcularVenta({ ...r, codigo_articulo: trim(r.codigo_articulo), codigo_cliente: trim(r.codigo_cliente) }))
     .filter((r) => !r.excluida);
   const filtradas = filtrar(filas, query);
   const entre = (a, b) => filtradas.filter((r) => r.fec_emis.slice(0, 10) >= a && r.fec_emis.slice(0, 10) <= b);
@@ -66,7 +67,7 @@ function construirReporte(datos, P, { corte, query = {} }) {
       const x = metricas(rr), y = metricas(pp);
       return { clave, nombre: dim === 'articulo' ? trim(r.articulo) : dim === 'cliente' ? nombreCliente(r) : clave,
         es_cpp: true, corte_cpp: corte,
-        extra: dim === 'vendedor' ? trim(r.codigo_vendedor) : dim === 'articulo' ? 'Laminados' : null,
+        extra: dim === 'vendedor' ? trim(r.codigo_vendedor) : dim === 'articulo' ? linea : null,
         ventas: x.ventas_totales, ventas_prev: y.ventas_totales, variacion: x.ventas_totales - y.ventas_totales,
         variacion_pct: y.ventas_totales > 0 ? (x.ventas_totales / y.ventas_totales - 1) * 100 : null,
         unidades: x.unidades, unidades_prev: y.unidades, facturas: x.facturas, clientes: x.clientes, clientes_prev: y.clientes, skus: x.skus,
@@ -83,7 +84,7 @@ function construirReporte(datos, P, { corte, query = {} }) {
   const productos = items('articulo').filter((r) => r.ventas >= 1000 && r.unidades > 0).map((r) => {
     const raw = actual.find((v) => v.codigo_articulo === r.clave);
     const delta = r.margen_pct !== null && r.margen_pct_prev !== null ? r.margen_pct - r.margen_pct_prev : null;
-    return { id: ids.get(r.clave), sku: r.clave, nombre: r.nombre, categoria: 'Laminados', es_cpp: true, corte_cpp: corte,
+    return { id: ids.get(r.clave), sku: r.clave, nombre: r.nombre, categoria: linea, unidad: UNIDADES[linea].unidad, es_cpp: true, corte_cpp: corte,
       subcategoria: trim(raw.categoria), sublinea: trim(raw.sublinea), ventas: r.ventas, margen_q: r.margen,
       precio_actual: r.precio_promedio, costo_actual: r.costo_unitario,
       margen_pct_actual: r.margen_pct, margen_pct_historico: r.margen_pct_prev, delta_puntos: delta,
@@ -93,10 +94,10 @@ function construirReporte(datos, P, { corte, query = {} }) {
         ? Math.min(r.costo_unitario / (1 - r.margen_pct_prev / 100), r.precio_promedio * 1.3) : r.precio_promedio,
     };
   });
-  const meta = { metodologia: 'CPP_LAMINADOS_JONATHAN_2026_10_21', corte_cpp: corte, unidad: 'kg',
+  const meta = { metodologia: linea === 'Laminados' ? 'CPP_LAMINADOS_JONATHAN_2026_10_21' : 'CPP_COMPRAS_PROPIAS_2026_10_22', corte_cpp: corte, unidad: UNIDADES[linea].unidad,
     periodo_solicitado: P.ventana(), hasta_efectivo: P.hasta,
     fuente: 'snapshots_completos_erp', cargas: datos.metadata || [], incidencias_compras: c.incidencias,
-    alcance: 'Solo linea original Laminados; Almacen General y Flexografia se concilian por separado.' };
+    alcance: linea === 'Laminados' ? 'Solo linea original Laminados; Almacen General y Flexografia se concilian por separado.' : `${linea}: compras del mismo artículo; incluye sus compras anteriores disponibles.` };
   return { P, meta, actual, anterior, filas: filtradas, ids, items, metricas: a, metricas_previas: h,
     data: { metodologia: meta, resumen: { total_margen_bruto_q: a.margen_mp,
       margen_global_pct: a.margen_mp_pct, margen_global_pct_prev: h.margen_mp_pct,
@@ -116,11 +117,13 @@ async function obtenerReporte(req, pool, { now = new Date(), cargar = leerLamina
   if (corte > ultimoMesCerrado(now)) throw Object.assign(new Error('El CPP solo admite compras de meses cerrados.'), { statusCode: 400 });
   const desde = P.desde < P.prevDesde ? P.desde : P.prevDesde;
   const hasta = P.hasta > P.prevHasta ? P.hasta : P.prevHasta;
-  const publicacion = cargar === leerLaminados ? (await pool.query('SELECT importacion_id FROM thermoplastica.cpp_laminados_publicacion WHERE singleton')).rows[0]?.importacion_id : null;
-  const key = JSON.stringify([desde, hasta, corte, publicacion]);
+  const linea = LINEAS.includes(req.query.categoria) ? req.query.categoria : 'Laminados';
+  const tabla = linea === 'Laminados' ? 'cpp_laminados_publicacion' : 'cpp_articulos_publicacion';
+  const publicacion = cargar === leerLaminados ? (await pool.query(`SELECT importacion_id FROM thermoplastica.${tabla} WHERE singleton`)).rows[0]?.importacion_id : null;
+  const key = JSON.stringify([linea, desde, hasta, corte, publicacion]);
   let cached = cache.get(key);
   if (cargar !== leerLaminados || !cached || cached.hasta < Date.now()) {
-    const promise = cargar(pool, { desde, hasta, corte });
+    const promise = cargar(pool, { desde, hasta, corte, ...(linea === 'Laminados' ? {} : {lineas:[linea]}) });
     cached = { hasta: Date.now() + 60000, promise };
     if (cargar === leerLaminados) {
       if (cache.size >= 24) cache.delete(cache.keys().next().value);

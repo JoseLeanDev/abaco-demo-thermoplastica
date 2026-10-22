@@ -146,6 +146,7 @@ app.use((err, req, res, next) => {
 });
 
 require('./services/laminadosPublicacion').iniciarPublicacion(db.pool);
+require('./services/articulosPublicacion').iniciarPublicacion(db.pool);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

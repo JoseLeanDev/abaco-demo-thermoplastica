@@ -1,6 +1,7 @@
-// Adaptadores del CPP de Laminados a los contratos existentes de Ventas/Márgenes.
-// Se activan solo con el filtro explícito categoria=Laminados.
+// Adaptadores del CPP a los contratos existentes de Ventas/Márgenes.
+// Cada una de las cuatro líneas comerciales conserva su fuente y su unidad.
 const { obtenerReporte, metricas, DIMENSIONES } = require('./laminados');
+const { LINEAS } = require('./cpp');
 const trim = (v) => String(v ?? '').trim();
 const sum = (rr, f) => rr.reduce((s, r) => s + Number(r[f] || 0), 0);
 const grupos = (rr, fn) => {
@@ -162,14 +163,17 @@ function middlewareLaminados(modulo, pool, cargar = obtenerReporte) {
     const preview = modulo === 'margenes' && ruta === '/cpp-laminados';
     if (req.method !== 'GET' || (!permitidas.includes(ruta) && !esDetalle)) return next();
     try {
-      let seleccionado = req.query.categoria === 'Laminados';
+      let categoria = preview ? 'Laminados' : req.query.categoria;
       if (esDetalle && !req.query.categoria && pool) {
-        seleccionado = (await pool.query('SELECT EXISTS(SELECT 1 FROM thermoplastica.cpp_laminados_venta WHERE articulo_id=$1) AS ok',[Number(ruta.split('/')[2])])).rows[0].ok;
+        categoria = (await pool.query(`SELECT linea FROM (
+          SELECT 'Laminados' AS linea,fecha_emision FROM thermoplastica.cpp_laminados_venta WHERE articulo_id=$1
+          UNION ALL SELECT linea_cpp,fecha_emision FROM thermoplastica.cpp_articulos_venta WHERE articulo_id=$1
+        ) x ORDER BY fecha_emision DESC LIMIT 1`,[Number(ruta.split('/')[2])])).rows[0]?.linea;
       }
-      if (!preview && !seleccionado) return next();
-      const reporte = await cargar({ query: { ...req.query, categoria: 'Laminados' } }, pool);
+      if (!LINEAS.includes(categoria)) return next();
+      const reporte = await cargar({ query: { ...req.query, categoria } }, pool);
       const data = modulo === 'ventas' ? adaptarVentas(reporte, ruta, req.query) : adaptarMargenes(reporte, ruta);
-      if (data === null) return res.status(404).json({ status: 'error', message: 'Artículo sin ventas en esta selección de Laminados.' });
+      if (data === null) return res.status(404).json({ status: 'error', message: 'Artículo sin ventas en esta selección comercial.' });
       return res.json({ status: 'success', timestamp: new Date().toISOString(), metodologia: reporte.meta, data });
     } catch (e) { return res.status(e.statusCode || 500).json({ status: 'error', message: e.message }); }
   };

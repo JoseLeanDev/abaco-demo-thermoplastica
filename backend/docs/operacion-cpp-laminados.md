@@ -245,9 +245,10 @@ cambiar ese metadato: la restricción del publicador a Laminados se conserva.
 Se añadieron casos de prueba con fracciones de millar para detectar conversiones
 erróneas por 1,000. Los fletes por kilo del PDF siguen reservados a Laminados.
 
-Hay una aclaración abierta: la frase recibida también equipara Laminados a
-millares, mientras el PDF lo define en kilos. Se pidió precisar ese alcance;
-Laminados conserva kilos y el cálculo ya conciliado mientras se obtiene respuesta.
+La captura posterior de la conversación resuelve la aclaración: la consulta
+original y la respuesta de Jonathan corresponden a las otras tres líneas.
+Confirma millares tanto en compras como en ventas; no modifica Laminados,
+que conserva kilos y el cálculo ya conciliado según el PDF.
 
 La nueva auditoría de solo lectura a Postgres, enero–septiembre de 2026 y compras
 al 30-sept, confirma el estado previo a recuperar las compras antiguas:

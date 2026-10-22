@@ -147,9 +147,14 @@ router.get('/', async (req, res) => {
     // Los productos Laminados del listado general conservan el CPP por kg
     // elegible, N/D y semáforos del mismo contrato que su selección exclusiva.
     if (!req.query.categoria) {
-      const lam = await require('../services/laminados').obtenerReporte({query:{...req.query,categoria:'Laminados'}},db.pool);
-      const otros = productos.filter((p)=>p.categoria!=='Laminados');
-      productos.splice(0,productos.length,...otros,...lam.data.productos);
+      const lineas = require('../services/cpp').LINEAS;
+      const corregidos = [];
+      for (const categoria of lineas) {
+        const r = await require('../services/laminados').obtenerReporte({query:{...req.query,categoria}},db.pool);
+        corregidos.push(...r.data.productos);
+      }
+      const otros = productos.filter((p)=>!lineas.includes(p.categoria));
+      productos.splice(0,productos.length,...otros,...corregidos);
       productos.sort((a,b)=>b.ventas-a.ventas);
     }
 

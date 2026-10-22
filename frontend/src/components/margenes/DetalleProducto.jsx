@@ -24,7 +24,7 @@ function Dato({ titulo, leyenda, valor, sub, tono = '' }) {
 // (período seleccionado + el año previo, para ver de dónde viene el cambio).
 export default function DetalleProducto({ producto: p, onClose }) {
   const { desde } = usePeriodo()
-  const { data, isLoading } = useMargenProductoDetalle(p.id, p.es_cpp ? { categoria: 'Laminados', corte_cpp: p.corte_cpp } : {})
+  const { data, isLoading } = useMargenProductoDetalle(p.id, p.es_cpp ? { categoria: p.categoria, corte_cpp: p.corte_cpp } : {})
 
   useEffect(() => {
     const esc = (e) => e.key === 'Escape' && onClose()
@@ -61,7 +61,7 @@ export default function DetalleProducto({ producto: p, onClose }) {
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Dato titulo="Ventas" valor={fmtQ(p.ventas)} sub={`${fmtInt(p.unidades_12m)} unidades`} />
-            <Dato titulo={p.es_cpp ? 'Margen sobre materia prima' : 'Margen bruto'} leyenda={p.es_cpp ? 'margen_mp' : 'margen_bruto'} valor={p.margen_q === null ? 'N/D' : fmtQ(p.margen_q)} sub={`${fmtPct(p.margen_pct_actual)} sobre ventas con costo`} />
+            <Dato titulo={p.es_cpp ? p.unidad === 'millar' ? 'Margen sobre costo de compra' : 'Margen sobre materia prima' : 'Margen bruto'} leyenda={p.es_cpp ? 'margen_mp' : 'margen_bruto'} valor={p.margen_q === null ? 'N/D' : fmtQ(p.margen_q)} sub={`${fmtPct(p.margen_pct_actual)} sobre ventas con costo`} />
             <Dato
               titulo="Margen año anterior"
               leyenda="vs_anio_anterior"

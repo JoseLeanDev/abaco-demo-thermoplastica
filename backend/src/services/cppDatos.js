@@ -41,6 +41,15 @@ async function leerLaminados(pool, { desde, hasta, corte, lineas = ['Laminados']
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await client.query("SET LOCAL statement_timeout = '20s'");
+    if (lineas.length === 1 && ['Empaques para alimentos','Tapas y Valvulas','Inyectables'].includes(lineas[0])) {
+      const p = (await client.query(`SELECT i.*,p.corte::text AS corte_publicado FROM thermoplastica.cpp_articulos_publicacion p
+        JOIN thermoplastica.cpp_articulos_importacion i ON i.id=p.importacion_id WHERE singleton`)).rows[0];
+      if (!p) throw Object.assign(new Error('El histórico de esta línea comercial todavía no está publicado.'), {statusCode:503});
+      const articulos=(await client.query('SELECT articulo_id,codigo_articulo FROM thermoplastica.dim_articulo')).rows;
+      await client.query('ROLLBACK');
+      return {ventas:p.ventas.filter(r=>String(r.linea).trim()===lineas[0] && r.fec_emis>=desde && r.fec_emis<=hasta),compras:p.compras,articulos,
+        metadata:[{importacion_id:p.id,desde_disponible:p.desde_ventas,desde_compras:p.desde_compras,ultima_carga:p.extraido_en,corte_publicado:p.corte_publicado}]};
+    }
     const publicado = (await client.query(`SELECT i.*,p.corte::text AS corte_publicado FROM thermoplastica.cpp_laminados_publicacion p
         JOIN thermoplastica.cpp_laminados_importacion i ON i.id=p.importacion_id WHERE singleton`)).rows[0];
     if (lineas.length === 1 && lineas[0] === 'Laminados') {

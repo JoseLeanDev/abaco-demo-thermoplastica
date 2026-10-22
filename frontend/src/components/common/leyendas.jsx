@@ -28,18 +28,18 @@ export const LEYENDAS = {
   margen_bruto: {
     titulo: 'Margen bruto',
     texto: <>
-      Laminados usa el margen sobre materia prima con CPP de compras de meses cerrados.
-      Las demás líneas conservan unidades × costo promedio facturado del ERP.
-      <Nota>El total suma el margen conocido de Laminados y el margen estimado de las otras líneas. Las ventas de Laminados sin CPP se excluyen del numerador y denominador; no se les estima utilidad.</Nota>
+      Laminados usa CPP de materia prima en kilos. Empaques, Tapas y válvulas e Inyectables usan el costo ponderado de las compras del mismo producto, en millares.
+      Las otras líneas conservan unidades × costo promedio facturado del ERP.
+      <Nota>El total suma los márgenes de ambos métodos. Las ventas sin CPP se excluyen del numerador y denominador; no se les estima utilidad.</Nota>
     </>,
   },
   margen_mp: {
-    titulo: 'Margen sobre materia prima',
-    texto: <>Ventas sin IVA menos kilos vendidos por el costo promedio ponderado de compras, con los fletes y respaldos definidos para Laminados. El porcentaje usa únicamente ventas con CPP disponible. Las ventas sin CPP se muestran aparte y no se les estima utilidad.</>,
+    titulo: 'Margen sobre costo de compras',
+    texto: <>Ventas sin IVA menos cantidad vendida por el costo promedio ponderado de compras. Laminados usa kilos, con los fletes y respaldos de su metodología. Empaques, Tapas y válvulas e Inyectables usan millares y compras del mismo producto, incluidas las anteriores disponibles. El porcentaje usa únicamente ventas con CPP disponible; a las ventas sin CPP no se les estima utilidad.</>,
   },
   costo_cpp: {
     titulo: 'Costo promedio ponderado de compras',
-    texto: <>Costo de compras sin IVA más el flete aplicable, dividido entre kilos comprados. Laminados busca por categoría, sublínea y color, con los respaldos y costos especiales definidos para el reporte. Se utilizan compras de meses cerrados.</>,
+    texto: <>Importe de compras sin IVA dividido entre la cantidad comprada. Laminados usa kilos, flete y respaldos por categoría, sublínea y color. Empaques, Tapas y válvulas e Inyectables usan millares y solo compras del mismo código: primero el año de venta y luego sus compras anteriores disponibles. Se utilizan compras de meses cerrados.</>,
   },
   margen_pts: {
     titulo: 'Puntos de margen',
@@ -47,7 +47,7 @@ export const LEYENDAS = {
   },
   pct_sin_costo: {
     titulo: 'Ventas sin costo',
-    texto: <>% de ventas sin costo disponible: CPP pendiente para Laminados o costo 0 del ERP en las otras líneas. No se cuentan como 100% de margen.</>,
+    texto: <>% de ventas sin costo disponible: CPP pendiente en las cuatro líneas comerciales o costo 0 del ERP en las otras líneas. No se cuentan como 100% de margen.</>,
   },
   clientes_compraron: {
     titulo: 'Clientes que compraron',

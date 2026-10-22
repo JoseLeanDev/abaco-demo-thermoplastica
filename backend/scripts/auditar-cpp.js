@@ -48,8 +48,11 @@ async function leerPostgres() {
     const historial = (await db.query('SELECT min(fec_emis)::text AS primera_compra FROM raw_thermoplastica.compras_lineas')).rows[0];
     const laminados=(await db.query(`SELECT i.compras,i.ventas FROM thermoplastica.cpp_laminados_publicacion p
       JOIN thermoplastica.cpp_laminados_importacion i ON i.id=p.importacion_id WHERE singleton`)).rows[0];
+    const existe=(await db.query("SELECT to_regclass('thermoplastica.cpp_articulos_publicacion') IS NOT NULL AS ok")).rows[0].ok;
+    const articulos=existe ? (await db.query(`SELECT i.compras,i.ventas,i.desde_compras::text AS desde_compras
+      FROM thermoplastica.cpp_articulos_publicacion p JOIN thermoplastica.cpp_articulos_importacion i ON i.id=p.importacion_id WHERE singleton`)).rows[0] : null;
     await db.query('ROLLBACK');
-    return { compras, ventas, historial, laminados };
+    return { compras, ventas, historial, laminados, articulos };
   } finally { await db.end(); }
 }
 
@@ -72,9 +75,12 @@ async function main() {
   } else datos = await leerPostgres();
   const cpp = crearCalculador(datos.compras, { corte: args.corte });
   const cppLam=datos.laminados ? crearCalculador(datos.laminados.compras,{corte:args.corte}) : cpp;
-  const vv=datos.laminados ? [...datos.ventas.filter((r)=>String(r.linea).trim()!=='Laminados'),
+  let vv=datos.laminados ? [...datos.ventas.filter((r)=>String(r.linea).trim()!=='Laminados'),
     ...datos.laminados.ventas.filter((r)=>r.fec_emis>=args.desde && r.fec_emis<=args.hasta)] : datos.ventas;
-  const filas = vv.map((v)=>(String(v.linea).trim()==='Laminados'?cppLam:cpp).calcularVenta(v));
+  const cppArt=datos.articulos ? crearCalculador(datos.articulos.compras,{corte:args.corte}) : cpp;
+  if(datos.articulos)vv=[...vv.filter(v=>!LINEAS.slice(1).includes(String(v.linea).trim())),
+    ...datos.articulos.ventas.filter(v=>v.fec_emis>=args.desde&&v.fec_emis<=args.hasta)];
+  const filas = vv.map((v)=>(String(v.linea).trim()==='Laminados'?cppLam:cppArt).calcularVenta(v));
   const grupos = {};
   for (const linea of LINEAS) {
     const propias = filas.filter((r) => String(r.linea ?? '').trim() === linea && !r.excluida);
@@ -89,12 +95,13 @@ async function main() {
     };
   }
   const salida = {
-    tipo: datos.laminados ? 'laminados_publicado_otras_lineas_provisionales' : 'auditoria_cpp_sin_activar_en_produccion', creado_en: new Date().toISOString(),
+    tipo: datos.articulos ? 'cpp_cuatro_lineas_publicadas' : datos.laminados ? 'laminados_publicado_otras_lineas_provisionales' : 'auditoria_cpp_sin_activar_en_produccion', creado_en: new Date().toISOString(),
     periodo_ventas: { desde: args.desde, hasta: args.hasta }, corte_compras: cpp.corte,
     primera_compra_disponible: datos.historial?.primera_compra || cpp.primeraCompra,
+    primera_compra_articulos: datos.articulos?.desde_compras || null,
     advertencia_snapshot: datos.advertencia_snapshot || null,
     criterio: 'Laminados conserva la jerarquía del PDF. Empaques, Tapas y Valvulas e Inyectables usan únicamente compras del mismo código: año de venta, luego años anteriores disponibles de más reciente a más antiguo, priorizando H2 antes del año completo.',
-    pendiente: ['Completar el historial de compras propias anterior al inicio de la ingesta para los artículos que siguen sin CPP.', 'Revisar compras del mismo código que aparecen en varias líneas.', 'Aclarar la referencia del usuario a Laminados en millares frente a los kilos documentados en el PDF; conservar Laminados sin cambios mientras se aclara.', 'Mantener documentadas las diferencias de alcance y datos de Laminados frente al reporte de referencia.'],
+    pendiente: ['Revisar artículos sin compras propias disponibles y conservarlos sin CPP.', 'Revisar compras del mismo código que aparecen en varias líneas.', 'Mantener documentadas las diferencias de alcance y datos de Laminados frente al reporte de referencia.'],
     resumen: resumir(filas), lineas: grupos, incidencias_compras: cpp.incidencias,
     excluidas: filas.filter((r) => r.excluida).reduce((a, r) => { a[r.motivo] = (a[r.motivo] || 0) + 1; return a; }, {}),
   };

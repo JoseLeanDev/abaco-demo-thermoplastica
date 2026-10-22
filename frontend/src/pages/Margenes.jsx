@@ -38,6 +38,7 @@ export default function Margenes() {
 
   const resumen = data?.data?.resumen
   const cpp = data?.data?.metodologia
+  const nombreMargen = cpp?.unidad === 'kg' ? 'Margen sobre materia prima' : cpp ? 'Margen sobre costo de compra' : 'Margen bruto'
   const productos = data?.data?.productos || []
   const delta = resumen && resumen.margen_global_pct !== null && resumen.margen_global_pct_prev !== null ? resumen.margen_global_pct - resumen.margen_global_pct_prev : null
 
@@ -59,9 +60,9 @@ export default function Margenes() {
 
       {/* Filtro de producto: aplica a KPIs y a todas las pestañas */}
       <FiltroProducto value={producto} onChange={setProducto} />
-      {cpp && <p className="text-xs text-[var(--text-muted)]">Margen sobre materia prima · compras hasta {cpp.corte_cpp} · ventas hasta {cpp.hasta_efectivo}. Las ventas sin CPP no entran al margen. <Leyenda k="margen_mp" /></p>}
+      {cpp && <p className="text-xs text-[var(--text-muted)]">{nombreMargen} · cantidades en {cpp.unidad === 'millar' ? 'millares' : 'kilos'} · compras hasta {cpp.corte_cpp} · ventas hasta {cpp.hasta_efectivo}. Las ventas sin CPP no entran al margen. <Leyenda k="margen_mp" /></p>}
 
-      {!cpp && <p className="text-xs text-[var(--text-muted)]">El total integra Laminados con CPP de materia prima y las demás líneas con su cálculo ERP actual. Laminados sin CPP queda fuera del margen; sus ventas permanecen visibles.</p>}
+      {!cpp && <p className="text-xs text-[var(--text-muted)]">Laminados, Empaques, Tapas y válvulas e Inyectables usan costos de compras. Las otras líneas conservan su cálculo ERP actual. Las ventas sin CPP quedan fuera del margen y permanecen visibles.</p>}
 
       {error && <div className="card p-6 text-red-500">Error cargando datos: {error.message}</div>}
 
@@ -71,7 +72,7 @@ export default function Margenes() {
       ) : resumen && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="card p-5">
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">{cpp ? 'Margen sobre materia prima' : 'Margen bruto'} <Leyenda k={cpp ? 'margen_mp' : 'margen_bruto'} /></p>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">{nombreMargen} <Leyenda k={cpp ? 'margen_mp' : 'margen_bruto'} /></p>
             <p className="text-2xl font-bold text-emerald-600">{resumen.total_margen_bruto_q === null ? 'N/D' : formatGTQ(resumen.total_margen_bruto_q)}</p>
             <p className="text-xs text-[var(--text-muted)]">{resumen.margen_global_pct === null ? 'N/D' : `${formatNum(resumen.margen_global_pct)}% sobre ventas con costo`}</p>
             {resumen.pct_ventas_sin_costo >= 1 && (

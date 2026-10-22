@@ -157,8 +157,8 @@ function crearCalculador(compras, { corte } = {}) {
       ...base, ...cpp, advertencias, es_provisional: !['documentada_pdf', 'confirmada_usuario'].includes(base.estado_unidad) || advertencias.length > 0,
       venta, cantidad, costo_mp: costo, margen_mp: margen,
       margen_mp_pct: venta > 0 && margen !== null ? margen / venta * 100 : null,
-      nombre_vendedor: cliente.includes('COLGATE') ? 'Gerencia Laminados' : r.nombre_vendedor,
-      codigo_vendedor: cliente.includes('COLGATE') ? null : r.codigo_vendedor,
+      nombre_vendedor: linea === 'Laminados' && cliente.includes('COLGATE') ? 'Gerencia Laminados' : r.nombre_vendedor,
+      codigo_vendedor: linea === 'Laminados' && cliente.includes('COLGATE') ? null : r.codigo_vendedor,
     };
   }
   return { buscar, calcularVenta, corte, primeraCompra, incidencias };

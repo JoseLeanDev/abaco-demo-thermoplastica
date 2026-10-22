@@ -102,6 +102,7 @@ test('excluye ventas internas sin tildes y reasigna Colgate', () => {
   assert.equal(c.calcularVenta(venta({ cliente: '5779022-Thermoplástica S.A.' })).motivo, 'venta_interna');
   assert.equal(c.calcularVenta(venta({ cliente: 'Termoplastica' })).motivo, 'venta_interna');
   assert.equal(c.calcularVenta(venta({ cliente: 'Colgate-Palmolive' })).nombre_vendedor, 'Gerencia Laminados');
+  assert.equal(c.calcularVenta(venta({linea:'Inyectables',cliente:'Colgate-Palmolive',nombre_vendedor:'Vendedor original'})).nombre_vendedor,'Vendedor original');
 });
 test('no redondea el CPP antes de aplicar la cantidad y exige un corte cerrado', () => {
   close(engine([compra({ unidades: 3, total_sin_iva: 10 })]).calcularVenta(venta({ unidades: 3 })).costo_mp, 10);

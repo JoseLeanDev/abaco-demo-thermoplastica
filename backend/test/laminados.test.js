@@ -70,12 +70,35 @@ test('el middleware requiere Laminados explícito y comparte el resultado entre 
   const res = { json(v) { this.body=v; return this; }, status(v) { this.code=v; return this; } };
   let siguientes = 0;
   const handler = middlewareLaminados('ventas', null, cargar);
-  await handler({method:'GET',path:'/',query:{categoria:'Inyectables'}},res,()=>siguientes++);
+  await handler({method:'GET',path:'/',query:{categoria:'Soplado'}},res,()=>siguientes++);
   await handler({method:'GET',path:'/filtros',query:{categoria:'Laminados'}},res,()=>siguientes++);
   assert.equal(siguientes, 2); assert.equal(llamadas, 0);
   await handler({method:'GET',path:'/',query:{categoria:'Laminados'}},res,()=>siguientes++);
   assert.equal(res.body.data.metodologia.unidad, 'kg'); close(res.body.data.margen_bruto, 100);
 });
+for (const categoria of ['Empaques para alimentos','Tapas y Valvulas','Inyectables']) {
+ test(`${categoria}: todos los contratos comparten compras propias en millares y no incorporan Laminados`,async()=>{
+  const datos={ventas:[venta({linea:categoria,unidades:2,total_sin_iva:3000}),
+    venta({linea:categoria,codigo_articulo:'SINCOMPRA',unidades:1,total_sin_iva:1500}),
+    venta({linea:'Laminados',total_sin_iva:9999})],
+    compras:[compra({linea:categoria,codigo_articulo:'SKU1',fec_emis:'2022-08-01',unidades:10,total_sin_iva:10000}),
+      compra({linea:categoria,codigo_articulo:'OTRO',total_sin_iva:100})],
+    articulos:[{codigo_articulo:'SKU1',articulo_id:1},{codigo_articulo:'SINCOMPRA',articulo_id:2}]};
+  const r=construirReporte(datos,P,{corte:'2026-09-30',query:{categoria}});
+  assert.equal(r.meta.unidad,'millar');close(r.metricas.ventas_totales,4500);
+  close(r.metricas.ventas_con_cpp,3000);close(r.metricas.costo_mp,2000);close(r.metricas.margen_mp,1000);
+  const p=r.data.productos.find(p=>p.sku==='SINCOMPRA');assert.equal(p.costo_actual,null);assert.equal(p.margen_pct_actual,null);
+  assert.equal(r.data.productos[0].categoria,categoria);
+  const v=adaptarVentas(r,'/',{});close(v.margen_bruto,r.metricas.margen_mp);
+  close(adaptarMargenes(r,'/vendedores')[0].margen_pct_actual,100/3);
+  close(adaptarVentas(r,'/matriz',{filas:'categoria',columnas:'vendedor'}).filas[0].celdas.Vendedor.margen_pct,100/3);
+  let categoriaRecibida;
+  const cargar=async(req)=>{categoriaRecibida=req.query.categoria;return r;};
+  const res={json(v){this.body=v;return this;},status(){return this;}};
+  await middlewareLaminados('ventas',null,cargar)({method:'GET',path:'/',query:{categoria}},res,()=>assert.fail('No debe usar el contrato ERP'));
+  assert.equal(categoriaRecibida,categoria);assert.equal(res.body.metodologia.unidad,'millar');
+ });
+}
 test('no acepta un corte abierto ni usa el filtro de producto para reducir compras', async () => {
   let opciones;
   const req = {query:{desde:'2026-01-01',hasta:'2026-09-30',categoria:'Laminados',subcategoria:'PVC'}};

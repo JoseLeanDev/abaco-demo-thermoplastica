@@ -244,9 +244,9 @@ export default function Dashboard() {
       <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 text-xs text-[var(--text-muted)] leading-relaxed">
         <p>
           <SparklesIcon className="w-4 h-4 inline mr-1 -mt-0.5" />
-          <strong>Notas metodológicas.</strong> Ventas y márgenes reales al nivel línea × factura (<code>fact_ventas_linea</code>, costo_promedio_facturado del ERP).
+          <strong>Notas metodológicas.</strong> Ventas y márgenes al nivel línea × factura. Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras; las otras líneas conservan el costo del ERP.
           Compras y gastos operativos separados por <code>es_gasto_operativo</code>. Flujos (ventas, compras, gastos, márgenes) = período del filtro vs mismo período del año anterior.
-          Margen % = solo líneas de venta con costo en el ERP ({fmtPct(k.pct_ventas_sin_costo)} de las ventas vino sin costo y no entra al %); el margen en Q aplica ese % a todas las ventas.
+          Las ventas sin CPP se excluyen del margen y permanecen visibles. En las líneas que mantienen el método ERP, se conserva su estimación de margen. Ventas sin costo disponible: {fmtPct(k.pct_ventas_sin_costo)}.
           CxC = snapshot vivo por buckets (por vencer / 1-30 / 31-60 / 61-90 / 90+); CxC y CxP incluyen solo documentos emitidos en el período.
           CxP = saldo pendiente × factura con fecha de vencimiento real del ERP. DSO/DIO/DPO y el ciclo de caja usan el mismo cálculo que Análisis: lo que deben los clientes / se debe a proveedores hoy (sin facturas vencidas hace más de 90 días) ÷ ventas / compras promedio de un día del período. Health Score compone 7 dimensiones con pesos (crecimiento 20%, margen 20%, EBITDA 15%, cobertura CxC/CxP 15%, cobros 10%, concentración 10%, disciplina crédito 10%).
           Sincronización diaria via n8n · Datos al {d.fecha_corte}.

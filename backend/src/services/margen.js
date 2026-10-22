@@ -1,5 +1,5 @@
 // Una agregación para pantallas, totales y agentes. El agregado en Postgres
-// separa CPP Laminados del método ERP que conservan las demás líneas.
+// separa el CPP de las cuatro líneas comerciales del método ERP restante.
 const col = (a, c) => a ? `${a}.${c}` : c;
 function agregado(a = '', cond) {
   const cols = ['es_cpp','total_sin_iva','costo_total_facturado','margen_bruto','ventas_base_margen'];
