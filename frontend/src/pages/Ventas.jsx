@@ -543,39 +543,39 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
         </div>
       )}
 
-      {/* Serie mensual top 5 vendedores */}
-      <div className="card">
-        <div className="section-header">
-          <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-          <h2 className="font-semibold">Evolución mensual de los top 5 vendedores</h2>
-          <Leyenda k="serie_mensual" />
-        </div>
-        <div className="p-5 pt-0">
-          {!serieVend || serieVend.serie?.length === 0 ? (
-            <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={serieVend.serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-                <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
-                <YAxis tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
-                <Tooltip
-                  formatter={(v) => fmtQ(v)}
-                  labelFormatter={fmtPeriod}
-                  contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {(serieVend.vendedores || []).map((v, i) => (
-                  <Line key={v} type="monotone" dataKey={v} stroke={PIE_COLORS[i % PIE_COLORS.length]} strokeWidth={2} dot={false} />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      {/* Ranking + Pie de participación */}
+      {/* Serie mensual + Pie de participación */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Serie mensual top 5 vendedores */}
+        <div className="card lg:col-span-2">
+          <div className="section-header">
+            <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Evolución mensual de los top 5 vendedores</h2>
+            <Leyenda k="serie_mensual" />
+          </div>
+          <div className="p-5 pt-0">
+            {!serieVend || serieVend.serie?.length === 0 ? (
+              <p className="py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={serieVend.serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                  <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
+                  <YAxis tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
+                  <Tooltip
+                    formatter={(v) => fmtQ(v)}
+                    labelFormatter={fmtPeriod}
+                    contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {(serieVend.vendedores || []).map((v, i) => (
+                    <Line key={v} type="monotone" dataKey={v} stroke={PIE_COLORS[i % PIE_COLORS.length]} strokeWidth={2} dot={false} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
         {/* Pie participación */}
         <div className="card lg:col-span-1">
           <div className="section-header">
@@ -616,74 +616,74 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Ranking completo */}
-        <div className="card lg:col-span-2">
-          <div className="section-header">
-            <UsersIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">Ranking de vendedores ({vendedores.length})</h2>
-            {resumen && (
-              <span className="ml-auto text-xs text-[var(--text-muted)]">
-                Total {fmtM(resumen.total)} · <Var pct={resumen.variacion_pct} /> vs año ant.
-              </span>
-            )}
-          </div>
-          <div className="p-5 pt-0 overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] uppercase">
-                  <th className="text-left  font-semibold pb-2">Vendedor</th>
-                  <th className="text-right font-semibold pb-2">Clientes</th>
-                  <th className="text-right font-semibold pb-2">Facturas</th>
-                  <th className="text-right font-semibold pb-2">Ventas</th>
-                  <th className="text-right font-semibold pb-2">Año ant. <Leyenda k="vs_anio_anterior" /></th>
-                  <th className="text-right font-semibold pb-2">Var. <Leyenda k="cambio" /></th>
-                  <th className="text-right font-semibold pb-2">Margen% año ant.</th>
-                  <th className="text-right font-semibold pb-2">Margen% <Leyenda k="margen_bruto" /></th>
-                  <th className="text-right font-semibold pb-2">Share <Leyenda k="participacion" /></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-default)]">
-                {vendedores.map((v, i) => (
-                  <tr key={v.vendedor} className="text-sm hover:bg-[var(--bg-secondary)]">
-                    <td className="py-2 pr-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
-                        <div className="min-w-0">
-                          <p className="font-medium truncate max-w-[220px]">{v.vendedor}</p>
-                          <p className="text-xs text-[var(--text-muted)]">{v.codigo || '—'}</p>
-                        </div>
+      {/* Ranking completo */}
+      <div className="card">
+        <div className="section-header">
+          <UsersIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <h2 className="font-semibold">Ranking de vendedores ({vendedores.length})</h2>
+          {resumen && (
+            <span className="ml-auto text-xs text-[var(--text-muted)]">
+              Total {fmtM(resumen.total)} · <Var pct={resumen.variacion_pct} /> vs año ant.
+            </span>
+          )}
+        </div>
+        <div className="p-5 pt-0 overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-xs text-[var(--text-muted)] uppercase">
+                <th className="text-left  font-semibold pb-2">Vendedor</th>
+                <th className="text-right font-semibold pb-2">Clientes</th>
+                <th className="text-right font-semibold pb-2">Facturas</th>
+                <th className="text-right font-semibold pb-2">Ventas</th>
+                <th className="text-right font-semibold pb-2">Año ant. <Leyenda k="vs_anio_anterior" /></th>
+                <th className="text-right font-semibold pb-2">Var. <Leyenda k="cambio" /></th>
+                <th className="text-right font-semibold pb-2">Margen% año ant.</th>
+                <th className="text-right font-semibold pb-2">Margen% <Leyenda k="margen_bruto" /></th>
+                <th className="text-right font-semibold pb-2">Share <Leyenda k="participacion" /></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-default)]">
+              {vendedores.map((v, i) => (
+                <tr key={v.vendedor} className="text-sm hover:bg-[var(--bg-secondary)]">
+                  <td className="py-2 pr-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
+                      <div className="min-w-0">
+                        <p className="font-medium truncate max-w-[220px]">{v.vendedor}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{v.codigo || '—'}</p>
                       </div>
-                    </td>
-                    <td className="py-2 text-right tabular-nums">
-                      {fmtInt(v.clientes)}
-                      {v.clientes_prev > 0 && v.clientes !== v.clientes_prev && (
-                        <span className="text-[10px] text-[var(--text-muted)] ml-1">({v.clientes > v.clientes_prev ? '+' : ''}{v.clientes - v.clientes_prev})</span>
-                      )}
-                    </td>
-                    <td className="py-2 text-right tabular-nums">{fmtInt(v.facturas)}</td>
-                    <td className="py-2 text-right tabular-nums font-semibold">{fmtM(v.ventas)}</td>
-                    <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{v.ventas_prev ? fmtM(v.ventas_prev) : '—'}</td>
-                    <td className="py-2 text-right"><Var pct={v.variacion_pct} nuevo={v.nuevo} /></td>
-                    <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{fmtPct(v.margen_pct_prev)}</td>
-                    <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(v.margen_pct)}`}>
-                      {v.margen_pct !== null ? `${v.margen_pct.toFixed(1)}%` : '—'}
-                    {v.margen_pct !== null && v.margen_pct_prev !== null && (
-                      <p className="text-[10px] font-normal text-[var(--text-muted)]">{v.margen_pct - v.margen_pct_prev >= 0 ? '+' : ''}{(v.margen_pct - v.margen_pct_prev).toFixed(1)} pts</p>
+                    </div>
+                  </td>
+                  <td className="py-2 text-right tabular-nums">
+                    {fmtInt(v.clientes)}
+                    {v.clientes_prev > 0 && v.clientes !== v.clientes_prev && (
+                      <span className="text-[10px] text-[var(--text-muted)] ml-1">({v.clientes > v.clientes_prev ? '+' : ''}{v.clientes - v.clientes_prev})</span>
                     )}
-                    <SinCosto pct={v.pct_sin_costo} />
-                    </td>
-                    <td className={`py-2 text-right tabular-nums font-semibold ${v.porcentaje >= 20 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
-                      {fmtPct(v.porcentaje, 2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="text-xs text-[var(--text-muted)] mt-3">
-              Total clientes atendidos por el equipo (con duplicados entre vendedores): {fmtInt(clientesTotales)}.
-            </p>
-          </div>
+                  </td>
+                  <td className="py-2 text-right tabular-nums">{fmtInt(v.facturas)}</td>
+                  <td className="py-2 text-right tabular-nums font-semibold">{fmtM(v.ventas)}</td>
+                  <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{v.ventas_prev ? fmtM(v.ventas_prev) : '—'}</td>
+                  <td className="py-2 text-right"><Var pct={v.variacion_pct} nuevo={v.nuevo} /></td>
+                  <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{fmtPct(v.margen_pct_prev)}</td>
+                  <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(v.margen_pct)}`}>
+                    {v.margen_pct !== null ? `${v.margen_pct.toFixed(1)}%` : '—'}
+                  {v.margen_pct !== null && v.margen_pct_prev !== null && (
+                    <p className="text-[10px] font-normal text-[var(--text-muted)]">{v.margen_pct - v.margen_pct_prev >= 0 ? '+' : ''}{(v.margen_pct - v.margen_pct_prev).toFixed(1)} pts</p>
+                  )}
+                  <SinCosto pct={v.pct_sin_costo} />
+                  </td>
+                  <td className={`py-2 text-right tabular-nums font-semibold ${v.porcentaje >= 20 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
+                    {fmtPct(v.porcentaje, 2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs text-[var(--text-muted)] mt-3">
+            Total clientes atendidos por el equipo (con duplicados entre vendedores): {fmtInt(clientesTotales)}.
+          </p>
         </div>
       </div>
     </div>
