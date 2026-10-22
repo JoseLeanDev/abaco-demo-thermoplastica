@@ -535,8 +535,8 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
               {topPct >= 40 ? '⚠ Concentración alta en un vendedor' : `Vendedor top: ${topVendedor.vendedor}`} <Leyenda k="vendedor_top" />
             </p>
             <p className="text-[var(--text-secondary)]">
-              <strong>{topVendedor.vendedor}</strong> concentra el <strong>{topPct}%</strong> de las ventas ({fmtM(topVendedor.ventas)})
-              con {topVendedor.clientes} clientes {topVendedor.margen_pct !== null ? `y margen del ${topVendedor.margen_pct}%` : ''}.
+              <strong>{topVendedor.vendedor}</strong> concentra el <strong>{fmtPct(topPct, 2)}</strong> de las ventas ({fmtM(topVendedor.ventas)})
+              con {topVendedor.clientes} clientes {topVendedor.margen_pct !== null ? `y margen del ${fmtPct(topVendedor.margen_pct)}` : ''}.
               {topPct >= 40 ? ' Revisar plan de sucesión y redistribución de cartera.' : ''}
             </p>
           </div>
@@ -610,7 +610,7 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
                     <span className="truncate">{v.vendedor}</span>
                   </div>
-                  <span className="tabular-nums font-semibold">{v.porcentaje}%</span>
+                  <span className="tabular-nums font-semibold">{fmtPct(v.porcentaje, 2)}</span>
                 </div>
               ))}
             </div>
@@ -638,6 +638,7 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                   <th className="text-right font-semibold pb-2">Ventas</th>
                   <th className="text-right font-semibold pb-2">Año ant. <Leyenda k="vs_anio_anterior" /></th>
                   <th className="text-right font-semibold pb-2">Var. <Leyenda k="cambio" /></th>
+                  <th className="text-right font-semibold pb-2">Margen% año ant.</th>
                   <th className="text-right font-semibold pb-2">Margen% <Leyenda k="margen_bruto" /></th>
                   <th className="text-right font-semibold pb-2">Share <Leyenda k="participacion" /></th>
                 </tr>
@@ -664,6 +665,7 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                     <td className="py-2 text-right tabular-nums font-semibold">{fmtM(v.ventas)}</td>
                     <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{v.ventas_prev ? fmtM(v.ventas_prev) : '—'}</td>
                     <td className="py-2 text-right"><Var pct={v.variacion_pct} nuevo={v.nuevo} /></td>
+                    <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{fmtPct(v.margen_pct_prev)}</td>
                     <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(v.margen_pct)}`}>
                       {v.margen_pct !== null ? `${v.margen_pct.toFixed(1)}%` : '—'}
                     {v.margen_pct !== null && v.margen_pct_prev !== null && (
@@ -672,7 +674,7 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                     <SinCosto pct={v.pct_sin_costo} />
                     </td>
                     <td className={`py-2 text-right tabular-nums font-semibold ${v.porcentaje >= 20 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
-                      {v.porcentaje}%
+                      {fmtPct(v.porcentaje, 2)}
                     </td>
                   </tr>
                 ))}
@@ -823,7 +825,7 @@ function TabClientes({ clientes, resumen }) {
                     <SinCosto pct={c.pct_sin_costo} />
                   </td>
                   <td className={`py-2 text-right tabular-nums font-semibold ${c.porcentaje >= 15 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>
-                    {c.porcentaje}%
+                    {fmtPct(c.porcentaje, 2)}
                   </td>
                 </tr>
               ))}
