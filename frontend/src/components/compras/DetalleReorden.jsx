@@ -9,7 +9,7 @@ import { endpoints } from '../../services/cfoApi'
 import { Cargando, fmtMes, fmtPrecio, fmtQ, tooltipStyle } from './comun'
 
 const SERVICIOS = [90, 95, 97.5, 99]
-const LEADS = [15, 30, 45, 60, 75, 90, 120, 150, 180]
+export const LEADS = [15, 30, 45, 60, 75, 90, 120, 150, 180]
 const n0 = (x) => Math.round(Number(x) || 0).toLocaleString('es-GT')
 const n1 = (x, d = 1) => Number(x || 0).toLocaleString('es-GT', { maximumFractionDigits: d, minimumFractionDigits: d })
 const DIA_MS = 86400000
@@ -71,8 +71,8 @@ function Variable({ simbolo, nombre, valor, sub }) {
 // dientes de sierra (existencias vs tiempo) y la fórmula con sus valores.
 export default function DetalleReorden({ item, params, onClose }) {
   const [servicio, setServicio] = useState(95)
-  // Lead time propio del popup (default 45 días): recalcula la fórmula y la gráfica
-  const [lead, setLead] = useState(45)
+  // Lead time del popup: arranca con el de la tabla (general o de la línea); recalcula la fórmula y la gráfica
+  const [lead, setLead] = useState(item.lead_time_dias || 45)
   const { data, isLoading, error, isPreviousData } = useQuery(
     ['compras-reorden', item.codigo, params.meses_consumo, lead, params.horizonte_meses, servicio],
     () => endpoints.compras.reorden(item.codigo, { ...params, lead_time: lead, nivel_servicio: servicio }),

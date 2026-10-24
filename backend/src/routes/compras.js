@@ -504,7 +504,8 @@ router.get('/detalle', async (req, res) => {
 // Motor de recomendación de reposición:
 //   - Consumo mensual = compras últ. N meses (default 6) / N
 //   - Cobertura = (stock_actual + en_transito) / (consumo_mensual / 30)
-//   - Lead time = por línea, default 45 días (importadores L/C)
+//   - Lead time = general (lead_time, default 45 días) o propio de la línea
+//                 (lead_lineas = JSON {"<línea>": días}, lo define el usuario en pantalla)
 //   - Prioridad: urgente < lead_time, alta < 1.5x, media < 2.5x, ok >= 2.5x
 //   - Cantidad sugerida = (consumo × horizonte_meses) + safety_stock
 //                         − stock_actual − stock_en_transito
@@ -517,6 +518,10 @@ router.get('/recomendaciones', async (req, res) => {
     const meses           = Math.min(Math.max(parseInt(req.query.meses_consumo) || 6, 3), 24);
     const leadTimeDefault = Math.min(Math.max(parseInt(req.query.lead_time) || 45, 7), 180);
     const factorSeguridad = Math.min(Math.max(parseFloat(req.query.safety) || 0.30, 0), 1.0);
+    const clampLead = (v) => Math.min(Math.max(parseInt(v) || leadTimeDefault, 7), 180);
+    let leadLineas = {};
+    try { leadLineas = JSON.parse(req.query.lead_lineas || '{}') || {}; } catch { leadLineas = {}; }
+    const leadDeLinea = (linea) => (leadLineas[linea] !== undefined ? clampLead(leadLineas[linea]) : leadTimeDefault);
 
     // ---------- 1) Consumo por artículo (últ N meses) ----------
     const rows = await db.allAsync(`
@@ -589,7 +594,7 @@ router.get('/recomendaciones', async (req, res) => {
       const valorInventario = stockActual * costoUnit;
       const diasCobertura   = consumoDiario > 0 ? (stockTotal / consumoDiario) : null;
 
-      const leadTime        = leadTimeDefault;
+      const leadTime        = leadDeLinea(r.linea);
       const safetyStock     = consumoDiario * leadTime * factorSeguridad;
       const rop             = (consumoDiario * leadTime) + safetyStock;
 
@@ -672,6 +677,8 @@ router.get('/recomendaciones', async (req, res) => {
         const coberturaDias = consumoDiarioGasto > 0 ? (g.valor_inventario / consumoDiarioGasto) : null;
         return {
           linea: g.linea,
+          lead_time_dias: leadDeLinea(g.linea),
+          lead_time_propio: leadLineas[g.linea] !== undefined,
           skus: g.skus,
           skus_urgentes: g.skus_urgentes,
           skus_alta: g.skus_alta,

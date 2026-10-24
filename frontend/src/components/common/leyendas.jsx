@@ -526,6 +526,13 @@ export const LEYENDAS = {
     titulo: 'Stock en tránsito',
     texto: <>Unidades pedidas que aún no llegan × costo promedio.</>,
   },
+  lead_time_reposicion: {
+    titulo: 'Lead time',
+    texto: <>
+      Días entre emitir el pedido y recibir la mercadería. Define la prioridad (cobertura menor al lead time = urgente; menor a 1.5× = alta; menor a 2.5× = media) y el stock de seguridad (30% de la demanda durante el lead time).
+      <Nota>Se usa el lead time general (selector de arriba) salvo que la línea tenga uno propio, que se cambia en la tarjeta de la línea (pestaña “Por línea”) o junto al filtro de línea. El lead propio se recuerda en este navegador.</Nota>
+    </>,
+  },
   // ======================= Análisis › Ventas vs compras =======================
   vc_vendido: {
     titulo: 'Vendido',

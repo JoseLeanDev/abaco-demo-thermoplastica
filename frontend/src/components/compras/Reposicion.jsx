@@ -3,6 +3,8 @@ import { useQuery } from 'react-query'
 import {
   ArrowUpRightIcon,
   BoltIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   ClipboardDocumentCheckIcon,
   CubeIcon,
   ExclamationTriangleIcon,
@@ -13,21 +15,79 @@ import {
 } from '@heroicons/react/24/outline'
 import { endpoints } from '../../services/cfoApi'
 import { Leyenda } from '../common/leyendas'
-import DetalleReorden from './DetalleReorden'
+import DetalleReorden, { LEADS } from './DetalleReorden'
+import { ordenar } from './comun'
 
 const fmtNum = (n) => Number(n || 0).toLocaleString('es-GT')
 
 // Pestaña "Reposición" de Compras. Mira hacia adelante desde hoy: no depende del
 // filtro de fechas (usa el consumo de los últimos N meses).
+// Lead time propio por línea ({ "<línea>": días }): se recuerda en este navegador.
+const LS_LEAD_LINEAS = 'abaco_reposicion_lead_lineas'
+const leerLeadLineas = () => {
+  try { return JSON.parse(localStorage.getItem(LS_LEAD_LINEAS) || '{}') || {} } catch { return {} }
+}
+
 export default function Reposicion() {
   const [params, setParams] = useState({ horizonte_meses: 3, meses_consumo: 6, lead_time: 45 })
-  const { data, isLoading } = useQuery(
-    ['compras-recomendaciones', params.horizonte_meses, params.meses_consumo, params.lead_time],
-    () => endpoints.compras.recomendaciones(params),
+  const [leadLineas, setLeadLineasState] = useState(leerLeadLineas)
+  const setLeadLinea = (linea, dias) => setLeadLineasState(prev => {
+    const next = { ...prev }
+    if (dias === null) delete next[linea]
+    else next[linea] = dias
+    try { localStorage.setItem(LS_LEAD_LINEAS, JSON.stringify(next)) } catch { /* sin almacenamiento */ }
+    return next
+  })
+  const leadLineasJson = JSON.stringify(leadLineas)
+  const { data, isLoading, isFetching } = useQuery(
+    ['compras-recomendaciones', params.horizonte_meses, params.meses_consumo, params.lead_time, leadLineasJson],
+    () => endpoints.compras.recomendaciones({ ...params, ...(Object.keys(leadLineas).length ? { lead_lineas: leadLineasJson } : {}) }),
     { keepPreviousData: true, staleTime: 60_000 }
   )
-  return <RecomendacionesSection reco={data?.data || {}} loading={isLoading} params={params} setParams={setParams} />
+  return (
+    <RecomendacionesSection
+      reco={data?.data || {}} loading={isLoading} actualizando={isFetching}
+      params={params} setParams={setParams} leadLineas={leadLineas} setLeadLinea={setLeadLinea}
+    />
+  )
 }
+
+// Selector de lead time de una línea: "General" = usa el lead time general
+function LeadLineaSelect({ linea, leadLineas, setLeadLinea, general, className = '' }) {
+  const propio = leadLineas[linea]
+  return (
+    <select
+      value={propio ?? ''}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setLeadLinea(linea, e.target.value === '' ? null : Number(e.target.value))}
+      className={`rounded border px-1.5 py-0.5 text-xs tabular-nums ${propio !== undefined ? 'border-[#001639] bg-[#001639] text-white' : 'border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-secondary)]'} ${className}`}
+      title={`Lead time de ${linea}`}
+    >
+      <option value="" className="text-black">General ({general}d)</option>
+      {LEADS.map(l => <option key={l} value={l} className="text-black">{l} días</option>)}
+    </select>
+  )
+}
+
+// Encabezado ordenable de la tabla de artículos
+function ThOrden({ col, orden, setOrden, align = 'right', className = '', leyenda, children }) {
+  const activo = orden.col === col
+  const Icon = activo && orden.dir === 'asc' ? ChevronUpIcon : ChevronDownIcon
+  return (
+    <th className={`text-${align} font-semibold py-2 ${className}`}>
+      <button
+        onClick={() => setOrden(activo ? { col, dir: orden.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: align === 'left' ? 'asc' : 'desc' })}
+        className={`inline-flex items-center gap-0.5 uppercase hover:text-[var(--text-primary)] ${activo ? 'text-[var(--text-primary)]' : ''}`}
+        title="Ordenar"
+      >
+        {children}
+        <Icon className={`w-3 h-3 ${activo ? '' : 'opacity-30'}`} />
+      </button>
+      {leyenda && <Leyenda k={leyenda} className="ml-0.5" />}
+    </th>
+  )
+}
+const RANGO_PRIO = { urgente: 0, alta: 1, media: 2, ok: 3 }
 
 // =========================================================================
 // RECOMENDACIONES DE REPOSICIÓN
@@ -50,12 +110,14 @@ const FILTROS_PRIORIDAD = [
   ['ok',      'OK',               it => it.prioridad === 'ok'],
 ]
 
-function RecomendacionesSection({ reco, loading, params, setParams }) {
+function RecomendacionesSection({ reco, loading, actualizando, params, setParams, leadLineas, setLeadLinea }) {
   const [tab, setTab] = useState('articulos') // 'articulos' | 'lineas'
   const [filtroLinea, setFiltroLinea] = useState('')
   const [filtroPrio, setFiltroPrio] = useState('accion')
   const [busqueda, setBusqueda] = useState('')
   const [seleccion, setSeleccion] = useState(null)
+  // Orden de la tabla; 'prio_rank' asc = prioridad y luego valor sugerido (orden del backend)
+  const [orden, setOrden] = useState({ col: 'prio_rank', dir: 'asc' })
   const kpis = reco?.kpis || {}
   const lineas = reco?.lineas || []
   const items = reco?.items || reco?.urgentes || []
@@ -70,12 +132,13 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     const fn = FILTROS_PRIORIDAD.find(([id]) => id === filtroPrio)?.[2] || (() => true)
-    return items.filter(it =>
+    const base = items.filter(it =>
       fn(it) &&
       (!filtroLinea || it.linea === filtroLinea) &&
       (!q || `${it.descripcion} ${it.codigo} ${it.proveedor_sugerido} ${it.sublinea}`.toLowerCase().includes(q))
-    )
-  }, [items, filtroPrio, filtroLinea, busqueda])
+    ).map((it, i) => ({ ...it, prio_rank: RANGO_PRIO[it.prioridad] * 1e6 + i, cobertura_orden: it.dias_cobertura ?? -1 }))
+    return ordenar(base, orden)
+  }, [items, filtroPrio, filtroLinea, busqueda, orden])
 
   const buscar = (v) => {
     setBusqueda(v)
@@ -113,7 +176,8 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
               <h2 className="text-lg font-bold text-white flex items-center gap-1.5">Recomendación de reposición <Leyenda k="reposicion" claro /></h2>
             </div>
             <p className="text-xs text-white/60 mt-1">
-              Basado en consumo de {params.meses_consumo}m · lead time {params.lead_time}d · horizonte {params.horizonte_meses}m · safety stock 30%
+              Basado en consumo de {params.meses_consumo}m · lead time general {params.lead_time}d{Object.keys(leadLineas).length ? ` (${Object.keys(leadLineas).length} línea${Object.keys(leadLineas).length === 1 ? '' : 's'} con lead propio)` : ''} · horizonte {params.horizonte_meses}m · safety stock 30%
+              {actualizando && <span className="ml-2 text-amber-300">recalculando…</span>}
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -131,17 +195,13 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
               </select>
             </label>
             <label className="flex items-center gap-1.5">
-              <span className="text-white/60">Lead</span>
+              <span className="text-white/60" title="Aplica a las líneas sin lead time propio">Lead general</span>
               <select
                 value={params.lead_time}
                 onChange={(e) => setParams(p => ({ ...p, lead_time: +e.target.value }))}
                 className="bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-xs"
               >
-                <option value={15}>15 días</option>
-                <option value={30}>30 días</option>
-                <option value={45}>45 días</option>
-                <option value={60}>60 días</option>
-                <option value={90}>90 días</option>
+                {LEADS.map(l => <option key={l} value={l} className="text-black">{l} días</option>)}
               </select>
             </label>
           </div>
@@ -207,6 +267,7 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
                 <LineaCard
                   key={l.linea}
                   linea={l}
+                  leadSelect={<LeadLineaSelect linea={l.linea} leadLineas={leadLineas} setLeadLinea={setLeadLinea} general={params.lead_time} />}
                   onFocus={() => { setFiltroLinea(l.linea); setBusqueda(''); setFiltroPrio('todas'); setTab('articulos') }}
                 />
               ))}
@@ -238,6 +299,12 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
               <option value="">Todas las líneas</option>
               {lineasOrdenadas.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
+            {filtroLinea && (
+              <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                Lead time de la línea
+                <LeadLineaSelect linea={filtroLinea} leadLineas={leadLineas} setLeadLinea={setLeadLinea} general={params.lead_time} className="py-1" />
+              </label>
+            )}
             <div className="flex rounded-md border border-[var(--border-default)] overflow-hidden text-xs flex-wrap">
               {FILTROS_PRIORIDAD.map(([id, label]) => (
                 <button
@@ -269,20 +336,21 @@ function RecomendacionesSection({ reco, loading, params, setParams }) {
               <table className="w-full">
                 <thead>
                   <tr className="text-[10px] text-[var(--text-muted)] uppercase border-b border-[var(--border-default)]">
-                    <th className="text-left  font-semibold py-2">Prioridad <Leyenda k="prioridad_reposicion" /></th>
-                    <th className="text-left  font-semibold py-2">Artículo</th>
-                    <th className="text-left  font-semibold py-2">Línea</th>
-                    <th className="text-right font-semibold py-2">Stock</th>
-                    <th className="text-right font-semibold py-2">Cobertura <Leyenda k="reposicion" /></th>
-                    <th className="text-right font-semibold py-2">Consumo/mes</th>
-                    <th className="text-right font-semibold py-2">Sugerido (uds) <Leyenda k="reposicion" /></th>
-                    <th className="text-right font-semibold py-2">Valor sugerido</th>
-                    <th className="text-left  font-semibold py-2 pl-3">Proveedor</th>
+                    <ThOrden col="prio_rank" orden={orden} setOrden={setOrden} align="left" leyenda="prioridad_reposicion">Prioridad</ThOrden>
+                    <ThOrden col="descripcion" orden={orden} setOrden={setOrden} align="left">Artículo</ThOrden>
+                    <ThOrden col="linea" orden={orden} setOrden={setOrden} align="left">Línea</ThOrden>
+                    <ThOrden col="stock_actual" orden={orden} setOrden={setOrden}>Stock</ThOrden>
+                    <ThOrden col="cobertura_orden" orden={orden} setOrden={setOrden} leyenda="reposicion">Cobertura</ThOrden>
+                    <ThOrden col="lead_time_dias" orden={orden} setOrden={setOrden} leyenda="lead_time_reposicion">Lead</ThOrden>
+                    <ThOrden col="consumo_mensual" orden={orden} setOrden={setOrden}>Consumo/mes</ThOrden>
+                    <ThOrden col="cantidad_sugerida" orden={orden} setOrden={setOrden} leyenda="reposicion">Sugerido (uds)</ThOrden>
+                    <ThOrden col="valor_sugerido" orden={orden} setOrden={setOrden}>Valor sugerido</ThOrden>
+                    <ThOrden col="proveedor_sugerido" orden={orden} setOrden={setOrden} align="left" className="pl-3">Proveedor</ThOrden>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-default)]">
                   {filtrados.map((u, i) => (
-                    <SkuUrgenteRow key={u.codigo + i} item={u} onClick={() => setSeleccion(u)} />
+                    <SkuUrgenteRow key={u.codigo + i} item={u} leadPropio={leadLineas[u.linea] !== undefined} onClick={() => setSeleccion(u)} />
                   ))}
                 </tbody>
               </table>
@@ -336,7 +404,7 @@ function RecoKpi({ label, value, sublabel, icon: Icon, tone, isValue, leyenda })
   )
 }
 
-function LineaCard({ linea, onFocus }) {
+function LineaCard({ linea, onFocus, leadSelect }) {
   const total = linea.skus || 1
   const pctUrgente = (linea.skus_urgentes / total) * 100
   const pctAlta    = (linea.skus_alta    / total) * 100
@@ -349,9 +417,12 @@ function LineaCard({ linea, onFocus }) {
       : 'border-[var(--border-default)]'
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onFocus}
-      className={`text-left rounded-lg border ${priorityCls} p-4 hover:shadow-md transition-all bg-[var(--bg-primary)] card-hover`}
+      onKeyDown={(e) => e.key === 'Enter' && onFocus()}
+      className={`text-left rounded-lg border ${priorityCls} p-4 hover:shadow-md transition-all bg-[var(--bg-primary)] card-hover cursor-pointer`}
     >
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0">
@@ -394,15 +465,15 @@ function LineaCard({ linea, onFocus }) {
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-[var(--border-default)] flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-        <span>Ver detalle</span>
-        <ArrowUpRightIcon className="w-3 h-3" />
+      <div className="mt-3 pt-3 border-t border-[var(--border-default)] flex items-center justify-between gap-2 text-[10px] text-[var(--text-muted)]">
+        <span className="flex items-center gap-1.5">Lead time {leadSelect}</span>
+        <span className="flex items-center gap-0.5">Ver artículos <ArrowUpRightIcon className="w-3 h-3" /></span>
       </div>
-    </button>
+    </div>
   )
 }
 
-function SkuUrgenteRow({ item, onClick }) {
+function SkuUrgenteRow({ item, leadPropio, onClick }) {
   const p = PRIORIDAD[item.prioridad] || PRIORIDAD.media
   const stockCritico = item.dias_cobertura !== null && item.dias_cobertura < item.lead_time_dias
   return (
@@ -434,7 +505,10 @@ function SkuUrgenteRow({ item, onClick }) {
             {item.dias_cobertura}d
           </span>
         )}
-        <p className="text-[10px] text-[var(--text-muted)]">vs {item.lead_time_dias}d lead</p>
+      </td>
+      <td className="py-2 text-right tabular-nums">
+        <span className={leadPropio ? 'font-semibold text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>{item.lead_time_dias}d</span>
+        {leadPropio && <p className="text-[10px] text-[var(--text-muted)]">de la línea</p>}
       </td>
       <td className="py-2 text-right tabular-nums text-[var(--text-secondary)]">
         {fmtNum(Math.round(item.consumo_mensual))}
