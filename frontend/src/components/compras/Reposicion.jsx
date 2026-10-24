@@ -17,6 +17,7 @@ import { endpoints } from '../../services/cfoApi'
 import { Leyenda } from '../common/leyendas'
 import DetalleReorden, { LEADS } from './DetalleReorden'
 import { ordenar } from './comun'
+import { FILTRO_VACIO, NIVELES_PRODUCTO } from '../ventas/FiltroProducto'
 
 const fmtNum = (n) => Number(n || 0).toLocaleString('es-GT')
 
@@ -28,7 +29,8 @@ const leerLeadLineas = () => {
   try { return JSON.parse(localStorage.getItem(LS_LEAD_LINEAS) || '{}') || {} } catch { return {} }
 }
 
-export default function Reposicion() {
+// producto / proveedor = filtros de arriba de la página de Compras
+export default function Reposicion({ producto = FILTRO_VACIO, setProducto = () => {}, proveedor = null }) {
   const [params, setParams] = useState({ horizonte_meses: 3, meses_consumo: 6, lead_time: 45 })
   const [leadLineas, setLeadLineasState] = useState(leerLeadLineas)
   const setLeadLinea = (linea, dias) => setLeadLineasState(prev => {
@@ -39,15 +41,20 @@ export default function Reposicion() {
     return next
   })
   const leadLineasJson = JSON.stringify(leadLineas)
+  const filtros = {
+    ...Object.fromEntries(NIVELES_PRODUCTO.filter(n => producto[n.dim]).map(n => [n.dim, producto[n.dim]])),
+    ...(proveedor ? { proveedor: proveedor.codigo } : {}),
+  }
   const { data, isLoading, isFetching } = useQuery(
-    ['compras-recomendaciones', params.horizonte_meses, params.meses_consumo, params.lead_time, leadLineasJson],
-    () => endpoints.compras.recomendaciones({ ...params, ...(Object.keys(leadLineas).length ? { lead_lineas: leadLineasJson } : {}) }),
+    ['compras-recomendaciones', params.horizonte_meses, params.meses_consumo, params.lead_time, leadLineasJson, JSON.stringify(filtros)],
+    () => endpoints.compras.recomendaciones({ ...params, ...filtros, ...(Object.keys(leadLineas).length ? { lead_lineas: leadLineasJson } : {}) }),
     { keepPreviousData: true, staleTime: 60_000 }
   )
   return (
     <RecomendacionesSection
       reco={data?.data || {}} loading={isLoading} actualizando={isFetching}
       params={params} setParams={setParams} leadLineas={leadLineas} setLeadLinea={setLeadLinea}
+      producto={producto} setProducto={setProducto}
     />
   )
 }
@@ -110,9 +117,10 @@ const FILTROS_PRIORIDAD = [
   ['ok',      'OK',               it => it.prioridad === 'ok'],
 ]
 
-function RecomendacionesSection({ reco, loading, actualizando, params, setParams, leadLineas, setLeadLinea }) {
+function RecomendacionesSection({ reco, loading, actualizando, params, setParams, leadLineas, setLeadLinea, producto, setProducto }) {
   const [tab, setTab] = useState('articulos') // 'articulos' | 'lineas'
-  const [filtroLinea, setFiltroLinea] = useState('')
+  // La línea (subcategoría) se elige con el filtro de producto de arriba
+  const filtroLinea = producto.subcategoria
   const [filtroPrio, setFiltroPrio] = useState('accion')
   const [busqueda, setBusqueda] = useState('')
   const [seleccion, setSeleccion] = useState(null)
@@ -122,34 +130,27 @@ function RecomendacionesSection({ reco, loading, actualizando, params, setParams
   const lineas = reco?.lineas || []
   const items = reco?.items || reco?.urgentes || []
 
-  const lineasOrdenadas = useMemo(() => lineas.map(l => l.linea).sort((a, b) => a.localeCompare(b, 'es')), [lineas])
-
-  const conteoPrio = useMemo(() => {
-    const base = filtroLinea ? items.filter(it => it.linea === filtroLinea) : items
-    return Object.fromEntries(FILTROS_PRIORIDAD.map(([id, , fn]) => [id, base.filter(fn).length]))
-  }, [items, filtroLinea])
+  const conteoPrio = useMemo(
+    () => Object.fromEntries(FILTROS_PRIORIDAD.map(([id, , fn]) => [id, items.filter(fn).length])),
+    [items]
+  )
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     const fn = FILTROS_PRIORIDAD.find(([id]) => id === filtroPrio)?.[2] || (() => true)
     const base = items.filter(it =>
       fn(it) &&
-      (!filtroLinea || it.linea === filtroLinea) &&
       (!q || `${it.descripcion} ${it.codigo} ${it.proveedor_sugerido} ${it.sublinea}`.toLowerCase().includes(q))
     ).map((it, i) => ({ ...it, prio_rank: RANGO_PRIO[it.prioridad] * 1e6 + i, cobertura_orden: it.dias_cobertura ?? -1 }))
     return ordenar(base, orden)
-  }, [items, filtroPrio, filtroLinea, busqueda, orden])
+  }, [items, filtroPrio, busqueda, orden])
 
   const buscar = (v) => {
     setBusqueda(v)
     if (v.trim() && filtroPrio === 'accion') setFiltroPrio('todas')
   }
-  const elegirLinea = (l) => {
-    setFiltroLinea(l)
-    if (l && filtroPrio === 'accion') setFiltroPrio('todas')
-  }
-  const limpiar = () => { setBusqueda(''); setFiltroLinea(''); setFiltroPrio('accion') }
-  const hayFiltros = busqueda || filtroLinea || filtroPrio !== 'accion'
+  const limpiar = () => { setBusqueda(''); setFiltroPrio('accion') }
+  const hayFiltros = busqueda || filtroPrio !== 'accion'
 
   if (loading && !reco?.kpis) {
     return (
@@ -268,7 +269,7 @@ function RecomendacionesSection({ reco, loading, actualizando, params, setParams
                   key={l.linea}
                   linea={l}
                   leadSelect={<LeadLineaSelect linea={l.linea} leadLineas={leadLineas} setLeadLinea={setLeadLinea} general={params.lead_time} />}
-                  onFocus={() => { setFiltroLinea(l.linea); setBusqueda(''); setFiltroPrio('todas'); setTab('articulos') }}
+                  onFocus={() => { setProducto({ ...FILTRO_VACIO, categoria: l.categoria, subcategoria: l.linea }); setBusqueda(''); setFiltroPrio('todas'); setTab('articulos') }}
                 />
               ))}
             </div>
@@ -291,14 +292,6 @@ function RecomendacionesSection({ reco, loading, actualizando, params, setParams
                 className="input py-1.5 pl-8 text-sm w-72 max-w-full"
               />
             </div>
-            <select
-              value={filtroLinea}
-              onChange={(e) => elegirLinea(e.target.value)}
-              className="input py-1.5 text-sm w-52 max-w-full"
-            >
-              <option value="">Todas las líneas</option>
-              {lineasOrdenadas.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
             {filtroLinea && (
               <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                 Lead time de la línea

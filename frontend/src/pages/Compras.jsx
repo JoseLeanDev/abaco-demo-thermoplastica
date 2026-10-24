@@ -43,7 +43,7 @@ export default function Compras() {
   const [proveedor, setProveedor] = useState(null) // { codigo, nombre }
   const [exportando, setExportando] = useState(false)
 
-  // Filtros que aplican a todas las pestañas (menos Reposición)
+  // Filtros que aplican a todas las pestañas (Reposición solo usa producto y proveedor)
   const filtros = {
     ...periodo,
     ...(tipo ? { tipo } : {}),
@@ -181,9 +181,9 @@ export default function Compras() {
       {tab === 'reposicion'  && (
         <>
           <p className="text-xs text-[var(--text-muted)] -mt-2">
-            La reposición mira hacia adelante desde hoy: usa el stock actual y el consumo de los últimos meses, no el filtro de fechas ni los de arriba.
+            La reposición mira hacia adelante desde hoy: usa el stock actual y el consumo de los últimos meses. Aplican los filtros de producto y proveedor de arriba; el de fechas y el tipo de compra no.
           </p>
-          <Reposicion />
+          <Reposicion producto={producto} setProducto={setProducto} proveedor={proveedor} />
         </>
       )}
       {tab === 'detalle'     && <TabDetalle {...ctx} />}

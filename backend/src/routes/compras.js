@@ -522,6 +522,15 @@ router.get('/recomendaciones', async (req, res) => {
     let leadLineas = {};
     try { leadLineas = JSON.parse(req.query.lead_lineas || '{}') || {}; } catch { leadLineas = {}; }
     const leadDeLinea = (linea) => (leadLineas[linea] !== undefined ? clampLead(leadLineas[linea]) : leadTimeDefault);
+    // Filtros de arriba de la página (producto y proveedor sugerido); el tipo y las fechas no aplican
+    const paramsFiltro = [];
+    const whereFiltro = [];
+    for (const k of ['categoria', 'subcategoria', 'sublinea', 'proveedor']) {
+      const val = req.query[k];
+      if (val === undefined || val === '') continue;
+      paramsFiltro.push(String(val));
+      whereFiltro.push(`AND ${DIMS[k].expr} = ?`);
+    }
 
     // ---------- 1) Consumo por artículo (últ N meses) ----------
     const rows = await db.allAsync(`
@@ -561,6 +570,7 @@ router.get('/recomendaciones', async (req, res) => {
       )
       SELECT
         a.codigo_articulo, a.descripcion,
+        ${DIMS.categoria.expr}                            AS categoria,
         COALESCE(NULLIF(a.linea, ''), 'Sin línea')        AS linea,
         COALESCE(NULLIF(a.sublinea, ''), '—')             AS sublinea,
         c.unidades_periodo, c.gasto_periodo, c.meses_activos,
@@ -579,7 +589,8 @@ router.get('/recomendaciones', async (req, res) => {
       WHERE a.codigo_articulo NOT IN ('GENARTICULO','GENARTICULOEXENTO','GENSERV','GENSERVICIO')
         AND COALESCE(NULLIF(a.linea, ''), 'Sin línea') NOT IN ('Costo de Producción', 'No Aplica')
         AND c.unidades_periodo > 0
-    `, [meses]);
+        ${whereFiltro.join(' ')}
+    `, [meses, ...paramsFiltro]);
 
     // ---------- 2) Calcular recomendaciones ----------
     const items = rows.map(r => {
@@ -611,6 +622,7 @@ router.get('/recomendaciones', async (req, res) => {
       return {
         codigo: r.codigo_articulo,
         descripcion: r.descripcion,
+        categoria: r.categoria,
         linea: r.linea,
         sublinea: r.sublinea,
         consumo_mensual: consumoMensual,
@@ -642,6 +654,7 @@ router.get('/recomendaciones', async (req, res) => {
       if (!porLinea[key]) {
         porLinea[key] = {
           linea: key,
+          categoria: it.categoria,
           skus: 0,
           skus_urgentes: 0,
           skus_alta: 0,
@@ -677,6 +690,7 @@ router.get('/recomendaciones', async (req, res) => {
         const coberturaDias = consumoDiarioGasto > 0 ? (g.valor_inventario / consumoDiarioGasto) : null;
         return {
           linea: g.linea,
+          categoria: g.categoria,
           lead_time_dias: leadDeLinea(g.linea),
           lead_time_propio: leadLineas[g.linea] !== undefined,
           skus: g.skus,
