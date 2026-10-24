@@ -526,6 +526,35 @@ export const LEYENDAS = {
     titulo: 'Stock en tránsito',
     texto: <>Unidades pedidas que aún no llegan × costo promedio.</>,
   },
+  // ======================= Análisis › Ventas vs compras =======================
+  vc_vendido: {
+    titulo: 'Vendido',
+    texto: <>Suma sin IVA de las facturas de venta (FACT) del tramo. Debajo, el cambio contra el mismo tramo del año anterior.</>,
+  },
+  vc_comprado: {
+    titulo: 'Comprado',
+    texto: <>Suma sin IVA de las facturas de compra del tramo. Con “Materiales e insumos” solo cuenta material de inventario; con “Todas” incluye gastos, fletes, importación y activo fijo. Debajo, el cambio contra el año anterior.</>,
+  },
+  vc_diferencia: {
+    titulo: 'Diferencia',
+    texto: <>Vendido − comprado, en quetzales. Negativo (rojo) = se compró más de lo que se vendió en ese grupo.</>,
+  },
+  vc_compra_venta: {
+    titulo: 'Compra / venta',
+    texto: <>Comprado ÷ vendido. Arriba de 100% (rojo) se compró más de lo que se vendió. “Solo compras” = el grupo no tuvo ventas.</>,
+  },
+  vc_delta_uds: {
+    titulo: 'Δ inventario (unidades)',
+    texto: <>
+      Unidades compradas − unidades vendidas en el tramo, en la unidad de medida del ERP de cada artículo.
+      <L>
+        <li><strong>Positivo:</strong> entraron más unidades de las que salieron vendidas; el inventario creció.</li>
+        <li><strong>Negativo:</strong> se vendió más de lo que se compró; salió de inventario o de producción propia.</li>
+      </L>
+      Debajo, las unidades compradas y vendidas, y el delta del mismo tramo del año anterior.
+      <Nota>“Incluye materia prima” = más de la mitad de lo comprado son artículos que no se venden tal cual (resina, rollos madre), así que compara unidades distintas (p. ej. kilos contra piezas). Úsalo como referencia, no como existencia exacta.</Nota>
+    </>,
+  },
   costo_vendido: {
     titulo: 'Costo vendido',
     texto: <>Costo de las facturas de venta del período, con el mismo criterio que el margen (ventas − margen bruto).</>,

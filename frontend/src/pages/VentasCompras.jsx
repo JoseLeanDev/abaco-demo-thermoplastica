@@ -220,11 +220,11 @@ export default function VentasCompras() {
                     <thead className="bg-[var(--bg-secondary)] border-y border-[var(--border-default)] sticky top-0 z-10">
                       <tr>
                         <Th col="clave" orden={orden} setOrden={setOrden} align="left">{nivel.singular}</Th>
-                        <Th col="ventas" orden={orden} setOrden={setOrden}>Vendido</Th>
-                        <Th col="compras" orden={orden} setOrden={setOrden}>Comprado</Th>
-                        <Th col="diferencia" orden={orden} setOrden={setOrden}>Diferencia</Th>
-                        <Th col="ratio" orden={orden} setOrden={setOrden}>Compra / venta</Th>
-                        <Th col="delta_uds" orden={orden} setOrden={setOrden}>Δ inventario (uds.)</Th>
+                        <Th col="ventas" orden={orden} setOrden={setOrden} leyenda="vc_vendido">Vendido</Th>
+                        <Th col="compras" orden={orden} setOrden={setOrden} leyenda="vc_comprado">Comprado</Th>
+                        <Th col="diferencia" orden={orden} setOrden={setOrden} leyenda="vc_diferencia">Diferencia</Th>
+                        <Th col="ratio" orden={orden} setOrden={setOrden} leyenda="vc_compra_venta">Compra / venta</Th>
+                        <Th col="delta_uds" orden={orden} setOrden={setOrden} leyenda="vc_delta_uds">Δ inventario (uds.)</Th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-default)]">
