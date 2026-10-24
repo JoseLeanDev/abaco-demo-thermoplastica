@@ -1361,25 +1361,36 @@ router.get('/ventas-vs-compras', async (req, res) => {
           SELECT ${nivel.expr} AS clave,
                  SUM(f.total_sin_iva) FILTER (WHERE ${enAct('f.fecha_emision')})  AS ventas,
                  SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS ventas_prev,
-                 ${M.costo('f', enAct('f.fecha_emision'))}                         AS costo_ventas
+                 ${M.costo('f', enAct('f.fecha_emision'))}                         AS costo_ventas,
+                 SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enAct('f.fecha_emision')})  AS ventas_uds,
+                 SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS ventas_uds_prev
           FROM thermoplastica.v_ventas_costeadas f
           JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
           WHERE f.tipo_doc = 'FACT' AND f.fecha_emision BETWEEN '${prevDesde}' AND '${hasta}' ${filtro}
           GROUP BY 1
         ),
+        vendidos AS (SELECT DISTINCT articulo_id FROM thermoplastica.fact_ventas_linea WHERE tipo_doc = 'FACT'),
         c AS (
           SELECT ${nivel.expr} AS clave,
                  SUM(f.total_sin_iva) FILTER (WHERE ${enAct('f.fecha_emision')})  AS compras,
-                 SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS compras_prev
+                 SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS compras_prev,
+                 SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enAct('f.fecha_emision')})  AS compras_uds,
+                 SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS compras_uds_prev,
+                 -- unidades de artículos que nunca se han vendido (materia prima / insumos que se transforman)
+                 SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enAct('f.fecha_emision')} AND vd.articulo_id IS NULL) AS compras_uds_mp
           FROM thermoplastica.fact_compras_linea f
           JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+          LEFT JOIN vendidos vd ON vd.articulo_id = f.articulo_id
           WHERE f.fecha_emision BETWEEN '${prevDesde}' AND '${hasta}' ${filtroCompras}
           GROUP BY 1
         )
         SELECT COALESCE(v.clave, c.clave) AS clave,
                COALESCE(v.ventas, 0) AS ventas, COALESCE(v.ventas_prev, 0) AS ventas_prev,
                COALESCE(v.costo_ventas, 0) AS costo_ventas,
-               COALESCE(c.compras, 0) AS compras, COALESCE(c.compras_prev, 0) AS compras_prev
+               COALESCE(c.compras, 0) AS compras, COALESCE(c.compras_prev, 0) AS compras_prev,
+               COALESCE(v.ventas_uds, 0) AS ventas_uds, COALESCE(v.ventas_uds_prev, 0) AS ventas_uds_prev,
+               COALESCE(c.compras_uds, 0) AS compras_uds, COALESCE(c.compras_uds_prev, 0) AS compras_uds_prev,
+               COALESCE(c.compras_uds_mp, 0) AS compras_uds_mp
         FROM v FULL JOIN c ON c.clave = v.clave
       `, [...params, ...params]),
       db.allAsync(`
@@ -1415,6 +1426,13 @@ router.get('/ventas-vs-compras', async (req, res) => {
       ventas: n(g.ventas), compras: n(g.compras), costo_ventas: n(g.costo_ventas),
       ventas_prev: hayPrev ? n(g.ventas_prev) : null,
       compras_prev: hayPrev ? n(g.compras_prev) : null,
+      // Δ inventario en unidades = compradas − vendidas (positivo: el inventario crece)
+      ventas_uds: n(g.ventas_uds), compras_uds: n(g.compras_uds),
+      delta_uds: n(g.compras_uds) - n(g.ventas_uds),
+      delta_uds_prev: hayPrev ? n(g.compras_uds_prev) - n(g.ventas_uds_prev) : null,
+      // más de la mitad de lo comprado (en unidades) es materia prima que no se vende: compras y ventas
+      // se miden en unidades distintas (kg de resina vs piezas) y el delta no es comparable
+      transforma: n(g.compras_uds) > 0 && n(g.compras_uds_mp) / n(g.compras_uds) > 0.5,
     })).filter(i => i.ventas || i.compras || i.ventas_prev || i.compras_prev)
       .sort((a, b) => b.ventas - a.ventas || b.compras - a.compras);
     const sum = (k) => items.reduce((s, i) => s + (i[k] || 0), 0);

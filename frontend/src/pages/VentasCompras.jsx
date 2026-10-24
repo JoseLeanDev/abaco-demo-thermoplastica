@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import { endpoints } from '../services/cfoApi'
 import { fmtM, fmtQ, fmtMes, tooltipStyle } from '../components/analisis/formato'
-import { Cargando, Seccion, Th, exportarExcel, ordenar, td } from '../components/compras/comun'
+import { Cargando, Seccion, Th, exportarExcel, fmtInt, ordenar, td } from '../components/compras/comun'
 
 const NIVELES = [
   { dim: 'categoria',    singular: 'Categoría',    plural: 'categorías' },
@@ -20,6 +20,7 @@ const C_COSTO = '#10b981'
 
 const varPct = (v, vp) => (vp ? (v - vp) / vp * 100 : null)
 const fmtVar = (x) => (x === null || x === undefined ? null : `${x > 0 ? '+' : ''}${x.toFixed(1)}%`)
+const fmtDelta = (n) => `${n > 0 ? '+' : ''}${fmtInt(n)}`
 const fmtFecha = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('es-GT', { day: 'numeric', month: 'short', year: 'numeric' })
 
 function Kpi({ titulo, valor, sub, variacion, tono = '' }) {
@@ -95,6 +96,11 @@ export default function VentasCompras() {
     { label: 'Vendido − comprado', get: i => i.diferencia },
     { label: 'Compras / ventas %', get: i => (i.ratio === null ? '' : i.ratio.toFixed(1)) },
     { label: 'Costo de lo vendido', get: i => i.costo_ventas },
+    { label: 'Unidades compradas', get: i => i.compras_uds },
+    { label: 'Unidades vendidas', get: i => i.ventas_uds },
+    { label: 'Δ inventario (unidades)', get: i => i.delta_uds },
+    { label: `Δ inventario (unidades) ${d.anio - 1}`, get: i => i.delta_uds_prev ?? '' },
+    { label: 'Compra materia prima que no se vende', get: i => (i.transforma ? 'Sí' : '') },
     { label: `Vendido ${d.anio - 1}`, get: i => i.ventas_prev ?? '' },
     { label: `Comprado ${d.anio - 1}`, get: i => i.compras_prev ?? '' },
   ], items)
@@ -185,8 +191,8 @@ export default function VentasCompras() {
           </Seccion>
 
           {/* Por categoría */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            <div className="lg:col-span-2 card p-5">
+          <div className="space-y-6">
+            <div className="card p-5">
               <h3 className="font-semibold">Top {grafica.length} {nivel.plural}</h3>
               <p className="text-xs text-[var(--text-muted)] mb-3">Vendido vs comprado</p>
               <ResponsiveContainer width="100%" height={Math.max(260, grafica.length * 44)}>
@@ -202,7 +208,7 @@ export default function VentasCompras() {
               </ResponsiveContainer>
             </div>
 
-            <div className="lg:col-span-3">
+            <div>
               <Seccion
                 titulo={`Por ${nivel.singular.toLowerCase()}`}
                 subtitulo={esHoja ? `${items.length} ${nivel.plural}` : `${items.length} ${nivel.plural} · clic para ver el detalle`}
@@ -218,10 +224,11 @@ export default function VentasCompras() {
                         <Th col="compras" orden={orden} setOrden={setOrden}>Comprado</Th>
                         <Th col="diferencia" orden={orden} setOrden={setOrden}>Diferencia</Th>
                         <Th col="ratio" orden={orden} setOrden={setOrden}>Compra / venta</Th>
+                        <Th col="delta_uds" orden={orden} setOrden={setOrden}>Δ inventario (uds.)</Th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-default)]">
-                      {items.length === 0 && <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</td></tr>}
+                      {items.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin datos.</td></tr>}
                       {items.map(i => (
                         <tr
                           key={i.clave}
@@ -253,6 +260,13 @@ export default function VentasCompras() {
                               </div>
                             )}
                           </td>
+                          <td className={`${td} text-right tabular-nums`} title={i.transforma ? 'Lo comprado es sobre todo materia prima que no se vende tal cual (p. ej. resina en kg vs piezas vendidas): el delta mezcla unidades distintas' : undefined}>
+                            <p className={`font-semibold ${i.transforma ? 'text-[var(--text-muted)]' : i.delta_uds > 0 ? 'text-amber-700' : i.delta_uds < 0 ? 'text-[var(--success)]' : ''}`}>{fmtDelta(i.delta_uds)}</p>
+                            <p className="text-[11px] text-[var(--text-muted)]">{fmtInt(i.compras_uds)} comp. − {fmtInt(i.ventas_uds)} vend.</p>
+                            {i.transforma
+                              ? <p className="text-[10px] text-amber-600">incluye materia prima ⓘ</p>
+                              : i.delta_uds_prev !== null && <p className="text-[11px] text-[var(--text-muted)]">{fmtDelta(i.delta_uds_prev)} en {d.anio - 1}</p>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -268,6 +282,7 @@ export default function VentasCompras() {
               <p><strong>Cómo leerlo.</strong> Vendido y comprado son montos sin IVA de las facturas del ERP. "Compra / venta" = comprado ÷ vendido: arriba de 100% se compró más de lo que se vendió en esa categoría.</p>
               <p>Las categorías que se fabrican (como Soplado y Termoformado) venden mucho y casi no compran: su materia prima, por ejemplo el polietileno, se compra bajo <em>Materia Prima (Insumos)</em>. Por eso conviene leerlas junto con esa categoría, o mirar el total.</p>
               <p>"Costo de lo vendido" es lo que costó la mercadería vendida. Si se compra más que eso, el dinero se queda en inventario.</p>
+              <p>"Δ inventario (uds.)" = unidades compradas − unidades vendidas en el tramo, en la unidad de medida del ERP de cada artículo. Positivo: entraron más unidades de las que salieron vendidas (el inventario creció); negativo: se vendió más de lo que se compró (salió de inventario o de producción propia). Las filas marcadas <em>incluye materia prima</em> compran sobre todo artículos que no se venden tal cual (resina, rollos madre), así que comparan unidades distintas: úsalo como referencia, no como existencia exacta.</p>
             </div>
           </div>
         </>
