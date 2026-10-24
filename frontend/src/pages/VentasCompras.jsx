@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { endpoints } from '../services/cfoApi'
+import FiltroProducto, { FILTRO_VACIO, cambiarNivel } from '../components/ventas/FiltroProducto'
 import { fmtM, fmtQ, fmtMes, tooltipStyle } from '../components/analisis/formato'
 import { Cargando, Seccion, Th, exportarExcel, fmtInt, ordenar, td } from '../components/compras/comun'
 
@@ -55,7 +56,9 @@ function Chip({ activo, onClick, children }) {
 export default function VentasCompras() {
   const [anio, setAnio] = useState(null)
   const [compras, setCompras] = useState('materiales')
-  const [path, setPath] = useState([]) // [{ dim, clave }]
+  // Filtro de producto (mismo de las demás páginas); el clic en una fila baja un nivel
+  const [producto, setProducto] = useState(FILTRO_VACIO)
+  const path = NIVELES.filter(n => producto[n.dim]).map(n => ({ dim: n.dim, clave: producto[n.dim] }))
   const [orden, setOrden] = useState({ col: 'ventas', dir: 'desc' })
 
   const filtros = Object.fromEntries(path.map(p => [p.dim, p.clave]))
@@ -66,7 +69,7 @@ export default function VentasCompras() {
   )
   const d = data?.data
   const nivel = NIVELES.find(n => n.dim === d?.nivel) || NIVELES[0]
-  const esHoja = path.length >= NIVELES.length - 1
+  const esHoja = d?.nivel === NIVELES[NIVELES.length - 1].dim
 
   const items = useMemo(() => ordenar((d?.items || []).map(i => ({
     ...i,
@@ -133,22 +136,8 @@ export default function VentasCompras() {
           <Chip activo={compras === 'materiales'} onClick={() => setCompras('materiales')}>Materiales e insumos</Chip>
           <Chip activo={compras === 'todas'} onClick={() => setCompras('todas')}>Todas (incluye gastos, fletes y activo fijo)</Chip>
         </div>
+        <FiltroProducto value={producto} onChange={setProducto} fuente="ventas-compras" params={{ ...(anio ? { anio } : {}), compras }} />
       </div>
-
-      {/* Ruta del drill-down */}
-      {path.length > 0 && (
-        <div className="flex items-center gap-1 flex-wrap text-sm">
-          <button onClick={() => setPath([])} className="px-2 py-1 rounded hover:bg-[var(--bg-secondary)] text-[var(--text-muted)]">Todas las categorías</button>
-          {path.map((p, i) => (
-            <span key={p.dim} className="flex items-center gap-1">
-              <ChevronRightIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-              <button onClick={() => setPath(path.slice(0, i + 1))} className={`px-2 py-1 rounded hover:bg-[var(--bg-secondary)] ${i === path.length - 1 ? 'font-semibold' : 'text-[var(--text-muted)]'}`}>
-                <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] mr-1">{NIVELES[i].singular}</span>{p.clave}
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
 
       {isLoading && !d ? (
         <div className="space-y-4"><Cargando alto="h-28" /><Cargando alto="h-72" /><Cargando alto="h-96" /></div>
@@ -232,7 +221,7 @@ export default function VentasCompras() {
                       {items.map(i => (
                         <tr
                           key={i.clave}
-                          onClick={() => !esHoja && setPath([...path, { dim: nivel.dim, clave: i.clave }])}
+                          onClick={() => !esHoja && setProducto(cambiarNivel(producto, nivel.dim, i.clave))}
                           className={`hover:bg-[var(--bg-secondary)] ${esHoja ? '' : 'cursor-pointer'}`}
                         >
                           <td className={`${td} max-w-[220px]`}>

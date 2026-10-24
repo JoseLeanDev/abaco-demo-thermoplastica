@@ -10,6 +10,8 @@ import { Leyenda } from '../common/leyendas'
 //   'ventas'     → lo que tuvo ventas en el período (página de Ventas)
 //   'inventario' → lo que tiene stock hoy (Capital inmovilizado)
 //   'compras'    → lo que se compró en el período (página de Compras)
+//   'ventas-compras' → lo vendido o comprado en el año de Análisis › Ventas vs compras
+//                  (params = { anio, compras }; no usa el filtro global de período)
 // opciones = (dim, filtrosArriba) => [{ clave, nombre }]: opciones ya calculadas en
 //   el navegador (página de Inventario); si se pasa, no se consulta al backend.
 export const NIVELES_PRODUCTO = [
@@ -31,14 +33,19 @@ export function cambiarNivel(value, dim, clave) {
   return out
 }
 
-function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente, opcionesLocal }) {
+function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente, opcionesLocal, params }) {
   const { desde, hasta } = usePeriodo()
   const { data } = useQuery(
     fuente === 'inventario'
       ? ['filtro-prod-inv', nivel.dim, JSON.stringify(filtrosArriba)]
-      : ['filtro-prod', fuente, nivel.dim, desde, hasta, JSON.stringify(filtrosArriba)],
+      : fuente === 'ventas-compras'
+        ? ['filtro-prod-vc', nivel.dim, JSON.stringify(params), JSON.stringify(filtrosArriba)]
+        : ['filtro-prod', fuente, nivel.dim, desde, hasta, JSON.stringify(filtrosArriba)],
     () => (fuente === 'inventario'
       ? endpoints.analisis.inventarioQuieto({ ...filtrosArriba, dim: nivel.dim })
+      : fuente === 'ventas-compras'
+        ? endpoints.analisis.ventasVsCompras({ ...params, ...filtrosArriba })
+          .then(r => ({ data: { items: (r.data?.nivel === nivel.dim ? r.data.items : []).map(i => ({ clave: i.clave, nombre: i.clave })) } }))
       : fuente === 'compras'
         ? endpoints.compras.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 })
         : endpoints.ventas.desglose({ desde, hasta, ...filtrosArriba, dim: nivel.dim, limit: 300 })),
@@ -73,7 +80,7 @@ function SelectorNivel({ nivel, value, filtrosArriba, onChange, fuente, opciones
   )
 }
 
-export default function FiltroProducto({ value, onChange, fuente = 'ventas', opciones }) {
+export default function FiltroProducto({ value, onChange, fuente = 'ventas', opciones, params }) {
   // Solo se muestra el siguiente nivel cuando el anterior está elegido
   const visibles = []
   for (const n of NIVELES_PRODUCTO) {
@@ -98,6 +105,7 @@ export default function FiltroProducto({ value, onChange, fuente = 'ventas', opc
               filtrosArriba={arriba}
               fuente={fuente}
               opcionesLocal={opciones}
+              params={params}
               onChange={(v) => onChange(cambiarNivel(value, n.dim, v))}
             />
           </span>
