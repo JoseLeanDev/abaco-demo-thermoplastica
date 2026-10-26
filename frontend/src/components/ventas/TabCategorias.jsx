@@ -465,7 +465,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
 
 // Puente de la variación: año anterior → efectos → período actual.
 // El eje no arranca en 0 para que los cambios se vean (son chicos vs el total).
-function Puente({ puente }) {
+export function Puente({ puente }) {
   const datos = useMemo(() => {
     const pasos = [
       { nombre: 'Año anterior', valor: puente.anterior, total: true },

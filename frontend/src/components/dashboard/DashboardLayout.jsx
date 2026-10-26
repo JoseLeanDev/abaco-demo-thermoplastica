@@ -229,7 +229,10 @@ export default function DashboardLayout({ children }) {
                 <span className="text-[var(--text-muted)]">GT</span>
                 <span className="text-[var(--border-strong)]">/</span>
                 <span className="text-[var(--text-primary)] font-medium">
-                  {navigation.flatMap(n => [n, ...(n.children || [])]).find(n => n.href === location.pathname)?.name || 'Dashboard'}
+                  {/* Páginas de detalle (/ventas/vendedor/014) toman el nombre de su sección */}
+                  {navigation.flatMap(n => [n, ...(n.children || [])])
+                    .filter(n => n.href === location.pathname || (n.href !== '/' && location.pathname.startsWith(`${n.href}/`)))
+                    .sort((a, b) => b.href.length - a.href.length)[0]?.name || 'Dashboard'}
                 </span>
               </nav>
             </div>

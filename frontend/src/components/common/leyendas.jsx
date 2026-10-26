@@ -125,6 +125,39 @@ export const LEYENDAS = {
     titulo: 'Concentración por vendedor',
     texto: <>% de las ventas de la selección que factura el vendedor principal. Desde 40% se marca como concentración alta.</>,
   },
+  posicion_vendedor: {
+    titulo: 'Posición en el ranking',
+    texto: <>Lugar del vendedor al ordenar a todos los vendedores con ventas en el período de mayor a menor (respeta el filtro de producto). No cuenta las ventas “Sin vendedor”.</>,
+  },
+  historial_vendedor: {
+    titulo: 'Historial de 24 meses',
+    texto: <>
+      Ventas sin IVA del vendedor por mes, en los 24 meses que terminan en el mes final del período (respeta el filtro de producto).
+      Las barras oscuras caen dentro del período elegido. La línea es su margen % del mes.
+      <Nota>En el detalle de cada mes: % de la empresa = ventas del vendedor ÷ ventas totales de ese mes.</Nota>
+    </>,
+  },
+  senales_vendedor: {
+    titulo: 'Señales del vendedor',
+    texto: <>
+      Avisos automáticos con los números de la ficha:
+      <L>
+        <li>Ventas ±10% o más vs el año anterior.</li>
+        <li>Margen 5 pts o más arriba/abajo del margen del equipo.</li>
+        <li>Top 10 clientes ≥ 70% de lo que vende (con más de 10 clientes).</li>
+        <li>Clientes que le compraron el año anterior y este período no.</li>
+        <li>Cartera asignada con más de 60 días vencida.</li>
+        <li>Más de 30 días sin facturar.</li>
+      </L>
+    </>,
+  },
+  cartera_vendedor: {
+    titulo: 'Cartera del vendedor',
+    texto: <>
+      Saldo por cobrar del último corte diario de CxC de los documentos que el ERP tiene asignados a este vendedor. No depende del período elegido.
+      <Nota>El vendedor de la cartera es el que trae el ERP en cuentas por cobrar; puede no coincidir con quien facturó cada venta.</Nota>
+    </>,
+  },
   matriz: {
     titulo: 'Matriz de ventas',
     texto: <>

@@ -595,6 +595,168 @@ router.get('/vendedores', async (req, res) => {
   }
 });
 
+// GET /api/ventas/vendedor/:codigo   Ficha de un vendedor (acepta filtros de producto)
+// Resumen del período vs año anterior, posición en el ranking, historial de 24
+// meses, clientes / categorías / artículos que vende y la cartera por cobrar que
+// el ERP le tiene asignada (último corte).
+router.get('/vendedor/:codigo', async (req, res) => {
+  try {
+    const info = await db.getAsync(`
+      SELECT vendedor_id, codigo_vendedor, TRIM(nombre) AS nombre
+      FROM thermoplastica.dim_vendedor WHERE codigo_vendedor = $1
+      ORDER BY vendedor_id LIMIT 1`, [String(req.params.codigo)]);
+    if (!info) return res.status(404).json({ status: 'error', message: 'Vendedor no encontrado' });
+
+    const P = parseWindow(req);
+    const id = parseInt(info.vendedor_id);
+    // Mismos filtros de producto + el del vendedor, para reutilizar el desglose
+    const reqV = { query: { ...req.query, vendedor: info.nombre } };
+    const V = ventasFiltradas(req, P);
+
+    const pSerie = [id];
+    const fSerie = filtrosProducto(req, pSerie);
+    const deV = 'f.vendedor_id = $1';
+
+    const [ranking, clientes, categorias, articulos, equipo, serie, vida, cartera, carteraClientes] = await Promise.all([
+      calcularDesglose(req, 'vendedor'),
+      calcularDesglose(reqV, 'cliente'),
+      calcularDesglose(reqV, 'categoria'),
+      calcularDesglose(reqV, 'articulo'),
+      db.getAsync(`
+        SELECT ${M.pct()} AS margen_pct,
+               COALESCE(SUM(total_sin_iva), 0) / NULLIF(COUNT(DISTINCT fact_num), 0) AS ticket_promedio
+        FROM ${V.from} fv`, V.params),
+      // Historial: 24 meses que terminan en el mes de "hasta", con el total de la empresa
+      db.allAsync(`
+        SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM')                     AS periodo,
+               COALESCE(SUM(f.total_sin_iva) FILTER (WHERE ${deV}), 0) AS ventas,
+               ${M.pct('f', deV)}                                      AS margen_pct,
+               COUNT(DISTINCT f.fact_num)   FILTER (WHERE ${deV})      AS facturas,
+               COUNT(DISTINCT f.cliente_id) FILTER (WHERE ${deV})      AS clientes,
+               COALESCE(SUM(f.total_sin_iva), 0)                       AS total_empresa
+        ${JOINS}
+        WHERE f.tipo_doc = 'FACT'
+          AND f.fecha_emision BETWEEN (DATE_TRUNC('month', ${P.H}) - INTERVAL '23 months')::date AND ${P.H}
+          ${fSerie.length ? 'AND ' + fSerie.join(' AND ') : ''}
+        GROUP BY 1 ORDER BY 1`, pSerie),
+      db.getAsync(`
+        SELECT MIN(fecha_emision) AS primera_venta, MAX(fecha_emision) AS ultima_venta
+        FROM thermoplastica.fact_ventas_linea WHERE vendedor_id = $1 AND tipo_doc = 'FACT'`, [id]),
+      db.getAsync(`
+        SELECT COALESCE(SUM(saldo_total), 0) AS saldo, COALESCE(SUM(porvencer), 0) AS por_vencer,
+               COALESCE(SUM(vencido), 0) AS vencido, COALESCE(SUM(v61a90 + v91a120 + v120), 0) AS mas_60,
+               COUNT(*) AS documentos, COUNT(DISTINCT cliente_id) AS clientes,
+               MAX(fecha_snapshot) AS corte
+        FROM thermoplastica.fact_cxc_snapshot_diario
+        WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+          AND vendedor_id = $1`, [id]),
+      db.allAsync(`
+        SELECT s.cliente_id, MAX(c.codigo_cliente) AS codigo,
+               MAX(REGEXP_REPLACE(c.nombre, '^[A-Za-z]*[0-9][0-9A-Za-z]*-', '')) AS cliente,
+               SUM(s.saldo_total) AS saldo, SUM(s.vencido) AS vencido,
+               MAX(CASE WHEN s.vencido > 0 THEN (CURRENT_DATE - s.fecha_vencimiento)::int END) AS atraso_max
+        FROM thermoplastica.fact_cxc_snapshot_diario s
+        JOIN thermoplastica.dim_cliente c ON c.cliente_id = s.cliente_id
+        WHERE s.fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+          AND s.vendedor_id = $1
+        GROUP BY s.cliente_id
+        ORDER BY SUM(s.vencido) DESC, SUM(s.saldo_total) DESC
+        LIMIT 10`, [id]),
+    ]);
+
+    // Posición y números del vendedor dentro del ranking del período
+    const conVentas = ranking.items.filter(i => i.clave !== 'Sin vendedor' && i.ventas > 0);
+    const yo = ranking.items.find(i => i.clave === info.nombre) || null;
+    const posicion = conVentas.findIndex(i => i.clave === info.nombre);
+
+    // Los clientes del desglose vienen por código; la ficha de CxC usa cliente_id
+    const codigos = clientes.items.map(i => i.clave);
+    const ids = codigos.length ? await db.allAsync(
+      `SELECT codigo_cliente, cliente_id FROM thermoplastica.dim_cliente WHERE codigo_cliente = ANY($1)`, [codigos]) : [];
+    const idDe = Object.fromEntries(ids.map(r => [r.codigo_cliente, parseInt(r.cliente_id)]));
+    const cliente = (i) => ({ ...i, codigo: i.clave, cliente: i.nombre, cliente_id: idDe[i.clave] || null });
+
+    const activos = clientes.items.filter(i => i.ventas > 0);
+    const perdidos = clientes.items.filter(i => i.perdido);
+    const top10 = activos.slice(0, 10).reduce((s, i) => s + i.ventas, 0);
+    const ventas = yo?.ventas || 0;
+    const hoy = new Date();
+    const ultima = vida?.ultima_venta ? new Date(vida.ultima_venta) : null;
+
+    res.json({
+      status: 'success',
+      data: {
+        ventana: P.ventana(),
+        vendedor: {
+          id, codigo: info.codigo_vendedor, nombre: info.nombre,
+          primera_venta: vida?.primera_venta || null,
+          ultima_venta: vida?.ultima_venta || null,
+          dias_sin_vender: ultima ? Math.floor((hoy - ultima) / 864e5) : null,
+        },
+        resumen: {
+          ventas,
+          ventas_prev: yo?.ventas_prev || 0,
+          variacion_pct: yo ? yo.variacion_pct : null,
+          facturas: yo?.facturas || 0,
+          clientes: yo?.clientes || 0,
+          clientes_prev: yo?.clientes_prev || 0,
+          skus: yo?.skus || 0,
+          unidades: yo?.unidades || 0,
+          margen: yo?.margen ?? null,
+          margen_pct: yo?.margen_pct ?? null,
+          margen_pct_prev: yo?.margen_pct_prev ?? null,
+          pct_sin_costo: yo?.pct_sin_costo || 0,
+          ticket_promedio: yo?.facturas ? ventas / yo.facturas : null,
+          participacion: yo?.participacion || 0,
+          posicion: posicion >= 0 ? posicion + 1 : null,
+          n_vendedores: conVentas.length,
+          concentracion_top10: ventas > 0 ? Math.round(top10 / ventas * 1000) / 10 : null,
+        },
+        equipo: {
+          total: ranking.total,
+          margen_pct: r1(equipo?.margen_pct),
+          ticket_promedio: equipo?.ticket_promedio === null ? null : n(equipo?.ticket_promedio),
+          ventas_promedio: conVentas.length ? ranking.total / conVentas.length : 0,
+        },
+        // Por artículo dentro del vendedor (igual que el ranking): precio, cantidad, nuevos, ya no se venden
+        puente: yo ? {
+          anterior: yo.ventas_prev, precio: yo.efecto_precio, volumen: yo.efecto_volumen,
+          nuevos: yo.efecto_nuevos, perdidos: yo.efecto_perdidos, otros: yo.efecto_otros, actual: yo.ventas,
+        } : null,
+        serie: serie.map(m => ({
+          periodo: m.periodo,
+          ventas: n(m.ventas),
+          margen_pct: r1(m.margen_pct),
+          facturas: parseInt(m.facturas) || 0,
+          clientes: parseInt(m.clientes) || 0,
+          participacion: n(m.total_empresa) > 0 ? Math.round(n(m.ventas) / n(m.total_empresa) * 1000) / 10 : 0,
+        })),
+        clientes: activos.map(cliente),
+        n_clientes_nuevos: activos.filter(i => i.nuevo).length,
+        venta_clientes_nuevos: activos.filter(i => i.nuevo).reduce((s, i) => s + i.ventas, 0),
+        clientes_perdidos: perdidos.sort((a, b) => b.ventas_prev - a.ventas_prev).slice(0, 25).map(cliente),
+        venta_perdida: perdidos.reduce((s, i) => s + i.ventas_prev, 0),
+        n_clientes_perdidos: perdidos.length,
+        categorias: categorias.items.filter(i => i.ventas > 0),
+        articulos: articulos.items.filter(i => i.ventas > 0).slice(0, 30)
+          .map(i => ({ ...i, codigo: i.clave, descripcion: i.nombre, categoria: i.extra })),
+        cartera: {
+          corte: cartera?.corte || null,
+          saldo: n(cartera?.saldo), por_vencer: n(cartera?.por_vencer),
+          vencido: n(cartera?.vencido), mas_60: n(cartera?.mas_60),
+          documentos: parseInt(cartera?.documentos) || 0, clientes: parseInt(cartera?.clientes) || 0,
+          top: carteraClientes.map(r => ({
+            cliente_id: parseInt(r.cliente_id), codigo: r.codigo, cliente: r.cliente,
+            saldo: n(r.saldo), vencido: n(r.vencido), atraso_max: r.atraso_max === null ? null : parseInt(r.atraso_max),
+          })),
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // GET /api/ventas/clientes   Top clientes (acepta filtros de producto)
 router.get('/clientes', async (req, res) => {
   try {

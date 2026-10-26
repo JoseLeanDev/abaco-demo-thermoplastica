@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { usePeriodo } from '../context/PeriodoContext'
 import { useQuery } from 'react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
 import PageInsights from '../components/agents/PageInsights'
 import {
@@ -103,7 +103,9 @@ const PIE_COLORS = ['#001639', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b
 // -------------------------------------------------------------------
 export default function Ventas() {
   const { desde, hasta } = usePeriodo()
-  const [tab, setTab]             = useState('resumen')
+  // ?tab=vendedores al volver desde la ficha de un vendedor
+  const [searchParams] = useSearchParams()
+  const [tab, setTab]             = useState(searchParams.get('tab') || 'resumen')
   const [busqueda, setBusqueda]   = useState('')
   const [clienteSel, setCliente]  = useState('')
   const [vendedorSel, setVendedor] = useState('')
@@ -608,7 +610,9 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                 <div key={v.vendedor} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                    <span className="truncate">{v.vendedor}</span>
+                    {v.codigo
+                      ? <Link to={`/ventas/vendedor/${encodeURIComponent(v.codigo)}`} className="truncate hover:underline">{v.vendedor}</Link>
+                      : <span className="truncate">{v.vendedor}</span>}
                   </div>
                   <span className="tabular-nums font-semibold">{fmtPct(v.porcentaje, 2)}</span>
                 </div>
@@ -651,7 +655,13 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
                       <div className="min-w-0">
-                        <p className="font-medium truncate max-w-[220px]">{v.vendedor}</p>
+                        {v.codigo ? (
+                          <Link to={`/ventas/vendedor/${encodeURIComponent(v.codigo)}`} title="Ver ficha del vendedor" className="font-medium truncate max-w-[220px] block hover:underline text-[var(--text-primary)]">
+                            {v.vendedor}
+                          </Link>
+                        ) : (
+                          <p className="font-medium truncate max-w-[220px]">{v.vendedor}</p>
+                        )}
                         <p className="text-xs text-[var(--text-muted)]">{v.codigo || '—'}</p>
                       </div>
                     </div>
