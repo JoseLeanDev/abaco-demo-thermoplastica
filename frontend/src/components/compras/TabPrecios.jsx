@@ -99,7 +99,7 @@ export default function TabPrecios({ precios: d }) {
               {items.map(i => (
                 <tr key={i.clave} className="hover:bg-[var(--bg-secondary)]">
                   <td className={`${td} max-w-[320px]`}>
-                    <p className="font-medium truncate" title={i.nombre}>{i.nombre}</p>
+                    <p className="font-medium nombre-articulo">{i.nombre}</p>
                     <p className="text-xs text-[var(--text-muted)] truncate">{i.clave} · {i.extra}{i.proveedor_ultimo ? ` · ${i.proveedor_ultimo}` : ''}</p>
                   </td>
                   <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{fmtPrecio(i.precio_promedio_prev)}</td>

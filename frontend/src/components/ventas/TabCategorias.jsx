@@ -280,7 +280,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
                 className="w-full text-left px-5 py-3 flex items-center gap-3 active:bg-[var(--bg-secondary)]"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{it.nombre}</p>
+                  <p className="font-medium text-sm nombre-articulo">{it.nombre}</p>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">
                     {it.participacion}% del total · margen <span className={margenTone(it.margen_pct)}>{it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}</span>
                   </p>
@@ -323,7 +323,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
                   className={`text-sm group ${esHoja ? '' : 'cursor-pointer hover:bg-[var(--bg-secondary)]'}`}
                 >
                   <td className="py-2.5 pr-2 max-w-[18rem]">
-                    <span className="font-medium truncate block" title={it.nombre}>{it.nombre}</span>
+                    <span className="font-medium nombre-articulo block">{it.nombre}</span>
                     {esHoja && <span className="text-[10px] text-[var(--text-muted)]">{it.clave}</span>}
                   </td>
                   <td className="py-2.5 px-2 min-w-[12rem]">
@@ -552,7 +552,7 @@ function RankingCruzado({ icon: Icon, titulo, subtitulo, data, loading }) {
             <tbody className="divide-y divide-[var(--border-default)]">
               {items.map(i => (
                 <tr key={i.clave} className="text-sm">
-                  <td className="py-1.5 pr-2 max-w-[14rem] truncate" title={i.nombre}>{i.nombre}</td>
+                  <td className="py-1.5 pr-2 max-w-[18rem] nombre-articulo">{i.nombre}</td>
                   <td className="py-1.5 text-right tabular-nums font-semibold">{fmtM(i.ventas)}</td>
                   <td className="py-1.5 text-right"><Variacion pct={i.variacion_pct} nuevo={i.nuevo} /></td>
                   <td className="py-1.5 text-right tabular-nums text-xs">{i.participacion}%</td>

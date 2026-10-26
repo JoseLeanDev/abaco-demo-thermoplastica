@@ -98,7 +98,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
                     className={`hover:bg-[var(--bg-secondary)] ${esArticulo ? '' : 'cursor-pointer'}`}
                   >
                     <td className={`${td} max-w-[280px]`}>
-                      <p className="font-medium truncate" title={g.nombre}>{g.nombre}</p>
+                      <p className="font-medium nombre-articulo">{g.nombre}</p>
                       {esArticulo
                         ? <p className="text-xs text-[var(--text-muted)]">{g.clave}</p>
                         : <div className="mt-1 w-full max-w-[220px]"><BarraPct pct={g.pct} /></div>}

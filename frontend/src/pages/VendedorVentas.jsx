@@ -297,7 +297,7 @@ function TabResumen({ d }) {
               {d.categorias.map(c => (
                 <div key={c.clave}>
                   <div className="flex items-center justify-between text-sm gap-2">
-                    <span className="truncate font-medium">{c.nombre}</span>
+                    <span className="nombre-articulo font-medium">{c.nombre}</span>
                     <span className="tabular-nums whitespace-nowrap">
                       <span className="font-semibold">{fmtM(c.ventas)}</span>
                       <span className="text-xs text-[var(--text-muted)] ml-2">{fmtPct(c.participacion)}</span>
@@ -407,7 +407,7 @@ function TabProductos({ d }) {
             {d.articulos.map(a => (
               <tr key={a.codigo} className="text-sm hover:bg-[var(--bg-secondary)]">
                 <td className="px-4 py-2">
-                  <p className="font-medium truncate max-w-[300px]">{a.descripcion}</p>
+                  <p className="font-medium nombre-articulo max-w-[340px]">{a.descripcion}</p>
                   <p className="text-xs text-[var(--text-muted)]">{a.codigo}</p>
                 </td>
                 <td className="px-3 py-2 text-[var(--text-secondary)]">{a.categoria || '—'}</td>
@@ -519,7 +519,7 @@ function TabHistorial({ vendedor, params }) {
                     <p className="text-xs text-[var(--text-muted)]">{f.codigo_cliente}</p>
                   </td>
                   <td className="px-3 py-2 max-w-[260px]">
-                    <p className="truncate">{f.articulo}</p>
+                    <p className="nombre-articulo">{f.articulo}</p>
                     <p className="text-xs text-[var(--text-muted)]">{f.codigo_articulo}</p>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtNum(f.unidades)}</td>

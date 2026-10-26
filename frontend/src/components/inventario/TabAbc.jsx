@@ -214,7 +214,7 @@ function ListaCorta({ icon, titulo, subtitulo, filas, vacio, col, colTitulo, dia
             {filas.map(f => (
               <tr key={f.codigo} className="hover:bg-[var(--bg-secondary)]">
                 <td className={`${td} max-w-[260px]`}>
-                  <p className="font-medium truncate" title={f.descripcion}>{f.descripcion}</p>
+                  <p className="font-medium nombre-articulo">{f.descripcion}</p>
                   <p className="text-xs text-[var(--text-muted)] truncate">{f.codigo} · {f.subcategoria}</p>
                 </td>
                 <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{f.salida > 0 ? fmtM(f.salida / dias * 30) : '—'}</td>

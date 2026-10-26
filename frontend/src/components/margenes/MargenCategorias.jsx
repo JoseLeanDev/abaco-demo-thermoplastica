@@ -124,7 +124,7 @@ export default function MargenCategorias({ filtro, onFiltro }) {
                     >
                       <td className="py-2 pr-2 max-w-[18rem]">
                         <div className="flex items-center gap-1">
-                          <span className="truncate font-medium" title={it.nombre}>{it.nombre}</span>
+                          <span className="nombre-articulo font-medium">{it.nombre}</span>
                           {!esHoja && <ChevronRightIcon className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />}
                         </div>
                         {it.pct_sin_costo >= 1 && (

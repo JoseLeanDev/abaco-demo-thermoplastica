@@ -62,7 +62,7 @@ export default function TabRanking({ icon, titulo, singular, items, isLoading, n
                 {filas.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin resultados.</td></tr>}
                 {filas.map(r => (
                   <tr key={r.id} className="hover:bg-[var(--bg-secondary)]">
-                    <td className={`${td} max-w-[320px]`}><p className="font-medium truncate" title={r.nombre}>{r.nombre}</p></td>
+                    <td className={`${td} max-w-[320px]`}><p className="font-medium nombre-articulo">{r.nombre}</p></td>
                     <td className={`${td} text-right tabular-nums`}>{fmtQ(r.ventas_12m)}</td>
                     <td className={`${td} text-right tabular-nums font-semibold`}>{fmtPct(r.margen_pct_actual)}</td>
                     <td className={`${td} text-right tabular-nums text-[var(--text-muted)]`}>{fmtPct(r.margen_pct_historico)}</td>
@@ -87,7 +87,7 @@ export default function TabRanking({ icon, titulo, singular, items, isLoading, n
           {top.map(i => (
             <div key={i.id} className="text-xs">
               <div className="flex justify-between gap-2 mb-0.5">
-                <span className="truncate text-[var(--text-secondary)]" title={i.nombre}>{i.nombre}</span>
+                <span className="nombre-articulo text-[var(--text-secondary)]">{i.nombre}</span>
                 <span className="tabular-nums shrink-0 font-semibold">{fmtPct(i.margen_pct_actual)}</span>
               </div>
               <div className="flex items-center gap-2">

@@ -130,6 +130,19 @@
    ============================================ */
 
 @layer components {
+
+  /* Nombre de artículo en listas y tablas: se lee completo, en varias líneas si hace
+     falta (no se corta con “…”). En tablas guarda un ancho mínimo para no quedar en
+     una columna angosta. */
+  .nombre-articulo {
+    white-space: normal;
+    overflow-wrap: break-word;
+    line-height: 1.3;
+  }
+  td.nombre-articulo,
+  td .nombre-articulo {
+    min-width: 14rem;
+  }
   
   /* Cards - Clean with subtle shadow */
   .card {

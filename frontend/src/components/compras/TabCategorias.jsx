@@ -100,8 +100,8 @@ export default function TabCategorias({ filtros, clave, producto, setProducto })
                   className={`hover:bg-[var(--bg-secondary)] ${esArticulo ? '' : 'cursor-pointer'}`}
                 >
                   <td className={`${td} max-w-[300px]`}>
-                    <p className="font-medium truncate flex items-center gap-1.5">
-                      <span className="truncate">{i.nombre}</span>
+                    <p className="font-medium flex items-center gap-1.5">
+                      <span className="nombre-articulo">{i.nombre}</span>
                       {i.nuevo && <span className="badge-success text-[10px]">Nuevo</span>}
                     </p>
                     {esArticulo && <p className="text-xs text-[var(--text-muted)]">{i.clave}{i.extra ? ` · ${i.extra}` : ''}</p>}

@@ -136,7 +136,7 @@ export default function TabDetalle({ filas, dias, objetivo, vista, setVista }) {
             {lista.slice(0, mostrar).map(f => (
               <tr key={f.codigo} className="hover:bg-[var(--bg-secondary)]">
                 <td className={`${td} max-w-[280px]`}>
-                  <p className="font-medium truncate" title={f.descripcion}>{f.descripcion}</p>
+                  <p className="font-medium nombre-articulo">{f.descripcion}</p>
                   <p className="text-xs text-[var(--text-muted)] truncate">
                     {f.codigo} · {CLASE[f.clase]?.corto}{f.proveedor ? ` · ${f.proveedor}` : ''}
                   </p>

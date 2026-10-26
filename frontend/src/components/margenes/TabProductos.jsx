@@ -125,7 +125,7 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
               {filas.slice(0, MAX_FILAS).map(p => (
                 <tr key={p.id} onClick={() => setSeleccion(p)} className="hover:bg-[var(--bg-secondary)] cursor-pointer">
                   <td className={`${td} max-w-[360px]`}>
-                    <p className="font-medium truncate" title={p.nombre}>{p.nombre}</p>
+                    <p className="font-medium nombre-articulo">{p.nombre}</p>
                     <p className="text-xs text-[var(--text-muted)] truncate">{p.sku} · {p.subcategoria}</p>
                   </td>
                   <td className={`${td} text-right tabular-nums`}>{fmtQ(p.ventas)}</td>

@@ -478,7 +478,7 @@ function SkuUrgenteRow({ item, leadPropio, onClick }) {
         </span>
       </td>
       <td className="py-2 pr-3 max-w-[280px]">
-        <p className="font-semibold truncate text-[var(--text-primary)]">{item.descripcion}</p>
+        <p className="font-semibold nombre-articulo text-[var(--text-primary)]">{item.descripcion}</p>
         <p className="text-[10px] text-[var(--text-muted)]">{item.codigo}</p>
       </td>
       <td className="py-2 pr-2 text-[var(--text-secondary)]">

@@ -401,7 +401,7 @@ function TabResumen({
               {articulos.map(a => (
                 <tr key={a.codigo} className="text-sm hover:bg-[var(--bg-secondary)]">
                   <td className="py-2 pr-3">
-                    <p className="font-medium truncate max-w-[260px]">{a.descripcion}</p>
+                    <p className="font-medium nombre-articulo max-w-[320px]">{a.descripcion}</p>
                     <p className="text-xs text-[var(--text-muted)]">{a.codigo}</p>
                   </td>
                   <td className="py-2 pr-3 text-[var(--text-secondary)]">
@@ -491,7 +491,7 @@ function TabResumen({
                     <p className="truncate text-[var(--text-secondary)]">{f.vendedor || '—'}</p>
                   </td>
                   <td className="px-3 py-2 text-sm max-w-[240px]">
-                    <p className="truncate">{f.articulo}</p>
+                    <p className="nombre-articulo">{f.articulo}</p>
                     <p className="text-xs text-[var(--text-muted)]">{f.codigo_articulo}</p>
                   </td>
                   <td className="px-3 py-2 text-right text-sm tabular-nums">{fmtNum(f.unidades)}</td>

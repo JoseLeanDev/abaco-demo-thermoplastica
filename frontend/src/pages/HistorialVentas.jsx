@@ -258,8 +258,8 @@ export default function HistorialServicios() {
             <StarIcon className="w-4 h-4 text-[var(--warning)]" />
           </div>
           <div className="kpi-value text-lg">{servicioTop ? formatGTQ(servicioTop.totalIngresos) : 'Q 0'}</div>
-          <span className="text-xs text-[var(--text-muted)] truncate">
-            {servicioTop ? servicioTop.nombre.slice(0, 25) + '...' : '—'}
+          <span className="text-xs text-[var(--text-muted)] nombre-articulo">
+            {servicioTop ? servicioTop.nombre : '—'}
           </span>
         </div>
       </div>
@@ -382,7 +382,7 @@ export default function HistorialServicios() {
                   </div>
 
                   {/* Nombre */}
-                  <p className="text-sm font-medium text-[var(--text-primary)] mb-3 line-clamp-2">
+                  <p className="text-sm font-medium text-[var(--text-primary)] mb-3 nombre-articulo">
                     {servicio.nombre}
                   </p>
 

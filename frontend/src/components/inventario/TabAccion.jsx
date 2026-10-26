@@ -100,7 +100,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
               {exceso.slice(0, 200).map(f => (
                 <tr key={f.codigo} className="hover:bg-[var(--bg-secondary)]">
                   <td className={`${td} max-w-[320px]`}>
-                    <p className="font-medium truncate" title={f.descripcion}>{f.descripcion}</p>
+                    <p className="font-medium nombre-articulo">{f.descripcion}</p>
                     <p className="text-xs text-[var(--text-muted)] truncate">{f.codigo} · {f.subcategoria}{f.proveedor ? ` · ${f.proveedor}` : ''}</p>
                   </td>
                   <td className={td}><EstadoBadge estado={f.estado} /></td>
@@ -141,7 +141,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
               {quiebres.map(f => (
                 <tr key={f.codigo} className="hover:bg-[var(--bg-secondary)]">
                   <td className={`${td} max-w-[320px]`}>
-                    <p className="font-medium truncate" title={f.descripcion}>{f.descripcion}</p>
+                    <p className="font-medium nombre-articulo">{f.descripcion}</p>
                     <p className="text-xs text-[var(--text-muted)] truncate">{f.codigo} · {f.subcategoria}{f.proveedor ? ` · ${f.proveedor}` : ''}</p>
                   </td>
                   <td className={`${td} font-semibold`}>{f.abc === 'N' ? '—' : f.abc}</td>

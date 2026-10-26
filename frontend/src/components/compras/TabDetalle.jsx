@@ -107,7 +107,7 @@ export default function TabDetalle({ filtros, clave }) {
                     <p className="text-xs text-[var(--text-muted)]">{f.codigo_proveedor}</p>
                   </td>
                   <td className={`${td} max-w-[240px]`}>
-                    <p className="truncate" title={f.articulo}>{f.articulo || f.codigo_articulo}</p>
+                    <p className="nombre-articulo">{f.articulo || f.codigo_articulo}</p>
                     <p className="text-xs text-[var(--text-muted)]">{f.codigo_articulo}</p>
                   </td>
                   <td className={`${td} max-w-[200px]`}>

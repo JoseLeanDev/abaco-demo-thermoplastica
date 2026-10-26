@@ -124,7 +124,7 @@ export default function TabMatriz({ filtroProducto }) {
             <tbody>
               {m.filas.map(f => (
                 <tr key={f.nombre}>
-                  <td className="py-0.5 pr-2 max-w-[16rem] truncate sticky left-0 bg-[var(--bg-primary)] font-medium" title={f.nombre}>{f.nombre}</td>
+                  <td className="py-0.5 pr-2 max-w-[18rem] nombre-articulo sticky left-0 bg-[var(--bg-primary)] font-medium">{f.nombre}</td>
                   {m.columnas.map(c => {
                     const v = celda(f, c)
                     return (

@@ -567,9 +567,9 @@ function Conceptos({ d, mostrarCentros, onConcepto }) {
             {items.map(c => (
               <tr key={c.codigo} onClick={() => onConcepto(c.codigo)} className="hover:bg-[var(--bg-secondary)] cursor-pointer">
                 <td className={`${td} max-w-[280px]`}>
-                  <p className="font-medium truncate flex items-center gap-1.5">
+                  <p className="font-medium flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: COLORES[c.rubro] }} />
-                    <span className="truncate">{c.concepto}</span>
+                    <span className="nombre-articulo">{c.concepto}</span>
                     {c.nuevo && <span className="badge-info text-[10px]">Nuevo</span>}
                   </p>
                   <p className="text-xs text-[var(--text-muted)] pl-3.5">Cuenta {c.cuenta} · {c.rubro_label}</p>
@@ -801,7 +801,7 @@ function Lineas({ filtros, mostrarCentro }) {
                     <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtFecha(f.fecha_emision)}</td>
                     <td className={td}>{f.tipo_doc} {f.fact_num}</td>
                     {mostrarCentro && <td className={`${td} text-[var(--text-secondary)]`}>{f.centro_costo}</td>}
-                    <td className={`${td} max-w-[220px] truncate`} title={f.articulo}>{f.articulo}</td>
+                    <td className={`${td} max-w-[280px] nombre-articulo`}>{f.articulo}</td>
                     <td className={`${td} max-w-[260px] truncate`} title={f.proveedor}>{f.proveedor}</td>
                     <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ(f.total_sin_iva)}</td>
                   </tr>

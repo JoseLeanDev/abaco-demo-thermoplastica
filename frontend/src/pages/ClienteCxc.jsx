@@ -618,7 +618,7 @@ function TabCompras({ d }) {
                     return (
                       <tr key={x.codigo}>
                         <td className="px-3 py-2 text-sm max-w-[280px]">
-                          <p className="font-medium truncate" title={x.articulo}>{x.articulo}</p>
+                          <p className="font-medium nombre-articulo">{x.articulo}</p>
                           <p className="text-xs text-[var(--text-muted)]">{x.codigo} · {x.categoria}</p>
                         </td>
                         <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{Math.round(x.unidades).toLocaleString('es-GT')}</td>
@@ -661,7 +661,7 @@ function TabCompras({ d }) {
                     <td className={`${td} tabular-nums`}>{fmtF(f.fecha)}</td>
                     <td className={`${td} font-medium`}>{f.documento}</td>
                     <td className="px-3 py-2 text-sm max-w-[320px]">
-                      <p className="truncate text-[var(--text-secondary)]" title={f.lineas.map(l => l.articulo).join(' · ')}>
+                      <p className="nombre-articulo text-[var(--text-secondary)]" title={f.lineas.map(l => l.articulo).join(' · ')}>
                         {f.lineas[0]?.articulo}{f.lineas.length > 1 && <span className="text-[var(--text-muted)]"> +{f.lineas.length - 1} más</span>}
                       </p>
                     </td>

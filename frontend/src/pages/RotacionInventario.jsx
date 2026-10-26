@@ -347,7 +347,7 @@ export default function RotacionInventario() {
                 <li key={it.clave}>
                   <button onClick={() => drill(it)} disabled={esHoja} className="w-full text-left px-5 py-3 flex items-center gap-3">
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="font-medium text-sm truncate">{it.nombre}</p>
+                      <p className="font-medium text-sm nombre-articulo">{it.nombre}</p>
                       <p className="text-xs text-[var(--text-muted)]">{fmtM(it.inventario)} inventario · {it.pct_inventario}% del inv. · {it.pct_cogs}% del {flujo}</p>
                     </div>
                     <div className="text-right shrink-0">
@@ -378,7 +378,7 @@ export default function RotacionInventario() {
                   {filas.map(it => (
                     <tr key={it.clave} onClick={() => drill(it)} className={`text-sm group ${esHoja ? '' : 'cursor-pointer hover:bg-[var(--bg-secondary)]'}`}>
                       <td className="py-2.5 pr-2 max-w-[18rem]">
-                        <span className="font-medium truncate block" title={it.nombre}>{it.nombre}</span>
+                        <span className="font-medium nombre-articulo block">{it.nombre}</span>
                         {esHoja
                           ? <span className="text-[10px] text-[var(--text-muted)]">{it.clave} · {CLASES[it.clase]}</span>
                           : it.pct_materia_prima > 0 && <span className="text-[10px] text-[var(--text-muted)]">{it.pct_materia_prima}% materia prima</span>}
@@ -496,7 +496,7 @@ export default function RotacionInventario() {
                 {d.articulos.map(a => (
                   <tr key={a.codigo_articulo}>
                     <td className="py-2 pr-2 max-w-[16rem]">
-                      <p className="truncate" title={a.articulo}>{a.articulo}</p>
+                      <p className="nombre-articulo">{a.articulo}</p>
                       <p className="text-[10px] text-[var(--text-muted)]">{a.codigo_articulo} · {CLASES[a.clase]}</p>
                     </td>
                     <td className="py-2 px-2 text-xs text-[var(--text-secondary)] hidden md:table-cell max-w-[16rem] truncate" title={`${a.categoria} › ${a.subcategoria} › ${a.sublinea}`}>

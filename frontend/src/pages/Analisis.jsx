@@ -326,7 +326,7 @@ function CapitalInmovilizado({ inventario, ciclo }) {
                 {inventario.top_inmovilizado.slice(0, 5).map(a => (
                   <tr key={a.codigo_articulo}>
                     <td className="px-3 py-2">
-                      <p className="truncate max-w-xs" title={a.articulo}>{a.articulo}</p>
+                      <p className="nombre-articulo max-w-xs">{a.articulo}</p>
                       <p className="text-xs text-[var(--text-muted)]">{a.codigo_articulo}</p>
                     </td>
                     <td className="px-3 py-2 text-[var(--text-secondary)]">{a.linea || '—'}</td>
