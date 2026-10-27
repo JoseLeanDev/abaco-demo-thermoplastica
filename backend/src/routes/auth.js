@@ -3,6 +3,21 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../../database/connection');
 const { authenticate, generateToken, JWT_SECRET } = require('../middleware/auth');
+const { MODULOS, ROLES, ROLES_POR_KEY, permisosDeRol } = require('../config/permisos');
+
+// El usuario que ve el frontend lleva sus permisos por módulo (menú y rutas salen de ahí)
+const conPermisos = (u) => ({ ...u, permisos: permisosDeRol(u.rol) });
+
+// Alcance válido para el rol: solo las llaves que el rol usa, como listas de texto
+function limpiarAlcance(rol, alcance) {
+  const llaves = ROLES_POR_KEY[rol]?.alcance || [];
+  const out = {};
+  for (const k of llaves) {
+    const v = alcance?.[k];
+    if (Array.isArray(v)) out[k] = [...new Set(v.map(x => String(x).trim()).filter(Boolean))];
+  }
+  return out;
+}
 
 const router = express.Router();
 
@@ -20,7 +35,7 @@ router.post('/login', async (req, res) => {
 
     // Buscar usuario
     const usuario = await db.getAsync(
-      'SELECT id, nombre, email, password_hash, rol, avatar_url, activo FROM usuarios WHERE email = ?',
+      'SELECT id, nombre, email, password_hash, rol, alcance, avatar_url, activo FROM usuarios WHERE email = ?',
       [email.toLowerCase().trim()]
     );
 
@@ -64,7 +79,7 @@ router.post('/login', async (req, res) => {
       status: 'success',
       message: 'Login exitoso',
       data: {
-        user: userWithoutPassword,
+        user: conPermisos(userWithoutPassword),
         token
       }
     });
@@ -83,11 +98,11 @@ router.post('/login', async (req, res) => {
 //   1. Si NO existen usuarios en la BD → cualquiera puede crear el PRIMER admin
 //      (bootstrap una sola vez).
 //   2. Si ya existen usuarios → solo un admin autenticado puede crear otros.
-//   3. Solo un admin puede asignar rol 'admin'; cualquier otro rol es 'usuario'.
+//   3. El rol debe existir en el catálogo (config/permisos.js); el alcance se limpia según el rol.
 router.post('/register', async (req, res) => {
   try {
-    const { nombre, email, password } = req.body;
-    let { rol = 'usuario' } = req.body;
+    const { nombre, email, password, alcance } = req.body;
+    let { rol } = req.body;
 
     if (!nombre || !email || !password) {
       return res.status(400).json({
@@ -140,8 +155,12 @@ router.post('/register', async (req, res) => {
       rol = 'admin';
     }
 
-    // Solo un admin autenticado (o bootstrap) puede crear otro admin.
-    if (rol !== 'admin' && rol !== 'usuario') rol = 'usuario';
+    if (!ROLES_POR_KEY[rol]) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Rol inválido'
+      });
+    }
 
     // Verificar si el email ya existe
     const existing = await db.getAsync(
@@ -162,18 +181,18 @@ router.post('/register', async (req, res) => {
 
     // Crear usuario
     const result = await db.runAsync(
-      'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-      [nombre.trim(), email.toLowerCase().trim(), passwordHash, rol]
+      'INSERT INTO usuarios (nombre, email, password_hash, rol, alcance) VALUES (?, ?, ?, ?, ?)',
+      [nombre.trim(), email.toLowerCase().trim(), passwordHash, rol, JSON.stringify(limpiarAlcance(rol, alcance))]
     );
 
     const newUser = await db.getAsync(
-      'SELECT id, nombre, email, rol, activo, created_at FROM usuarios WHERE id = ?',
+      'SELECT id, nombre, email, rol, alcance, activo, created_at FROM usuarios WHERE id = ?',
       [result.id || result.rows?.[0]?.id]
     );
 
     // Si no podemos obtener el ID de result, lo buscamos por email
     const user = newUser || await db.getAsync(
-      'SELECT id, nombre, email, rol, activo, created_at FROM usuarios WHERE email = ?',
+      'SELECT id, nombre, email, rol, alcance, activo, created_at FROM usuarios WHERE email = ?',
       [email.toLowerCase().trim()]
     );
 
@@ -203,7 +222,7 @@ router.get('/me', authenticate, async (req, res) => {
     res.json({
       status: 'success',
       data: {
-        user: req.user
+        user: conPermisos(req.user)
       }
     });
   } catch (error) {
@@ -233,6 +252,47 @@ router.post('/logout', authenticate, async (req, res) => {
   }
 });
 
+// ==================== CATÁLOGO DE ROLES (solo admin) ====================
+// Roles con su matriz de permisos y las opciones para asignar alcance:
+// líneas = categoría de producto (campo marca del ERP), vendedores = dim_vendedor.
+router.get('/roles', authenticate, async (req, res) => {
+  try {
+    if (req.user.rol !== 'admin') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'No tiene permisos para ver roles'
+      });
+    }
+
+    const [lineas, vendedores] = await Promise.all([
+      db.allAsync(`SELECT DISTINCT TRIM(marca) AS valor FROM thermoplastica.dim_articulo
+                   WHERE NULLIF(TRIM(marca), '') IS NOT NULL ORDER BY 1`),
+      db.allAsync(`SELECT codigo_vendedor AS valor, MAX(TRIM(nombre)) AS nombre, BOOL_OR(activo) AS activo
+                   FROM thermoplastica.dim_vendedor WHERE NULLIF(TRIM(codigo_vendedor), '') IS NOT NULL
+                   GROUP BY codigo_vendedor ORDER BY 2`),
+    ]);
+
+    res.json({
+      status: 'success',
+      data: {
+        modulos: MODULOS,
+        roles: ROLES.map(r => ({ key: r.key, nombre: r.nombre, alcance: r.alcance || [], permisos: permisosDeRol(r.key) })),
+        opciones: {
+          lineas: lineas.map(l => ({ valor: l.valor, nombre: l.valor })),
+          vendedores: vendedores.map(v => ({ valor: v.valor, nombre: v.nombre, activo: v.activo })),
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('[AUTH ROLES ERROR]', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error en el servidor'
+    });
+  }
+});
+
 // ==================== LISTAR USUARIOS (solo admin) ====================
 router.get('/usuarios', authenticate, async (req, res) => {
   try {
@@ -245,7 +305,7 @@ router.get('/usuarios', authenticate, async (req, res) => {
     }
 
     const usuarios = await db.allAsync(
-      'SELECT id, nombre, email, rol, avatar_url, activo, ultimo_login, created_at FROM usuarios ORDER BY created_at DESC'
+      'SELECT id, nombre, email, rol, alcance, avatar_url, activo, ultimo_login, created_at FROM usuarios ORDER BY created_at DESC'
     );
 
     res.json({
@@ -266,7 +326,7 @@ router.get('/usuarios', authenticate, async (req, res) => {
 router.patch('/usuarios/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, rol, activo } = req.body;
+    const { nombre, rol, activo, alcance } = req.body;
 
     // Solo admin o el propio usuario puede actualizar
     if (req.user.rol !== 'admin' && req.user.id !== parseInt(id)) {
@@ -276,11 +336,26 @@ router.patch('/usuarios/:id', authenticate, async (req, res) => {
       });
     }
 
-    // Solo admin puede cambiar rol o activo
-    if ((rol !== undefined || activo !== undefined) && req.user.rol !== 'admin') {
+    // Solo admin puede cambiar rol, alcance o activo
+    if ((rol !== undefined || activo !== undefined || alcance !== undefined) && req.user.rol !== 'admin') {
       return res.status(403).json({
         status: 'error',
         message: 'No tiene permisos para cambiar rol o estado'
+      });
+    }
+
+    if (rol !== undefined && !ROLES_POR_KEY[rol]) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Rol inválido'
+      });
+    }
+
+    // Un admin no puede quitarse a sí mismo el rol ni desactivarse (se quedaría sin acceso a Usuarios)
+    if (req.user.id === parseInt(id) && ((rol !== undefined && rol !== 'admin') || activo === false)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No puede quitarse el rol de administrador ni desactivarse a sí mismo'
       });
     }
 
@@ -297,6 +372,14 @@ router.patch('/usuarios/:id', authenticate, async (req, res) => {
       paramCount++;
       updates.push(`rol = $${paramCount}`);
       values.push(rol);
+    }
+    if ((rol !== undefined || alcance !== undefined) && req.user.rol === 'admin') {
+      // El alcance se guarda limpio para el rol que queda (el nuevo o el actual)
+      const actual = await db.getAsync('SELECT rol, alcance FROM usuarios WHERE id = ?', [parseInt(id)]);
+      const rolFinal = rol ?? actual?.rol;
+      paramCount++;
+      updates.push(`alcance = $${paramCount}`);
+      values.push(JSON.stringify(limpiarAlcance(rolFinal, alcance ?? actual?.alcance)));
     }
     if (activo !== undefined && req.user.rol === 'admin') {
       paramCount++;
@@ -318,7 +401,7 @@ router.patch('/usuarios/:id', authenticate, async (req, res) => {
     await db.runAsync(sql, values);
 
     const usuario = await db.getAsync(
-      'SELECT id, nombre, email, rol, avatar_url, activo, ultimo_login, created_at FROM usuarios WHERE id = ?',
+      'SELECT id, nombre, email, rol, alcance, avatar_url, activo, ultimo_login, created_at FROM usuarios WHERE id = ?',
       [parseInt(id)]
     );
 

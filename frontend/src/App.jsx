@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { PeriodoProvider } from './context/PeriodoContext'
 import DashboardLayout from './components/dashboard/DashboardLayout'
@@ -52,6 +52,22 @@ function ProtectedRoute({ children }) {
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
+// Página fuera de los permisos del rol (p. ej. un enlace directo): aviso en lugar del módulo
+function RutaPermitida({ children }) {
+  const { puedeVer } = useAuth()
+  const { pathname } = useLocation()
+  if (puedeVer(pathname)) return children
+  return (
+    <div className="max-w-xl card p-6 space-y-2">
+      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Sin acceso a este módulo</h1>
+      <p className="text-sm text-[var(--text-secondary)]">
+        Su rol no incluye esta página. Si la necesita, pídale al administrador del sistema que revise su rol.
+      </p>
+      <Link to="/" className="text-sm text-[var(--accent-blue)] hover:underline">Ir al panel</Link>
+    </div>
+  )
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -62,6 +78,7 @@ function AppRoutes() {
           <ProtectedRoute>
             <PeriodoProvider>
             <DashboardLayout>
+              <RutaPermitida>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/asistente" element={<AsistenteIA />} />
@@ -96,6 +113,7 @@ function AppRoutes() {
                 {/* <Route path="/contabilidad/cierre/:anio/:mes" element={<CierreWizard />} /> */}
                 {/* <Route path="/contabilidad/conciliacion/:cuentaId/:anio/:mes" element={<ConciliacionBancaria />} /> */}
               </Routes>
+              </RutaPermitida>
             </DashboardLayout>
             </PeriodoProvider>
           </ProtectedRoute>

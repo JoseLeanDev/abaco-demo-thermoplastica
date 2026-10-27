@@ -4,6 +4,42 @@ const db = require('../../database/connection');
 const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
 const { cicloPeriodo } = require('../services/cicloCaja');
+const { puede } = require('../config/permisos');
+
+// Qué módulo necesita cada bloque del panel. Un rol ve solo los bloques de sus
+// módulos (p. ej. Cobranza: cartera; Compras: compras e inventario).
+const KPIS_POR_MODULO = {
+  ventas:     ['ventas_12m', 'ventas_12m_previo', 'delta_ventas_pct', 'facturas_12m', 'clientes_activos_12m',
+               'clientes_previo_12m', 'tendencia_mes_pct', 'pct_ventas_sin_costo'],
+  margenes:   ['costo_ventas_12m', 'margen_bruto_real_12m', 'margen_bruto_previo_12m', 'margen_bruto_pct',
+               'margen_bruto_pct_previo', 'delta_margen_pp'],
+  compras:    ['compras_12m', 'delta_compras_pct'],
+  gastos:     ['gastos_operativos_12m', 'delta_gastos_pct'],
+  cxc:        ['cxc_total', 'cxc_vencido', 'cxc_documentos'],
+  cxp:        ['cxp_total', 'cxp_facturas', 'cxp_proveedores'],
+  inventario: ['inventario_valor', 'inventario_articulos', 'inventario_con_stock'],
+  analisis:   ['ebitda_estimado', 'ebitda_pct', 'posicion_neta_wc', 'cobertura_cxc_cxp', 'dso', 'dpo', 'dio', 'ccc'],
+};
+const BLOQUES_POR_MODULO = {
+  ventas:   ['ventas_mensuales', 'top_lineas'],
+  compras:  ['concentracion_compras'],
+  cxc:      ['cxc_aging', 'top_clientes', 'cxc_criticas'],
+  cxp:      ['cxp_aging', 'top_proveedores_cxp'],
+  analisis: ['health', 'insights'],
+};
+
+function recortarPanel(data, rol) {
+  if (rol === 'admin') return data;
+  const kpis = {};
+  for (const [mod, keys] of Object.entries(KPIS_POR_MODULO)) {
+    if (puede(rol, mod)) keys.forEach(k => { kpis[k] = data.kpis[k]; });
+  }
+  const out = { ...data, kpis };
+  for (const [mod, keys] of Object.entries(BLOQUES_POR_MODULO)) {
+    if (!puede(rol, mod)) keys.forEach(k => { delete out[k]; });
+  }
+  return out;
+}
 
 // GET /api/dashboard
 // Executive briefing CEO-grade: KPIs, aging, YoY, márgenes, inventario, concentración, insights.
@@ -480,7 +516,7 @@ router.get('/', async (req, res) => {
     res.json({
       status: 'success',
       timestamp: new Date().toISOString(),
-      data: {
+      data: recortarPanel({
         empresa: 'Thermoplástica, S.A.',
         fecha_corte: new Date().toISOString().split('T')[0],
         periodo: P.ventana(),
@@ -582,7 +618,7 @@ router.get('/', async (req, res) => {
           saldo: parseFloat(c.saldo_total) || 0,
         })),
         insights,
-      },
+      }, req.user?.rol),
     });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });

@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('../database/connection');
 const internalToken = require('./middleware/internalToken');
 const { authenticate } = require('./middleware/auth');
+const { autorizar } = require('./middleware/permisos');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,21 +73,21 @@ app.use('/api/auth', require('./routes/auth'));
 // -----------------------------------------------------------
 // Rutas de negocio — REQUIEREN LOGIN (Bearer JWT)
 // -----------------------------------------------------------
-app.use('/api/tesoreria',                authenticate, require('./routes/tesoreria'));
-app.use('/api/compras',                  authenticate, require('./routes/compras'));
-app.use('/api/gastos',                   authenticate, require('./routes/gastos'));
-app.use('/api/inventario',               authenticate, require('./routes/inventario'));
-app.use('/api/ventas',                   authenticate, require('./routes/ventas'));
-app.use('/api/contabilidad',             authenticate, require('./routes/contabilidad'));
-app.use('/api/sat',                      authenticate, require('./routes/sat'));
-app.use('/api/analisis',                 authenticate, require('./routes/analisis'));
-app.use('/api/alertas',                  authenticate, require('./routes/alertas'));
-app.use('/api/dashboard',                authenticate, require('./routes/dashboard'));
-app.use('/api/agents',                   authenticate, require('./routes/agents'));
-app.use('/api/cierre',                   authenticate, require('./routes/cierre'));
-app.use('/api/conciliador',              authenticate, require('./routes/conciliador'));
-app.use('/api/scheduler',                authenticate, require('./routes/scheduler'));
-app.use('/api/margenes',                 authenticate, require('./routes/margenes'));
+app.use('/api/tesoreria',                authenticate, autorizar, require('./routes/tesoreria'));
+app.use('/api/compras',                  authenticate, autorizar, require('./routes/compras'));
+app.use('/api/gastos',                   authenticate, autorizar, require('./routes/gastos'));
+app.use('/api/inventario',               authenticate, autorizar, require('./routes/inventario'));
+app.use('/api/ventas',                   authenticate, autorizar, require('./routes/ventas'));
+app.use('/api/contabilidad',             authenticate, autorizar, require('./routes/contabilidad'));
+app.use('/api/sat',                      authenticate, autorizar, require('./routes/sat'));
+app.use('/api/analisis',                 authenticate, autorizar, require('./routes/analisis'));
+app.use('/api/alertas',                  authenticate, autorizar, require('./routes/alertas'));
+app.use('/api/dashboard',                authenticate, autorizar, require('./routes/dashboard'));
+app.use('/api/agents',                   authenticate, autorizar, require('./routes/agents'));
+app.use('/api/cierre',                   authenticate, autorizar, require('./routes/cierre'));
+app.use('/api/conciliador',              authenticate, autorizar, require('./routes/conciliador'));
+app.use('/api/scheduler',                authenticate, autorizar, require('./routes/scheduler'));
+app.use('/api/margenes',                 authenticate, autorizar, require('./routes/margenes'));
 
 // -----------------------------------------------------------
 // Rutas administrativas / de mantenimiento

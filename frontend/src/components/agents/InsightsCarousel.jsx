@@ -12,6 +12,7 @@ import {
   LightBulbIcon,
 } from '@heroicons/react/24/outline'
 import { useInsightsHistorico } from '../../hooks/useCfoData'
+import { useAuth } from '../../context/AuthContext'
 
 /**
  * InsightsCarousel — Carrusel horizontal con TODOS los insights del analista
@@ -47,7 +48,13 @@ const fmtQ = (v) =>
   new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', minimumFractionDigits: 0, maximumFractionDigits: 0 })
     .format(Math.abs(Number(v) || 0))
 
+// Los insights son un módulo con permiso propio: sin él, el bloque no se muestra
 export default function InsightsCarousel() {
+  const { puede } = useAuth()
+  return puede('insights') ? <InsightsCarouselContenido /> : null
+}
+
+function InsightsCarouselContenido() {
   const scroller = useRef(null)
   const { data, isLoading } = useInsightsHistorico({ limit: 100, days: 60, fuente: 'playbook' })
 

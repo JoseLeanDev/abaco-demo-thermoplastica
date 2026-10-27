@@ -23,6 +23,7 @@ import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import AgentChat from '../agents/AgentChat'
 import FiltroPeriodo from '../common/FiltroPeriodo'
+import { NOMBRE_ROL } from '../../config/permisos'
 
 const navigation = [
   { name: 'Panel', href: '/', icon: HomeIcon },
@@ -35,7 +36,14 @@ const navigation = [
   },
   { name: 'Compras', href: '/compras', icon: ShoppingCartIcon },
   { name: 'Inventario', href: '/inventario', icon: CubeIcon },
-  { name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon },
+  {
+    name: 'Tesorería', href: '/tesoreria', icon: BanknotesIcon,
+    children: [
+      { name: 'Cuentas por cobrar', href: '/tesoreria/cuentas-por-cobrar' },
+      { name: 'Cuentas por pagar', href: '/tesoreria/cuentas-por-pagar' },
+      { name: 'Proyecciones', href: '/tesoreria/proyecciones' },
+    ],
+  },
   // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
   {
     name: 'Análisis', href: '/analisis', icon: ChartBarIcon,
@@ -50,8 +58,20 @@ const navigation = [
   { name: 'Asistente IA', href: '/asistente', icon: ChatBubbleLeftRightIcon },
   { name: 'Insights de IA', href: '/insights', icon: SparklesIcon },
   { name: 'Agentes IA', href: '/log-actividades', icon: CpuChipIcon },
-  { name: 'Usuarios', href: '/usuarios', icon: UsersIcon, adminOnly: true },
+  { name: 'Usuarios', href: '/usuarios', icon: UsersIcon },
 ]
+
+// Menú según los permisos del rol: se ocultan las páginas sin acceso; si el rol no
+// puede abrir la página de una sección pero sí alguna hija (p. ej. Cobranza en
+// Tesorería → solo CxC), la sección apunta a su primera hija visible.
+function menuDelRol(puedeVer) {
+  return navigation.flatMap(item => {
+    const children = (item.children || []).filter(c => puedeVer(c.href))
+    const propia = puedeVer(item.href)
+    if (!propia && children.length === 0) return []
+    return [{ ...item, href: propia ? item.href : children[0].href, children: propia ? children : children.slice(1) }]
+  })
+}
 
 // Los subitems se muestran cuando se está en la sección (la página o una de sus hijas)
 // Una sección queda activa también en sus subpáginas (p. ej. /tesoreria/cuentas-por-cobrar)
@@ -63,7 +83,8 @@ export default function DashboardLayout({ children }) {
   const location = useLocation()
   const enSeccion = enSeccionDe(location.pathname)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, logout, isAdmin } = useAuth()
+  const { user, logout, isAdmin, puede, puedeVer } = useAuth()
+  const menu = menuDelRol(puedeVer)
 
   const handleLogout = async () => {
     await logout()
@@ -96,9 +117,7 @@ export default function DashboardLayout({ children }) {
             </div>
             
             <nav className="p-2 space-y-1">
-              {navigation
-                .filter(item => !item.adminOnly || isAdmin)
-                .map((item) => {
+              {menu.map((item) => {
                 const isActive = dentroDe(location.pathname, item.href) && !(item.children || []).some(c => dentroDe(location.pathname, c.href))
                 return (
                   <div key={item.name} className="space-y-1">
@@ -133,7 +152,7 @@ export default function DashboardLayout({ children }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-[var(--text-primary)] truncate">{user?.nombre || 'Usuario'}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{user?.rol || 'Usuario'}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{NOMBRE_ROL[user?.rol] || user?.rol}</p>
                 </div>
               </div>
               <button
@@ -160,9 +179,7 @@ export default function DashboardLayout({ children }) {
           
           {/* Navigation */}
           <nav className="flex-1 p-2 space-y-1">
-            {navigation
-              .filter(item => !item.adminOnly || isAdmin)
-              .map((item) => {
+            {menu.map((item) => {
               const isActive = dentroDe(location.pathname, item.href) && !(item.children || []).some(c => dentroDe(location.pathname, c.href))
               return (
                 <div key={item.name} className="space-y-1">
@@ -198,7 +215,7 @@ export default function DashboardLayout({ children }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-[var(--text-primary)] truncate">{user?.nombre || 'Usuario'}</p>
-                <p className="text-xs text-[var(--text-muted)]">{isAdmin ? 'Admin' : (user?.rol || 'Usuario')}</p>
+                <p className="text-xs text-[var(--text-muted)]">{NOMBRE_ROL[user?.rol] || user?.rol}</p>
               </div>
             </div>
             <button
@@ -265,7 +282,7 @@ export default function DashboardLayout({ children }) {
       </div>
       
       {/* Widget flotante: en todas las paginas menos en la pagina completa del asistente */}
-      {location.pathname !== '/asistente' && <AgentChat />}
+      {location.pathname !== '/asistente' && puede('asistente') && <AgentChat />}
     </div>
   )
 }

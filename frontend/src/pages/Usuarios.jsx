@@ -15,6 +15,8 @@ import {
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import RolCampos from '../components/usuarios/RolCampos'
+import MatrizPermisos from '../components/usuarios/MatrizPermisos'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://cfo-ai-backend-4n29.onrender.com/api'
 
@@ -29,13 +31,16 @@ export default function Usuarios() {
   const [showDelete, setShowDelete] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [message, setMessage] = useState('')
+  // Catálogo de roles, módulos y opciones de alcance (líneas, vendedores) desde /auth/roles
+  const [catalogo, setCatalogo] = useState(null)
 
   // Form nuevo usuario
   const [newUser, setNewUser] = useState({
     nombre: '',
     email: '',
     password: '',
-    rol: 'usuario'
+    rol: '',
+    alcance: {}
   })
 
   // Redirigir si no es admin
@@ -50,6 +55,10 @@ export default function Usuarios() {
   useEffect(() => {
     if (!isAdmin) return
     fetchUsuarios()
+    fetch(`${API_BASE}/auth/roles`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => d.status === 'success' && setCatalogo(d.data))
+      .catch(() => {})
   }, [isAdmin])
 
   const fetchUsuarios = async () => {
@@ -92,7 +101,7 @@ export default function Usuarios() {
       const data = await res.json()
       if (res.ok) {
         setMessage('Usuario creado exitosamente')
-        setNewUser({ nombre: '', email: '', password: '', rol: 'usuario' })
+        setNewUser({ nombre: '', email: '', password: '', rol: '', alcance: {} })
         setShowCreate(false)
         fetchUsuarios()
       } else {
@@ -119,6 +128,7 @@ export default function Usuarios() {
         body: JSON.stringify({
           nombre: showEdit.nombre,
           rol: showEdit.rol,
+          alcance: showEdit.alcance || {},
           activo: showEdit.activo
         })
       })
@@ -187,11 +197,25 @@ export default function Usuarios() {
     setActionLoading(false)
   }
 
+  const nombreRol = (rol) => catalogo?.roles.find(r => r.key === rol)?.nombre || rol
+
+  // Resumen del alcance para la tabla: "3 líneas", "Juan Pérez", "4 vendedores"
+  const resumenAlcance = (u) => {
+    const a = u.alcance || {}
+    const partes = []
+    if (a.lineas?.length) partes.push(a.lineas.length === 1 ? a.lineas[0] : `${a.lineas.length} líneas`)
+    if (a.vendedores?.length) {
+      const nombre = catalogo?.opciones.vendedores.find(v => v.valor === a.vendedores[0])?.nombre
+      partes.push(a.vendedores.length === 1 ? (nombre || a.vendedores[0]) : `${a.vendedores.length} vendedores`)
+    }
+    return partes.join(' · ')
+  }
+
   // Filtrar usuarios
   const filtered = usuarios.filter(u =>
     (u.nombre?.toLowerCase() || '').includes(search.toLowerCase()) ||
     (u.email?.toLowerCase() || '').includes(search.toLowerCase()) ||
-    (u.rol?.toLowerCase() || '').includes(search.toLowerCase())
+    (nombreRol(u.rol)?.toLowerCase() || '').includes(search.toLowerCase())
   )
 
   const getInitials = (name) => {
@@ -299,8 +323,11 @@ export default function Usuarios() {
                     <td className="px-4 py-3 text-[var(--text-secondary)]">{u.email}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRolColor(u.rol)}`}>
-                        {u.rol}
+                        {nombreRol(u.rol)}
                       </span>
+                      {resumenAlcance(u) && (
+                        <p className="text-[11px] text-[var(--text-muted)] mt-1 truncate max-w-[200px]">{resumenAlcance(u)}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${u.activo
@@ -365,6 +392,13 @@ export default function Usuarios() {
         </div>
       )}
 
+      {/* Matriz de permisos (referencia para asignar roles) */}
+      {!error && !loading && (
+        <div className="mt-6">
+          <MatrizPermisos catalogo={catalogo} />
+        </div>
+      )}
+
       {/* Loading */}
       {loading && !error && (
         <div className="flex items-center justify-center py-12">
@@ -375,7 +409,7 @@ export default function Usuarios() {
       {/* Modal: Crear Usuario */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-xl border border-[var(--border-default)] shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-xl border border-[var(--border-default)] shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
               <h3 className="font-semibold text-[var(--text-primary)]">Nuevo Usuario</h3>
               <button onClick={() => setShowCreate(false)} className="p-1 hover:bg-[var(--bg-secondary)] rounded">
@@ -415,17 +449,11 @@ export default function Usuarios() {
                   minLength={6}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Rol</label>
-                <select
-                  value={newUser.rol}
-                  onChange={(e) => setNewUser({ ...newUser, rol: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] text-sm focus:outline-none focus:ring-2 focus:ring-[#001639] bg-white"
-                >
-                  <option value="usuario">Usuario</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </div>
+              <RolCampos
+                value={newUser}
+                onChange={(v) => setNewUser({ ...newUser, ...v })}
+                catalogo={catalogo}
+              />
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -450,7 +478,7 @@ export default function Usuarios() {
       {/* Modal: Editar Usuario */}
       {showEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-xl border border-[var(--border-default)] shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-xl border border-[var(--border-default)] shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
               <h3 className="font-semibold text-[var(--text-primary)]">Editar Usuario</h3>
               <button onClick={() => setShowEdit(null)} className="p-1 hover:bg-[var(--bg-secondary)] rounded">
@@ -474,17 +502,11 @@ export default function Usuarios() {
                   {showEdit.email}
                 </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Rol</label>
-                <select
-                  value={showEdit.rol}
-                  onChange={(e) => setShowEdit({ ...showEdit, rol: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] text-sm focus:outline-none focus:ring-2 focus:ring-[#001639] bg-white"
-                >
-                  <option value="usuario">Usuario</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </div>
+              <RolCampos
+                value={showEdit}
+                onChange={(v) => setShowEdit({ ...showEdit, ...v })}
+                catalogo={catalogo}
+              />
               <div className="flex items-center gap-3 p-3 bg-[var(--bg-secondary)] rounded-lg">
                 <input
                   type="checkbox"

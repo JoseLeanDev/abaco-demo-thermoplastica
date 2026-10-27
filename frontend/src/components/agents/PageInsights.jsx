@@ -9,6 +9,7 @@ import {
   ArrowRightIcon
 } from '@heroicons/react/24/outline'
 import { useInsights, useInsightsHistorico } from '../../hooks/useCfoData'
+import { useAuth } from '../../context/AuthContext'
 
 /**
  * PageInsights — Banner distintivo de insights de IA para la cabecera de cada
@@ -53,7 +54,13 @@ const fmtQ = (v) =>
   new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', minimumFractionDigits: 0, maximumFractionDigits: 0 })
     .format(Math.abs(Number(v) || 0))
 
-export default function PageInsights({ context = 'general', vertical = null, maxInsights = 4, title: customTitle }) {
+// Los insights son un módulo con permiso propio: sin él, el bloque no se muestra
+export default function PageInsights(props) {
+  const { puede } = useAuth()
+  return puede('insights') ? <PageInsightsContenido {...props} /> : null
+}
+
+function PageInsightsContenido({ context = 'general', vertical = null, maxInsights = 4, title: customTitle }) {
   const isVertical = !!vertical
 
   // En modo vertical solo importa el histórico; el generador en tiempo real se

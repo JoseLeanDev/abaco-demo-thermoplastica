@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { puedeVerRuta } from '../config/permisos'
 
 const AuthContext = createContext(null)
 
@@ -71,7 +72,7 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const register = async (nombre, email, password, rol = 'usuario') => {
+  const register = async (nombre, email, password, rol) => {
     try {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
@@ -122,6 +123,10 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = !!user && !!token
   const isAdmin = user?.rol === 'admin'
+  const permisos = user?.permisos || {}
+  // puede('cxc') → el rol tiene ese módulo; puedeVer('/ventas') → puede abrir esa página
+  const puede = (modulo) => !!permisos[modulo]
+  const puedeVer = (pathname) => puedeVerRuta(permisos, pathname)
 
   const value = {
     user,
@@ -129,6 +134,9 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated,
     isAdmin,
+    permisos,
+    puede,
+    puedeVer,
     login,
     register,
     logout,

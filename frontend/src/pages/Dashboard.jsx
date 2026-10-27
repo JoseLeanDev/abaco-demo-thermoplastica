@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useDashboard } from '../hooks/useCfoData'
 import { usePeriodo } from '../context/PeriodoContext'
+import { useAuth } from '../context/AuthContext'
+import { NOMBRE_ROL } from '../config/permisos'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
   ComposedChart, Line, Area, ReferenceLine, Cell,
@@ -77,6 +79,8 @@ const healthColor = (grade) => {
 // ============================================================
 export default function Dashboard() {
   const { data, isLoading, error } = useDashboard()
+  // Cada bloque sale solo con su módulo (el backend ya recorta los datos que el rol no ve)
+  const { puede, user } = useAuth()
   const d = data?.data || {}
   const k = d.kpis || {}
   const h = d.health || {}
@@ -119,28 +123,37 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-fade-in max-w-[1400px]">
       {/* ============ 1. HERO EJECUTIVO ============ */}
-      <ExecutiveHero empresa={d.empresa} actualizado={actualizado} kpis={k} health={h} />
+      {puede('analisis') ? (
+        <ExecutiveHero empresa={d.empresa} actualizado={actualizado} kpis={k} health={h} />
+      ) : (
+        <div>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">{d.empresa}</h1>
+          <p className="text-sm text-[var(--text-muted)]">Panel de {NOMBRE_ROL[user?.rol] || user?.rol} · Actualizado {actualizado}</p>
+        </div>
+      )}
 
       {/* ============ 2. INSIGHTS DE IA (carrusel, debajo del hero) ============ */}
       <InsightsCarousel />
 
       {/* ============ 3. FACTURACIÓN & MARGEN — ComposedChart YoY ============ */}
-      <VentasTrendCard serie={serie} kpis={k} />
+      {puede('ventas') && <VentasTrendCard serie={serie} kpis={k} />}
 
       {/* ============ 4. CASH CONVERSION + WATERFALL P&L ============ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CashConversionCycle kpis={k} />
-        <PnlWaterfall kpis={k} />
-      </div>
+      {puede('analisis') && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <CashConversionCycle kpis={k} />
+          <PnlWaterfall kpis={k} />
+        </div>
+      )}
 
       {/* ============ 5. SEMÁFORO CARTERA VENCIDA + AGING CxC / CxP ============ */}
-      <SemaforoCxc
+      {puede('cxc') && <SemaforoCxc
         total={cxcAg.total}
         vencido={['v_1_30', 'v_31_60', 'v_61_90', 'v_90_mas'].reduce((s, key) => s + (Number(cxcAg[key]) || 0), 0)}
         link="/tesoreria/cuentas-por-cobrar"
-      />
+      />}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <AgingCard
+        {puede('cxc') && <AgingCard
           titulo="Antigüedad · Cuentas por Cobrar"
           leyenda="aging_cxc"
           tono="cobrar"
@@ -149,8 +162,8 @@ export default function Dashboard() {
           buckets={cxcAg}
           link="/tesoreria/cuentas-por-cobrar"
           linkLabel="Ver cartera"
-        />
-        <AgingCard
+        />}
+        {puede('cxp') && <AgingCard
           titulo="Antigüedad · Cuentas por Pagar"
           leyenda="aging_cxp"
           tono="pagar"
@@ -159,23 +172,23 @@ export default function Dashboard() {
           buckets={cxpAg}
           link="/tesoreria/cuentas-por-pagar"
           linkLabel="Ver CxP"
-        />
+        />}
       </div>
 
       {/* ============ 6. COMPRAS + GASTOS + INVENTARIO (3 cols) ============ */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ComprasKpiCard kpis={k} />
-        <GastosKpiCard kpis={k} />
-        <InventarioKpiCard kpis={k} />
+        {puede('compras') && <ComprasKpiCard kpis={k} />}
+        {puede('gastos') && <GastosKpiCard kpis={k} />}
+        {puede('inventario') && <InventarioKpiCard kpis={k} />}
       </div>
 
       {/* ============ 7. CONCENTRACIÓN + MIX DE PRODUCTO ============ */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="lg:col-span-3">
+        {puede('ventas') && <div className="lg:col-span-3">
           <MixLineasCard lineas={lineas} />
-        </div>
+        </div>}
         <div className="lg:col-span-2 space-y-4">
-          <ConcentracionCard
+          {puede('cxc') && <ConcentracionCard
             titulo="Top clientes deudores (CxC)"
             leyenda="top_deudores"
             icono={UsersIcon}
@@ -184,8 +197,8 @@ export default function Dashboard() {
             alertaPct={20}
             linkTo="/tesoreria/cuentas-por-cobrar"
             variant="rose"
-          />
-          <ConcentracionCard
+          />}
+          {puede('cxp') && <ConcentracionCard
             titulo="Top proveedores por pagar"
             leyenda="top_proveedores_cxp"
             icono={TruckIcon}
@@ -194,7 +207,7 @@ export default function Dashboard() {
             alertaPct={25}
             linkTo="/tesoreria/cuentas-por-pagar"
             variant="indigo"
-          />
+          />}
         </div>
       </div>
 
@@ -241,7 +254,7 @@ export default function Dashboard() {
       )}
 
       {/* ============ Footer metodológica ============ */}
-      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 text-xs text-[var(--text-muted)] leading-relaxed">
+      {puede('analisis') && <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 text-xs text-[var(--text-muted)] leading-relaxed">
         <p>
           <SparklesIcon className="w-4 h-4 inline mr-1 -mt-0.5" />
           <strong>Notas metodológicas.</strong> Ventas y márgenes al nivel línea × factura. Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras; las otras líneas conservan el costo del ERP.
@@ -251,7 +264,7 @@ export default function Dashboard() {
           CxP = saldo pendiente × factura con fecha de vencimiento real del ERP. DSO/DIO/DPO y el ciclo de caja usan el mismo cálculo que Análisis: lo que deben los clientes / se debe a proveedores hoy (sin facturas vencidas hace más de 90 días) ÷ ventas / compras promedio de un día del período. Health Score compone 7 dimensiones con pesos (crecimiento 20%, margen 20%, EBITDA 15%, cobertura CxC/CxP 15%, cobros 10%, concentración 10%, disciplina crédito 10%).
           Sincronización diaria via n8n · Datos al {d.fecha_corte}.
         </p>
-      </div>
+      </div>}
     </div>
   )
 }
