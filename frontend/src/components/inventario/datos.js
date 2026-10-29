@@ -6,6 +6,7 @@ import { NIVELES_PRODUCTO } from '../ventas/FiltroProducto'
 export const CLASES = [
   { id: 'producto',       label: 'Producto terminado', corto: 'Producto',       color: '#001639' },
   { id: 'materia_prima',  label: 'Materia prima',      corto: 'Materia prima',  color: '#3b82f6' },
+  { id: 'consumo',        label: 'Consumo / gasto',    corto: 'Consumo / gasto', color: '#f59e0b' },
   { id: 'sin_movimiento', label: 'Sin trazabilidad',   corto: 'Sin trazabilidad', color: '#94a3b8' },
 ]
 export const CLASE = Object.fromEntries(CLASES.map(c => [c.id, c]))

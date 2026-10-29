@@ -103,7 +103,7 @@ export default function VentasCompras() {
     { label: 'Unidades vendidas', get: i => i.ventas_uds },
     { label: 'Δ inventario (unidades)', get: i => i.delta_uds },
     { label: `Δ inventario (unidades) ${d.anio - 1}`, get: i => i.delta_uds_prev ?? '' },
-    { label: 'Compra materia prima que no se vende', get: i => (i.transforma ? 'Sí' : '') },
+    { label: 'Compra sobre todo materia prima', get: i => (i.transforma ? 'Sí' : '') },
     { label: `Vendido ${d.anio - 1}`, get: i => i.ventas_prev ?? '' },
     { label: `Comprado ${d.anio - 1}`, get: i => i.compras_prev ?? '' },
   ], items)
@@ -249,7 +249,7 @@ export default function VentasCompras() {
                               </div>
                             )}
                           </td>
-                          <td className={`${td} text-right tabular-nums`} title={i.transforma ? 'Lo comprado es sobre todo materia prima que no se vende tal cual (p. ej. resina en kg vs piezas vendidas): el delta mezcla unidades distintas' : undefined}>
+                          <td className={`${td} text-right tabular-nums`} title={i.transforma ? 'Lo comprado es sobre todo materia prima (Tipo Uso del ERP) (p. ej. resina en kg vs piezas vendidas): el delta mezcla unidades distintas' : undefined}>
                             <p className={`font-semibold ${i.transforma ? 'text-[var(--text-muted)]' : i.delta_uds > 0 ? 'text-amber-700' : i.delta_uds < 0 ? 'text-[var(--success)]' : ''}`}>{fmtDelta(i.delta_uds)}</p>
                             <p className="text-[11px] text-[var(--text-muted)]">{fmtInt(i.compras_uds)} comp. − {fmtInt(i.ventas_uds)} vend.</p>
                             {i.transforma
@@ -271,7 +271,7 @@ export default function VentasCompras() {
               <p><strong>Cómo leerlo.</strong> Vendido y comprado son montos sin IVA de las facturas del ERP. "Compra / venta" = comprado ÷ vendido: arriba de 100% se compró más de lo que se vendió en esa categoría.</p>
               <p>Las categorías que se fabrican (como Soplado y Termoformado) venden mucho y casi no compran: su materia prima, por ejemplo el polietileno, se compra bajo <em>Materia Prima (Insumos)</em>. Por eso conviene leerlas junto con esa categoría, o mirar el total.</p>
               <p>"Costo de lo vendido" es lo que costó la mercadería vendida. Si se compra más que eso, el dinero se queda en inventario.</p>
-              <p>"Δ inventario (uds.)" = unidades compradas − unidades vendidas en el tramo, en la unidad de medida del ERP de cada artículo. Positivo: entraron más unidades de las que salieron vendidas (el inventario creció); negativo: se vendió más de lo que se compró (salió de inventario o de producción propia). Las filas marcadas <em>incluye materia prima</em> compran sobre todo artículos que no se venden tal cual (resina, rollos madre), así que comparan unidades distintas: úsalo como referencia, no como existencia exacta.</p>
+              <p>"Δ inventario (uds.)" = unidades compradas − unidades vendidas en el tramo, en la unidad de medida del ERP de cada artículo. Positivo: entraron más unidades de las que salieron vendidas (el inventario creció); negativo: se vendió más de lo que se compró (salió de inventario o de producción propia). Las filas marcadas <em>incluye materia prima</em> compran sobre todo materia prima según el Tipo Uso del ERP (resina, rollos madre), así que comparan unidades distintas: úsalo como referencia, no como existencia exacta.</p>
             </div>
           </div>
         </>

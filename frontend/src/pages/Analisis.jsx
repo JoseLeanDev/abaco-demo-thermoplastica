@@ -209,6 +209,7 @@ function CicloCaja({ ciclo, mensual }) {
 const CLASES = [
   { id: 'materia_prima', nombre: 'Materia prima' },
   { id: 'producto', nombre: 'Producto' },
+  { id: 'consumo', nombre: 'Consumo / gasto' },
   { id: 'sin_movimiento', nombre: 'Sin trazabilidad' },
 ]
 const ESTADOS = [

@@ -592,7 +592,7 @@ export const LEYENDAS = {
         <li><strong>Negativo:</strong> se vendió más de lo que se compró; salió de inventario o de producción propia.</li>
       </L>
       Debajo, las unidades compradas y vendidas, y el delta del mismo tramo del año anterior.
-      <Nota>“Incluye materia prima” = más de la mitad de lo comprado son artículos que no se venden tal cual (resina, rollos madre), así que compara unidades distintas (p. ej. kilos contra piezas). Úsalo como referencia, no como existencia exacta.</Nota>
+      <Nota>“Incluye materia prima” = más de la mitad de lo comprado es materia prima según el Tipo Uso del ERP (resina, rollos madre), así que compara unidades distintas (p. ej. kilos contra piezas). Úsalo como referencia, no como existencia exacta.</Nota>
     </>,
   },
   costo_vendido: {
@@ -620,7 +620,10 @@ export const LEYENDAS = {
   },
   inv_tipo_articulo: {
     titulo: 'Tipo de artículo',
-    texto: <>Producto: venta directa observada. Materia prima / insumo: compras sin venta directa registrada. Sin trazabilidad: sin compras/ventas en las fuentes disponibles. La relación insumo-producto transformado todavía no está expuesta.</>,
+    texto: <>
+      Según el campo “Tipo Uso” de la ficha del artículo en el ERP: <strong>Materia prima</strong>, <strong>Producto terminado</strong> o <strong>Consumo / gasto</strong> (servicios y consumibles).
+      <Nota>Si un artículo no tiene Tipo Uso, se deduce: producto si se ha vendido, materia prima si solo se ha comprado, sin trazabilidad si no tiene compras ni ventas.</Nota>
+    </>,
   },
   inv_salida: {
     titulo: 'Salida comercial del período',
@@ -986,7 +989,10 @@ export const LEYENDAS = {
   },
   tipo: {
     titulo: 'Tipo de inventario',
-    texto: <>Producto: tiene venta directa en los registros disponibles. Materia prima / insumo: tiene compras sin venta directa registrada; es una clasificación por actividad, pendiente de relacionar con producción. Sin trazabilidad: sin compras ni ventas en las fuentes disponibles; puede tener transformación no expuesta.</>,
+    texto: <>
+      Según el campo “Tipo Uso” de la ficha del artículo en el ERP: <strong>Materia prima</strong>, <strong>Producto terminado</strong> o <strong>Consumo / gasto</strong> (servicios y consumibles).
+      <Nota>Si un artículo no tiene Tipo Uso, se deduce: producto si se ha vendido, materia prima si solo se ha comprado, sin trazabilidad si no tiene compras ni ventas.</Nota>
+    </>,
   },
   antiguedad: {
     titulo: 'Tiempo desde la última venta directa',

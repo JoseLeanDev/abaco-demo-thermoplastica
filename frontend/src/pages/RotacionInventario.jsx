@@ -43,8 +43,8 @@ const NIVELES = [
   { dim: 'sublinea',     singular: 'Sublínea',     plural: 'Sublíneas' },
   { dim: 'articulo',     singular: 'Artículo',     plural: 'Artículos' },
 ]
-const CLASES = { producto: 'Producto terminado', materia_prima: 'Materia prima', sin_movimiento: 'Sin trazabilidad' }
-const TIPOS = [['', 'Todo'], ['producto', 'Producto terminado'], ['materia_prima', 'Materia prima'], ['sin_movimiento', 'Sin trazabilidad']]
+const CLASES = { producto: 'Producto terminado', materia_prima: 'Materia prima', consumo: 'Consumo / gasto', sin_movimiento: 'Sin trazabilidad' }
+const TIPOS = [['', 'Todo'], ['producto', 'Producto terminado'], ['materia_prima', 'Materia prima'], ['consumo', 'Consumo / gasto'], ['sin_movimiento', 'Sin trazabilidad']]
 const TRAMOS = [
   { id: 'd30',        nombre: '≤ 1 mes',     color: '#059669' },
   { id: 'd60',        nombre: '1–2 meses',   color: '#22c55e' },

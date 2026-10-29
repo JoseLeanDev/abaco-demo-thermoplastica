@@ -40,7 +40,7 @@ const ESTADOS = {
   por_validar:  { nombre: 'Consumo por validar', color: '#64748b', ayuda: 'Sin salidas de producción disponibles; no se infiere consumo por las compras' },
   inmovilizado: { nombre: 'Inmovilizado', color: '#DC2626', ayuda: 'Artículo con venta directa registrada y sin venta comercial en 180 días' },
 }
-const CLASES = { materia_prima: 'Materia prima', producto: 'Producto', sin_movimiento: 'Sin trazabilidad' }
+const CLASES = { materia_prima: 'Materia prima', producto: 'Producto', consumo: 'Consumo / gasto', sin_movimiento: 'Sin trazabilidad' }
 const TRAMOS = [
   { id: '0_90',         nombre: '≤ 3 meses',   color: '#059669' },
   { id: '91_180',       nombre: '3–6 meses',   color: '#84cc16' },

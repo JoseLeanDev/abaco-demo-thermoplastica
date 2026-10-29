@@ -949,7 +949,7 @@ router.get('/inventario-quieto', async (req, res) => {
     ];
 
     const porClase = [];
-    for (const clase of ['materia_prima', 'producto', 'sin_movimiento']) {
+    for (const clase of ['materia_prima', 'producto', 'consumo', 'sin_movimiento']) {
       for (const estado of ['activo', 'lento', 'inmovilizado', 'por_validar']) {
         const rs = filas.filter(r => r.clase === clase && r.estado === estado);
         if (rs.length) porClase.push({ clase, estado, articulos: rs.length, valor: Math.round(rs.reduce((s, r) => s + r.valor, 0)) });
@@ -1048,7 +1048,8 @@ async function salidaPorArticulo(db, P) {
         ${limpio('a.sublinea', 'Sin sublínea')}  AS sublinea,
         COALESCE(v.cogs, 0) AS cogs, COALESCE(v.cogs_prev, 0) AS cogs_prev, COALESCE(v.ventas, 0) AS ventas,
         COALESCE(v.alguna_venta, false) AS alguna_venta,
-        COALESCE(c.compras, 0) AS compras, COALESCE(c.compras_prev, 0) AS compras_prev
+        COALESCE(c.compras, 0) AS compras, COALESCE(c.compras_prev, 0) AS compras_prev,
+        thermoplastica.clase_tipo_uso(a.tipo_uso) AS clase_erp
       FROM thermoplastica.dim_articulo a
       LEFT JOIN v ON v.articulo_id = a.articulo_id
       LEFT JOIN c ON c.articulo_id = a.articulo_id
@@ -1152,13 +1153,13 @@ router.get('/rotacion-inventario', async (req, res) => {
         articulo_id: Number(f.articulo_id),
         cogs: Number(f.cogs) || 0, cogs_prev: Number(f.cogs_prev) || 0,
         compras: Number(f.compras) || 0, compras_prev: Number(f.compras_prev) || 0,
-        ventas: Number(f.ventas) || 0, alguna_venta: f.alguna_venta,
+        ventas: Number(f.ventas) || 0, alguna_venta: f.alguna_venta, clase_erp: f.clase_erp,
       });
       porCodigo.set(f.codigo_articulo, r);
     }
     let filas = [...porCodigo.values()].map(r => {
-      // Misma clasificación que capital inmovilizado; sin stock hoy, se deduce de la historia
-      const clase = r.clase || (r.alguna_venta ? 'producto' : r.compras > 0 || r.compras_prev > 0 ? 'materia_prima' : 'sin_movimiento');
+      // Misma clasificación que capital inmovilizado: Tipo Uso del ERP; sin él, se deduce de la historia
+      const clase = r.clase || r.clase_erp || (r.alguna_venta ? 'producto' : r.compras > 0 || r.compras_prev > 0 ? 'materia_prima' : 'sin_movimiento');
       const inventario = base.usa_inventario_hoy ? r.inventario_hoy : (promedio.get(r.articulo_id) || 0);
       const salida = clase === 'producto' ? r.cogs : null;
       const salida_prev = clase === 'producto' ? r.cogs_prev : null;
@@ -1176,7 +1177,7 @@ router.get('/rotacion-inventario', async (req, res) => {
         return palabras.every(p => texto.includes(p));
       });
     }
-    const tipo = ['producto', 'materia_prima', 'sin_movimiento'].includes(req.query.tipo) ? req.query.tipo : null;
+    const tipo = ['producto', 'materia_prima', 'consumo', 'sin_movimiento'].includes(req.query.tipo) ? req.query.tipo : null;
     if (tipo) filas = filas.filter(r => r.clase === tipo);
 
     const anual = 365 / P.dias;
@@ -1184,7 +1185,7 @@ router.get('/rotacion-inventario', async (req, res) => {
     totales.cogs_variacion_pct = totales.cogs_prev > 0 ? Math.round((totales.cogs / totales.cogs_prev - 1) * 1000) / 10 : null;
 
     // Por tipo de artículo
-    const porTipo = ['producto', 'materia_prima', 'sin_movimiento']
+    const porTipo = ['producto', 'materia_prima', 'consumo', 'sin_movimiento']
       .map(c => ({ clase: c, ...resumirRot(filas.filter(r => r.clase === c), anual) }))
       .filter(t => t.inventario > 0 || t.salida > 0);
 
@@ -1376,8 +1377,9 @@ router.get('/ventas-vs-compras', async (req, res) => {
                  SUM(f.total_sin_iva) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS compras_prev,
                  SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enAct('f.fecha_emision')})  AS compras_uds,
                  SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enPrev('f.fecha_emision')}) AS compras_uds_prev,
-                 -- unidades de artículos que nunca se han vendido (materia prima / insumos que se transforman)
-                 SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enAct('f.fecha_emision')} AND vd.articulo_id IS NULL) AS compras_uds_mp
+                 -- unidades de materia prima: Tipo Uso del ERP; sin él, artículos que nunca se han vendido
+                 SUM(f.unidades - COALESCE(f.unidades_dev, 0)) FILTER (WHERE ${enAct('f.fecha_emision')} AND COALESCE(
+                   thermoplastica.clase_tipo_uso(a.tipo_uso) = 'materia_prima', vd.articulo_id IS NULL)) AS compras_uds_mp
           FROM thermoplastica.fact_compras_linea f
           JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
           LEFT JOIN vendidos vd ON vd.articulo_id = f.articulo_id

@@ -395,7 +395,7 @@ router.get('/analitica', async (req, res) => {
                COALESCE(s.precio_venta_1, 0) AS precio,
                CASE WHEN s.stock_actual > 0 THEN COALESCE(s.valor_inventario, 0) ELSE 0 END AS valor,
                ${margenInventario('s.articulo_id','s.margen_bruto_pct',P)} AS margen,
-               sa.clase, sa.estado,
+               sa.clase, sa.estado, thermoplastica.clase_tipo_uso(a.tipo_uso) AS clase_erp,
                COALESCE(v.ventas, 0) AS ventas, COALESCE(v.unidades, 0) AS unidades_vendidas, COALESCE(v.cogs, 0) AS cogs,
                COALESCE(v.ventas_90, 0) AS ventas_90, COALESCE(v.meses_venta_6m, 0) AS meses_venta_6m, v.ultima_venta,
                COALESCE(c.compras, 0) AS compras, COALESCE(c.unidades, 0) AS unidades_compradas,
@@ -425,8 +425,8 @@ router.get('/analitica', async (req, res) => {
     const diasDesde = (d) => (d ? Math.floor((hoy - new Date(d).getTime()) / 86400000) : null);
     const filas = rows.map(r => {
       const ventas = num(r.ventas), compras = num(r.compras);
-      // Sin stock hoy la vista de salud no trae clase: se deduce de la historia
-      const clase = r.clase || (r.ultima_venta ? 'producto' : r.ultima_compra ? 'materia_prima' : 'sin_movimiento');
+      // Sin stock hoy la vista de salud no trae clase: Tipo Uso del ERP; sin él, se deduce de la historia
+      const clase = r.clase || r.clase_erp || (r.ultima_venta ? 'producto' : r.ultima_compra ? 'materia_prima' : 'sin_movimiento');
       const salida = clase === 'producto' ? num(r.cogs) : null;
       const salida90 = clase === 'producto' ? num(r.ventas_90) : 0;
       const meses6m = parseInt(clase === 'producto' ? r.meses_venta_6m : r.meses_compra_6m) || 0;
