@@ -465,9 +465,14 @@ router.get('/cxc/cliente/:id', async (req, res) => {
           (CURRENT_DATE - s.fecha_vencimiento)::int AS dias_vencido,
           s.saldo_total, s.porvencer, s.vencido, s.v30, s.v31a60, s.v61a90, s.v91a120, s.v120,
           fac.valor, ${fecha('fac.fecha_ultimo_cobro')} AS ultimo_abono,
-          suc.nombre AS sucursal, ven.nombre AS vendedor, ${fecha('s.fecha_snapshot')} AS corte
+          suc.nombre AS sucursal, ven.nombre AS vendedor, ${fecha('s.fecha_snapshot')} AS corte, fel.fel
         FROM thermoplastica.fact_cxc_snapshot_diario s
         LEFT JOIN thermoplastica.fact_cxc_factura fac ON fac.cliente_id = s.cliente_id AND fac.factura_num = s.documento
+        -- Número FEL (serie-número del DTE) desde las líneas de venta
+        LEFT JOIN LATERAL (
+          SELECT v.fel FROM thermoplastica.fact_ventas_linea v
+          WHERE v.cliente_id = s.cliente_id AND v.fact_num = s.documento AND v.fel IS NOT NULL LIMIT 1
+        ) fel ON true
         LEFT JOIN thermoplastica.dim_sucursal suc ON suc.sucursal_id = s.sucursal_id
         LEFT JOIN thermoplastica.dim_vendedor ven ON ven.vendedor_id = s.vendedor_id
         WHERE s.cliente_id = $1 AND s.fecha_snapshot = ${SNAP_MAX}
@@ -659,6 +664,7 @@ router.get('/cxc/cliente/:id', async (req, res) => {
         estado_cuenta: docs.map(d => ({
           documento: d.documento,
           tipo_documento: d.tipo_documento,
+          fel: d.fel || null,
           fecha_emision: d.fecha_emision,
           fecha_vencimiento: d.fecha_vencimiento,
           dias_vencido: d.dias_vencido,

@@ -12,7 +12,7 @@ import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
-import { exportarExcelFilas } from '../services/excel'
+import { descargarEstadoCuentaExcel } from '../services/estadoCuentaExcel'
 
 // Ficha de un cliente: estado de cuenta, cómo paga y qué compra.
 
@@ -94,7 +94,7 @@ export default function ClienteCxc() {
             <PeriodoActivo nota="el saldo es al último corte; pagos y compras son del período" className="mt-1" />
           </div>
         </div>
-        <button onClick={() => descargarEstadoCuenta(d)} className="btn-secondary flex items-center gap-2 text-sm" disabled={!d.estado_cuenta.length}>
+        <button onClick={() => descargarEstadoCuentaExcel(d)} className="btn-secondary flex items-center gap-2 text-sm" disabled={!d.estado_cuenta.length}>
           <ArrowDownTrayIcon className="w-4 h-4" />
           Estado de cuenta (Excel)
         </button>
@@ -721,29 +721,4 @@ function MiniDato({ titulo, leyenda, valor, prev }) {
       {prev !== null && <p className="text-xs text-[var(--text-muted)] mt-0.5">año ant. {prev}</p>}
     </div>
   )
-}
-
-// ------------------------------------------------------------------
-// Estado de cuenta en Excel
-// ------------------------------------------------------------------
-function descargarEstadoCuenta(d) {
-  const { cliente: c, estado_cuenta: docs, saldo } = d
-  const n = (v) => (v === null || v === undefined ? '' : Number(v).toFixed(2))
-  const filas = [
-    [`Estado de cuenta — ${c.nombre} (código ${c.codigo})`],
-    [`Corte del reporte de cartera: ${saldo.corte || ''}`],
-    [],
-    ['Documento', 'Emisión', 'Vencimiento', 'Valor', 'Abonado', 'Saldo', 'Días vencido', 'Último abono', 'Vendedor'],
-    ...docs.map(x => [
-      `${x.tipo_documento} ${x.documento}`, x.fecha_emision, x.fecha_vencimiento, n(x.valor), n(x.abonado), n(x.saldo),
-      x.dias_vencido > 0 ? x.dias_vencido : 0, x.ultimo_abono || '', x.vendedor || '',
-    ]),
-    [],
-    ['Total', '', '', '', '', n(saldo.total)],
-    ['Vencido', '', '', '', '', n(saldo.vencido)],
-  ]
-  const ultima = filas.length - 1
-  exportarExcelFilas(`estado-de-cuenta-${c.codigo}-${saldo.corte || 'hoy'}.xlsx`, filas, {
-    hoja: 'Estado de cuenta', negritas: [0, 3, ultima - 1, ultima],
-  })
 }

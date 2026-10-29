@@ -67,19 +67,6 @@ export async function exportarExcel(nombre, columnas, filas, { hoja = 'Datos' } 
   await descargar(wb, nombre)
 }
 
-// Documento libre (p. ej. estado de cuenta): arreglo de filas; `negritas` = índices en negrita.
-export async function exportarExcelFilas(nombre, filas, { hoja = 'Datos', negritas = [] } = {}) {
-  const { default: ExcelJS } = await import('exceljs')
-  const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet(hoja.slice(0, 31))
-  escribir(ws, filas, [], 1, i => negritas.includes(i))
-  // Anchos solo con las filas de tabla: un título de una celda no debe ensanchar la columna A
-  const anchos = []
-  filas.filter(f => f.length > 1).forEach(f => f.forEach((v, j) => { anchos[j] = Math.max(anchos[j] || 0, String(v ?? '').length) }))
-  ajustarAnchos(ws, anchos)
-  await descargar(wb, nombre)
-}
-
 // Trae todas las páginas de un endpoint paginado (limit máx. 1000 en el backend).
 export async function traerTodo(fn, params, { pagina = 1000, max = 50000 } = {}) {
   const filas = []
