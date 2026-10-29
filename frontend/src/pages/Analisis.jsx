@@ -235,7 +235,7 @@ function CapitalInmovilizado({ inventario, ciclo }) {
       fila[e.id] = sumar(inventario.por_clase_estado.filter(r => r.clase === c.id && r.estado === e.id))
     })
     return fila
-  })
+  }).filter(f => ESTADOS.some(e => f[e.id] > 0)) // sin barras vacías (p. ej. sin trazabilidad = 0)
   const inmov = sumar(inventario.por_clase_estado.filter(r => r.estado === 'inmovilizado'))
   const lento = sumar(inventario.por_clase_estado.filter(r => r.estado === 'lento'))
 
