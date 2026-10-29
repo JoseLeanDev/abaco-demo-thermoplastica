@@ -12,7 +12,7 @@ import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
-import { descargarEstadoCuentaExcel } from '../services/estadoCuentaExcel'
+import { descargarEstadoCuentaPdf } from '../services/estadoCuentaPdf'
 
 // Ficha de un cliente: estado de cuenta, cómo paga y qué compra.
 
@@ -94,9 +94,9 @@ export default function ClienteCxc() {
             <PeriodoActivo nota="el saldo es al último corte; pagos y compras son del período" className="mt-1" />
           </div>
         </div>
-        <button onClick={() => descargarEstadoCuentaExcel(d)} className="btn-secondary flex items-center gap-2 text-sm" disabled={!d.estado_cuenta.length}>
+        <button onClick={() => descargarEstadoCuentaPdf(d)} className="btn-secondary flex items-center gap-2 text-sm" disabled={!d.estado_cuenta.length}>
           <ArrowDownTrayIcon className="w-4 h-4" />
-          Estado de cuenta (Excel)
+          Estado de cuenta (PDF)
         </button>
       </div>
 
