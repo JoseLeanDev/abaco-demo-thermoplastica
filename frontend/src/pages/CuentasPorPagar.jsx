@@ -32,6 +32,18 @@ const fmtDate = (d) => {
   return String(d).slice(0, 10)
 }
 
+// Nombre del proveedor que abre su ficha
+const NombreProveedor = ({ id, nombre, className = 'max-w-[240px]' }) => (
+  <Link
+    to={`/tesoreria/cuentas-por-pagar/proveedor/${id}`}
+    onClick={(e) => e.stopPropagation()}
+    title="Ver ficha del proveedor"
+    className={`block font-medium truncate hover:underline hover:text-[var(--accent-blue)] ${className}`}
+  >
+    {nombre}
+  </Link>
+)
+
 const badgeForDias = (dias) => {
   if (dias <= 0)  return { label: 'Vigente',        color: 'badge-success', icon: CheckCircleIcon }
   if (dias <= 30) return { label: `${dias}d`,       color: 'badge-warning', icon: ClockIcon }
@@ -221,7 +233,7 @@ export default function CuentasPorPagar() {
                     onClick={() => setProveedor(p.codigo === proveedorSel ? '' : p.codigo)}
                   >
                     <td className="py-2 pr-2">
-                      <p className="font-medium truncate max-w-[240px]">{p.proveedor}</p>
+                      <NombreProveedor id={p.proveedor_id} nombre={p.proveedor} />
                       <p className="text-xs text-[var(--text-muted)]">
                         {p.codigo}
                         {p.facturas_vencidas > 0 && (
@@ -238,6 +250,7 @@ export default function CuentasPorPagar() {
                 ))}
               </tbody>
             </table>
+            <p className="mt-3 text-xs text-[var(--text-muted)]">Clic en la fila filtra la tabla de abajo; clic en el nombre abre la ficha del proveedor.</p>
             {proveedorSel && (
               <button
                 onClick={() => setProveedor('')}
@@ -273,7 +286,7 @@ export default function CuentasPorPagar() {
                     <tr key={`${p.numero_interno}-${i}`} className="text-sm hover:bg-[var(--bg-secondary)]">
                       <td className="py-2 pr-2 tabular-nums text-[var(--text-secondary)]">{fmtDate(p.fecha_vencimiento)}</td>
                       <td className="py-2 pr-2">
-                        <p className="font-medium truncate max-w-[220px]">{p.proveedor}</p>
+                        <NombreProveedor id={p.proveedor_id} nombre={p.proveedor} className="max-w-[220px]" />
                         <p className="text-xs text-[var(--text-muted)]">#{p.numero_interno}</p>
                       </td>
                       <td className={`py-2 text-right tabular-nums font-semibold ${
@@ -368,7 +381,7 @@ export default function CuentasPorPagar() {
                           <BuildingOfficeIcon className="w-4 h-4 text-[var(--text-muted)]" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-[var(--text-primary)] truncate max-w-[240px]">{row.proveedor}</p>
+                          <NombreProveedor id={row.proveedor_id} nombre={row.proveedor} />
                           <p className="text-xs text-[var(--text-muted)]">
                             {row.codigo_proveedor}
                             {row.sucursal && ` · ${row.sucursal}`}

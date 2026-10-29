@@ -4,6 +4,7 @@ const db = require('../../database/connection');
 const proyecciones = require('../services/proyecciones');
 const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
+const { TIPO_EXPR, TIPOS } = require('../services/tipoCompra');
 
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
@@ -768,6 +769,7 @@ router.get('/cxp', async (req, res) => {
     // Próximos pagos por fecha_vencimiento real en los próximos N días
     const proximos = await db.allAsync(`
       SELECT
+        p.proveedor_id,
         p.nombre                       AS proveedor,
         p.codigo_proveedor             AS codigo,
         f.numero_interno,
@@ -790,6 +792,7 @@ router.get('/cxp', async (req, res) => {
     // Top proveedores por CxP
     const topProveedores = await db.allAsync(`
       SELECT
+        p.proveedor_id,
         p.nombre                              AS proveedor,
         p.codigo_proveedor                    AS codigo,
         COUNT(*)                              AS facturas,
@@ -800,7 +803,7 @@ router.get('/cxp', async (req, res) => {
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE f.saldo > 0
         AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
-      GROUP BY p.nombre, p.codigo_proveedor
+      GROUP BY p.proveedor_id, p.nombre, p.codigo_proveedor
       ORDER BY monto DESC
       LIMIT 10
     `);
@@ -826,6 +829,7 @@ router.get('/cxp', async (req, res) => {
           v_90_mas:   { monto: parseFloat(aging.v_90_mas)   || 0, porcentaje: pct(aging.v_90_mas) },
         },
         proximos_pagos: proximos.map(p => ({
+          proveedor_id: parseInt(p.proveedor_id),
           proveedor: p.proveedor,
           codigo: p.codigo,
           numero_interno: p.numero_interno,
@@ -837,6 +841,7 @@ router.get('/cxp', async (req, res) => {
           dias_restantes: parseInt(p.dias_restantes) || 0,
         })),
         top_proveedores: topProveedores.map(p => ({
+          proveedor_id: parseInt(p.proveedor_id),
           proveedor: p.proveedor,
           codigo: p.codigo,
           facturas: parseInt(p.facturas) || 0,
@@ -888,6 +893,7 @@ router.get('/cxp/detalle', async (req, res) => {
     const rows = await db.allAsync(`
       SELECT
         f.factura_pk                              AS id,
+        p.proveedor_id,
         p.codigo_proveedor                        AS codigo_proveedor,
         p.nombre                                  AS proveedor,
         p.rif                                     AS rif,
@@ -929,6 +935,7 @@ router.get('/cxp/detalle', async (req, res) => {
         suma_saldo: parseFloat(totalRow.suma_saldo) || 0,
         filas: rows.map(r => ({
           id: parseInt(r.id),
+          proveedor_id: parseInt(r.proveedor_id),
           codigo_proveedor: r.codigo_proveedor,
           proveedor: r.proveedor,
           rif: r.rif,
@@ -947,6 +954,358 @@ router.get('/cxp/detalle', async (req, res) => {
           estado: r.estado,
           fecha_ultimo_pago: r.fecha_ultimo_pago,
         })),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// GET /api/tesoreria/cxp/proveedor/:id
+// Ficha de un proveedor: estado de cuenta, cómo le pagamos y qué le compramos.
+//
+// Fuentes:
+// - Saldo y antigüedad: fact_cxp_factura con saldo > 0, TODOS los documentos
+//   abiertos sin importar el período. El saldo ya viene depurado (cxp_depuracion):
+//   importaciones pagadas fuera del documento y retenciones no aplicadas en el ERP.
+// - Cómo le pagamos: facturas con saldo 0 y fecha_ultimo_pago (historia desde
+//   sep-2024; incluye las que quedaron en 0 por depuración de residuos). Las
+//   importaciones depuradas sin ningún pago registrado no tienen fecha y no cuentan. Días de pago = último pago − emisión; atraso = último pago −
+//   vencimiento; ponderados por valor. Se miden las facturas que terminamos de
+//   pagar dentro del período (y el mismo rango del año anterior).
+// - Compras: fact_compras_linea (sin IVA, mismo criterio que la página Compras).
+const SQL_PAGOS_PROV = (desde, hasta) => `
+  SELECT
+    COUNT(*)                                                                 AS facturas,
+    COALESCE(SUM(valor), 0)                                                  AS monto,
+    SUM(valor * GREATEST(fecha_ultimo_pago - fecha_emision, 0)) / NULLIF(SUM(valor), 0) AS dias_pago,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY GREATEST(fecha_ultimo_pago - fecha_emision, 0)) AS dias_pago_mediana,
+    SUM(valor * (fecha_ultimo_pago - fecha_vencimiento)) / NULLIF(SUM(valor), 0) AS atraso,
+    COALESCE(SUM(valor) FILTER (WHERE fecha_ultimo_pago <= fecha_vencimiento), 0) / NULLIF(SUM(valor), 0) * 100 AS pct_a_tiempo,
+    SUM(valor * (fecha_vencimiento - fecha_emision)) / NULLIF(SUM(valor), 0) AS plazo,
+    MAX(fecha_ultimo_pago - fecha_vencimiento)                               AS peor_atraso
+  FROM thermoplastica.fact_cxp_factura
+  WHERE proveedor_id = $1 AND saldo = 0 AND fecha_ultimo_pago IS NOT NULL
+    AND fecha_ultimo_pago BETWEEN ${desde} AND ${hasta}`;
+
+const SQL_COMPRAS_PROV = (desde, hasta) => `
+  SELECT
+    COALESCE(SUM(total_sin_iva), 0)   AS compras,
+    COUNT(DISTINCT fact_num)          AS facturas,
+    COALESCE(SUM(unidades), 0)        AS unidades
+  FROM thermoplastica.fact_compras_linea
+  WHERE proveedor_id = $1 AND fecha_emision BETWEEN ${desde} AND ${hasta}`;
+
+const comprasProv = (r) => ({
+  compras: num(r.compras) || 0,
+  facturas: parseInt(r.facturas) || 0,
+  unidades: num(r.unidades) || 0,
+  ticket: parseInt(r.facturas) ? (num(r.compras) || 0) / parseInt(r.facturas) : 0,
+});
+
+router.get('/cxp/proveedor/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ status: 'error', message: 'Proveedor inválido' });
+    const P = parsePeriodo(req);
+    const p = [id];
+
+    const info = await db.getAsync(`
+      SELECT proveedor_id, codigo_proveedor, ${NOMBRE_LIMPIO('nombre')} AS nombre, rif
+      FROM thermoplastica.dim_proveedor WHERE proveedor_id = $1`, p);
+    if (!info) return res.status(404).json({ status: 'error', message: 'Proveedor no encontrado' });
+
+    const [
+      relacion, plazoFicha, docs, pagAct, pagPrev, histPagadas,
+      serie, comprasAct, comprasPrev, frecuencia, ultimas, productos, categorias, tipos,
+    ] = await Promise.all([
+      // Primera / última compra y sucursal principal (últimos 12 meses)
+      db.getAsync(`
+        SELECT ${fecha('MIN(f.fecha_emision)')} AS primera_compra, ${fecha('MAX(f.fecha_emision)')} AS ultima_compra,
+          (SELECT s.nombre FROM thermoplastica.fact_compras_linea x
+             JOIN thermoplastica.dim_sucursal s ON s.sucursal_id = x.sucursal_id
+           WHERE x.proveedor_id = $1 AND x.fecha_emision > CURRENT_DATE - 365
+           GROUP BY s.nombre ORDER BY SUM(x.total_sin_iva) DESC LIMIT 1) AS sucursal
+        FROM thermoplastica.fact_compras_linea f WHERE f.proveedor_id = $1`, p),
+
+      // Días de crédito pactados en la ficha (de la factura más reciente)
+      db.getAsync(`
+        SELECT dias_credito_ficha FROM thermoplastica.fact_cxp_factura
+        WHERE proveedor_id = $1 AND dias_credito_ficha IS NOT NULL
+        ORDER BY fecha_emision DESC LIMIT 1`, p),
+
+      // Estado de cuenta: documentos abiertos
+      db.allAsync(`
+        SELECT f.numero_interno::text AS documento, f.factura_proveedor,
+          ${fecha('f.fecha_emision')} AS fecha_emision, ${fecha('f.fecha_vencimiento')} AS fecha_vencimiento,
+          (CURRENT_DATE - f.fecha_vencimiento)::int AS dias_vencido,
+          f.valor, f.saldo, f.saldo_erp, f.saldo_depurado, ${fecha('f.fecha_ultimo_pago')} AS ultimo_pago,
+          s.nombre AS sucursal
+        FROM thermoplastica.fact_cxp_factura f
+        LEFT JOIN thermoplastica.dim_sucursal s ON s.sucursal_id = f.sucursal_id
+        WHERE f.proveedor_id = $1 AND f.saldo > 0
+        ORDER BY f.fecha_vencimiento ASC, f.numero_interno`, p),
+
+      db.getAsync(SQL_PAGOS_PROV(P.D, P.H), p),
+      db.getAsync(SQL_PAGOS_PROV(P.prevD, P.prevH), p),
+
+      // Facturas ya pagadas, más recientes primero
+      db.allAsync(`
+        SELECT numero_interno::text AS documento, factura_proveedor, ${fecha('fecha_emision')} AS fecha_emision,
+               ${fecha('fecha_vencimiento')} AS fecha_vencimiento, ${fecha('fecha_ultimo_pago')} AS fecha_pago,
+               valor, GREATEST(fecha_ultimo_pago - fecha_emision, 0) AS dias_pago,
+               (fecha_ultimo_pago - fecha_vencimiento) AS atraso
+        FROM thermoplastica.fact_cxp_factura
+        WHERE proveedor_id = $1 AND saldo = 0 AND fecha_ultimo_pago IS NOT NULL
+        ORDER BY fecha_ultimo_pago DESC, numero_interno DESC
+        LIMIT 200`, p),
+
+      // 24 meses hasta el fin del período: facturado y pagado (con IVA), días de pago y compras sin IVA
+      db.allAsync(`
+        WITH m AS (
+          SELECT generate_series(date_trunc('month', ${P.H}) - interval '23 months', date_trunc('month', ${P.H}), interval '1 month')::date AS mes
+        ), fac AS (
+          SELECT * FROM thermoplastica.fact_cxp_factura WHERE proveedor_id = $1
+        )
+        SELECT to_char(m.mes, 'YYYY-MM') AS mes,
+          (SELECT COALESCE(SUM(valor), 0) FROM fac WHERE date_trunc('month', fecha_emision) = m.mes) AS facturado,
+          (SELECT COALESCE(SUM(valor), 0) FROM fac WHERE saldo = 0 AND fecha_ultimo_pago IS NOT NULL AND date_trunc('month', fecha_ultimo_pago) = m.mes) AS pagado,
+          (SELECT SUM(valor * GREATEST(fecha_ultimo_pago - fecha_emision, 0)) / NULLIF(SUM(valor), 0)
+             FROM fac WHERE saldo = 0 AND fecha_ultimo_pago IS NOT NULL AND date_trunc('month', fecha_ultimo_pago) = m.mes) AS dias_pago,
+          (SELECT COALESCE(SUM(total_sin_iva), 0) FROM thermoplastica.fact_compras_linea c
+             WHERE c.proveedor_id = $1 AND date_trunc('month', c.fecha_emision) = m.mes) AS compras
+        FROM m ORDER BY m.mes`, p),
+
+      db.getAsync(SQL_COMPRAS_PROV(P.D, P.H), p),
+      db.getAsync(SQL_COMPRAS_PROV(P.prevD, P.prevH), p),
+
+      // Frecuencia de compra: días promedio entre fechas de compra (últimos 12 meses)
+      db.getAsync(`
+        SELECT (MAX(fecha_emision) - MIN(fecha_emision))::numeric / NULLIF(COUNT(DISTINCT fecha_emision) - 1, 0) AS cada_dias
+        FROM thermoplastica.fact_compras_linea
+        WHERE proveedor_id = $1 AND fecha_emision > CURRENT_DATE - 365`, p),
+
+      // Últimas facturas de compra con su detalle y estado de pago
+      db.allAsync(`
+        WITH ult AS (
+          SELECT fact_num, MIN(fecha_emision) AS fecha
+          FROM thermoplastica.fact_compras_linea WHERE proveedor_id = $1
+          GROUP BY fact_num ORDER BY MIN(fecha_emision) DESC, fact_num DESC LIMIT 25
+        )
+        SELECT u.fact_num::text AS documento, ${fecha('u.fecha')} AS fecha,
+          SUM(f.total_sin_iva) AS total_sin_iva, SUM(f.total_con_iva) AS total_con_iva,
+          json_agg(json_build_object(
+            'codigo', a.codigo_articulo, 'articulo', a.descripcion, 'categoria', a.marca,
+            'unidades', f.unidades, 'total', f.total_sin_iva,
+            'precio', f.total_sin_iva / NULLIF(f.unidades, 0)
+          ) ORDER BY f.total_sin_iva DESC) AS lineas,
+          MAX(cxp.factura_proveedor) AS factura_proveedor,
+          MAX(cxp.saldo) AS saldo, MAX(cxp.estado) AS estado_pago,
+          ${fecha('MAX(cxp.fecha_vencimiento)')} AS fecha_vencimiento,
+          ${fecha('MAX(cxp.fecha_ultimo_pago)')} AS fecha_pago
+        FROM ult u
+        JOIN thermoplastica.fact_compras_linea f ON f.fact_num = u.fact_num AND f.proveedor_id = $1
+        JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+        LEFT JOIN thermoplastica.fact_cxp_factura cxp ON cxp.proveedor_id = $1 AND cxp.numero_interno = u.fact_num
+        GROUP BY u.fact_num, u.fecha
+        ORDER BY u.fecha DESC, u.fact_num DESC`, p),
+
+      // Artículos del período (con el mismo rango del año anterior) y su precio unitario
+      db.allAsync(`
+        SELECT a.codigo_articulo AS codigo, MAX(a.descripcion) AS articulo, MAX(a.marca) AS categoria,
+          COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS compras,
+          COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS compras_prev,
+          COALESCE(SUM(f.unidades) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS unidades,
+          SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H})
+            / NULLIF(SUM(f.unidades) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS precio,
+          SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH})
+            / NULLIF(SUM(f.unidades) FILTER (WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS precio_prev,
+          ${fecha('MAX(f.fecha_emision)')} AS ultima_compra
+        FROM thermoplastica.fact_compras_linea f
+        JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+        WHERE f.proveedor_id = $1 AND (f.fecha_emision BETWEEN ${P.D} AND ${P.H} OR f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH})
+        GROUP BY a.codigo_articulo
+        ORDER BY 4 DESC, 5 DESC
+        LIMIT 300`, p),
+
+      // Por categoría
+      db.allAsync(`
+        SELECT COALESCE(NULLIF(TRIM(a.marca), ''), 'Sin categoría') AS categoria,
+          COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.D} AND ${P.H}), 0) AS compras,
+          COALESCE(SUM(f.total_sin_iva) FILTER (WHERE f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}), 0) AS compras_prev
+        FROM thermoplastica.fact_compras_linea f
+        JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+        WHERE f.proveedor_id = $1 AND (f.fecha_emision BETWEEN ${P.D} AND ${P.H} OR f.fecha_emision BETWEEN ${P.prevD} AND ${P.prevH})
+        GROUP BY 1
+        ORDER BY 2 DESC, 3 DESC`, p),
+
+      // Tipo de compra principal (materiales, gastos, importación...) en los últimos 12 meses
+      db.allAsync(`
+        SELECT ${TIPO_EXPR} AS tipo, SUM(f.total_sin_iva) AS compras
+        FROM thermoplastica.fact_compras_linea f
+        JOIN thermoplastica.dim_articulo a ON a.articulo_id = f.articulo_id
+        WHERE f.proveedor_id = $1 AND f.fecha_emision > CURRENT_DATE - 365
+        GROUP BY 1 ORDER BY 2 DESC`, p),
+    ]);
+
+    // ---- Saldo y antigüedad ----
+    const suma = (fn) => docs.reduce((t, d) => t + fn(d), 0);
+    const sal = (d) => Number(d.saldo) || 0;
+    const tramo = (min, max) => suma(d => (d.dias_vencido >= min && d.dias_vencido <= max ? sal(d) : 0));
+    const vencidos = docs.filter(d => d.dias_vencido > 0);
+    const saldo = {
+      total: suma(sal),
+      por_vencer: tramo(-Infinity, 0),
+      vencido: tramo(1, Infinity),
+      depurado: suma(d => Number(d.saldo_depurado) || 0),
+      documentos: docs.length,
+      vencidos: vencidos.length,
+      aging: {
+        por_vencer: tramo(-Infinity, 0),
+        d1_30: tramo(1, 30),
+        d31_60: tramo(31, 60),
+        d61_90: tramo(61, 90),
+        d90_mas: tramo(91, Infinity),
+      },
+      mas_antiguo_dias: vencidos.reduce((m, d) => Math.max(m, d.dias_vencido), 0),
+      proximo_vencimiento: docs.find(d => d.dias_vencido <= 0)?.fecha_vencimiento || null,
+    };
+
+    const pAct = comportamiento(pagAct);
+    const pPrev = comportamiento(pagPrev);
+    const kAct = comprasProv(comprasAct);
+    const kPrev = comprasProv(comprasPrev);
+    const cadaDias = redondo(frecuencia?.cada_dias, 0);
+    const plazoPactado = plazoFicha ? parseInt(plazoFicha.dias_credito_ficha) : null;
+    const TIPO_LABEL = Object.fromEntries(TIPOS.map(t => [t.id, t.label]));
+    const totalTipos = tipos.reduce((t, r) => t + (Number(r.compras) || 0), 0);
+
+    // Precio: artículos comprados en ambos períodos → (precio actual − anterior) × unidades actuales
+    let sobrecosto = 0;
+    let baseComparable = 0;
+    for (const r of productos) {
+      if (num(r.precio) > 0 && num(r.precio_prev) > 0 && num(r.unidades) > 0) {
+        sobrecosto += (num(r.precio) - num(r.precio_prev)) * num(r.unidades);
+        baseComparable += num(r.precio_prev) * num(r.unidades);
+      }
+    }
+    const variacionPrecio = baseComparable > 0 ? redondo(sobrecosto / baseComparable * 100) : null;
+
+    // ---- Señales en lenguaje simple (reglas, no IA) ----
+    const senales = [];
+    const fmtQ = (v) => `Q${Math.round(v).toLocaleString('es-GT')}`;
+    if (pAct.facturas >= 3 && pAct.atraso !== null) {
+      if (pAct.atraso > 5) senales.push({ tipo: 'aviso', texto: `Le pagamos en promedio ${Math.round(pAct.atraso)} días después del vencimiento (ponderado por monto).` });
+      else if (pAct.atraso < -5) senales.push({ tipo: 'aviso', texto: `Le pagamos en promedio ${Math.round(-pAct.atraso)} días antes del vencimiento: hay margen para usar más el crédito.` });
+      else senales.push({ tipo: 'bien', texto: 'Le pagamos en la fecha de vencimiento o muy cerca de ella.' });
+    }
+    if (saldo.vencido > 0) {
+      senales.push({
+        tipo: saldo.mas_antiguo_dias > 60 ? 'alerta' : 'aviso',
+        texto: `${fmtQ(saldo.vencido)} vencidos en ${saldo.vencidos} documento${saldo.vencidos === 1 ? '' : 's'}; el más antiguo tiene ${saldo.mas_antiguo_dias} días de atraso.`,
+      });
+    }
+    if (kPrev.compras > 0) {
+      const v = (kAct.compras / kPrev.compras - 1) * 100;
+      if (Math.abs(v) >= 15) senales.push({ tipo: 'aviso', texto: `Le compramos ${Math.abs(v).toFixed(0)}% ${v > 0 ? 'más' : 'menos'} que en el mismo período del año anterior.` });
+    } else if (kAct.compras > 0) {
+      senales.push({ tipo: 'aviso', texto: 'Sin compras en el mismo período del año anterior: es un proveedor nuevo o se reactivó.' });
+    }
+    if (variacionPrecio !== null && Math.abs(variacionPrecio) >= 3 && Math.abs(sobrecosto) >= 1000) {
+      senales.push({
+        tipo: variacionPrecio > 0 ? 'alerta' : 'bien',
+        texto: `Sus precios ${variacionPrecio > 0 ? 'subieron' : 'bajaron'} ${Math.abs(variacionPrecio).toFixed(1)}% en los artículos que también compramos el año anterior (${variacionPrecio > 0 ? '+' : '−'}${fmtQ(Math.abs(sobrecosto))} en el período).`,
+      });
+    }
+    if (plazoPactado !== null && pAct.plazo !== null && plazoPactado - pAct.plazo > 5) {
+      senales.push({ tipo: 'aviso', texto: `Sus facturas vencen a ${Math.round(pAct.plazo)} días en promedio, menos que los ${plazoPactado} de su ficha.` });
+    }
+    if (saldo.depurado > 0) {
+      senales.push({ tipo: 'aviso', texto: `${fmtQ(saldo.depurado)} de saldo del ERP en facturas abiertas se descontaron por depuración (pagos confirmados que el ERP no aplicó).` });
+    }
+
+    res.json({
+      status: 'success',
+      timestamp: new Date().toISOString(),
+      data: {
+        periodo: P.ventana(),
+        proveedor: {
+          id: parseInt(info.proveedor_id),
+          codigo: info.codigo_proveedor,
+          nombre: info.nombre,
+          nit: info.rif,
+          sucursal: relacion?.sucursal || null,
+          tipo_principal: tipos[0] ? TIPO_LABEL[tipos[0].tipo] : null,
+          tipos: tipos.map(t => ({ tipo: TIPO_LABEL[t.tipo] || t.tipo, compras: num(t.compras) || 0, pct: totalTipos > 0 ? redondo(num(t.compras) / totalTipos * 100) : 0 })),
+          primera_compra: relacion?.primera_compra || null,
+          ultima_compra: relacion?.ultima_compra || null,
+          dias_credito: plazoPactado,
+          historia_desde: '2024-09-18',
+        },
+        saldo,
+        estado_cuenta: docs.map(d => ({
+          documento: d.documento,
+          factura_proveedor: d.factura_proveedor,
+          fecha_emision: d.fecha_emision,
+          fecha_vencimiento: d.fecha_vencimiento,
+          dias_vencido: d.dias_vencido,
+          valor: num(d.valor),
+          abonado: d.valor !== null ? Math.max(0, Number(d.valor) - Number(d.saldo_erp ?? d.saldo)) : null,
+          depurado: num(d.saldo_depurado) || 0,
+          saldo: num(d.saldo) || 0,
+          ultimo_pago: d.ultimo_pago,
+          sucursal: d.sucursal,
+        })),
+        pagos: { actual: pAct, anterior: pPrev },
+        pagadas: histPagadas.map(r => ({
+          documento: r.documento,
+          factura_proveedor: r.factura_proveedor,
+          fecha_emision: r.fecha_emision,
+          fecha_vencimiento: r.fecha_vencimiento,
+          fecha_pago: r.fecha_pago,
+          valor: num(r.valor) || 0,
+          dias_pago: parseInt(r.dias_pago),
+          atraso: parseInt(r.atraso),
+        })),
+        serie: serie.map(r => ({
+          mes: r.mes,
+          facturado: num(r.facturado) || 0,
+          pagado: num(r.pagado) || 0,
+          compras: num(r.compras) || 0,
+          dias_pago: redondo(r.dias_pago),
+          sin_datos: r.mes < '2024-09',
+        })),
+        compras: {
+          actual: kAct,
+          anterior: kPrev,
+          variacion_pct: kPrev.compras > 0 ? redondo((kAct.compras / kPrev.compras - 1) * 100) : null,
+          variacion_precio_pct: variacionPrecio,
+          sobrecosto,
+          cada_dias: cadaDias,
+        },
+        ultimas_facturas: ultimas.map(u => ({
+          documento: u.documento,
+          factura_proveedor: u.factura_proveedor,
+          fecha: u.fecha,
+          total_sin_iva: num(u.total_sin_iva) || 0,
+          total_con_iva: num(u.total_con_iva) || 0,
+          saldo: num(u.saldo),
+          estado_pago: u.estado_pago,
+          fecha_vencimiento: u.fecha_vencimiento,
+          fecha_pago: u.fecha_pago,
+          lineas: (u.lineas || []).map(l => ({ ...l, unidades: num(l.unidades), total: num(l.total), precio: num(l.precio) })),
+        })),
+        // Montos de centavos (ajustes del ERP) se omiten
+        productos: productos.filter(r => Math.max(Math.abs(num(r.compras)), Math.abs(num(r.compras_prev))) >= 1).map(r => ({
+          codigo: r.codigo, articulo: r.articulo, categoria: r.categoria,
+          compras: num(r.compras) || 0, compras_prev: num(r.compras_prev) || 0,
+          unidades: num(r.unidades) || 0, precio: num(r.precio), precio_prev: num(r.precio_prev),
+          ultima_compra: r.ultima_compra,
+        })),
+        categorias: categorias.filter(r => Math.max(Math.abs(num(r.compras)), Math.abs(num(r.compras_prev))) >= 1).map(r => ({
+          categoria: r.categoria, compras: num(r.compras) || 0, compras_prev: num(r.compras_prev) || 0,
+        })),
+        senales,
       },
     });
   } catch (error) {

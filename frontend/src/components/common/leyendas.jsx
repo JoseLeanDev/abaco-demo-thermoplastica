@@ -816,6 +816,78 @@ export const LEYENDAS = {
     texto: <>Reglas fijas sobre los números de esta ficha (atraso de más de 5 días, cambio de 7+ días en el tiempo de pago, compras ±15%, días sin comprar más de 2.5× su frecuencia). No es IA.</>,
   },
 
+
+  // ---- Ficha de proveedor ----
+  saldo_proveedor: {
+    titulo: 'Saldo con el proveedor',
+    texto: <>
+      Todo lo que se le debe hoy, sin importar cuándo se emitió la factura.
+      <Nota>Ya viene depurado: se descuentan importaciones pagadas fuera del documento y residuos de retención que el ERP no aplicó. Por eso puede diferir del saldo en Profit y de la lista de Cuentas por Pagar, que solo cuenta facturas emitidas en el período.</Nota>
+    </>,
+  },
+  dias_pago_proveedor: {
+    titulo: 'Días en que le pagamos',
+    texto: <>
+      Para cada factura ya pagada: fecha del último pago − fecha de emisión. Promedio ponderado por el valor de la factura.
+      <Nota>Solo facturas que terminamos de pagar en el período. Se compara con el mismo rango del año anterior y con los días de crédito de su ficha.</Nota>
+    </>,
+  },
+  atraso_pago_prov: {
+    titulo: 'Atraso al pagarle',
+    texto: <>Fecha del último pago − fecha de vencimiento, ponderado por monto. Negativo = le pagamos antes de que venza (se usa menos crédito del disponible).</>,
+  },
+  pct_a_tiempo_prov: {
+    titulo: 'Pagado a tiempo',
+    texto: <>% del monto de las facturas pagadas en el período cuyo último pago fue en o antes de su vencimiento.</>,
+  },
+  plazo_facturado_prov: {
+    titulo: 'Plazo en factura',
+    texto: <>
+      Días entre emisión y vencimiento de sus facturas, ponderado por monto.
+      <Nota>Si es menor que los días de la ficha, nos está dando menos crédito del pactado.</Nota>
+    </>,
+  },
+  peor_atraso_prov: {
+    titulo: 'Peor atraso',
+    texto: <>El mayor número de días que una factura pagada en el período se pagó después de vencer.</>,
+  },
+  estado_cuenta_cxp: {
+    titulo: 'Facturas por pagar',
+    texto: <>
+      Facturas del proveedor con saldo pendiente hoy.
+      <L>
+        <li><strong>No. interno:</strong> número de la compra en el ERP; <strong>Factura prov.:</strong> número de la factura del proveedor.</li>
+        <li><strong>Valor:</strong> monto original con IVA. <strong>Abonado:</strong> valor − saldo del ERP.</li>
+        <li><strong>Depurado:</strong> parte del saldo del ERP que se confirmó pagada fuera del sistema y no se cuenta.</li>
+      </L>
+    </>,
+  },
+  facturado_pagado: {
+    titulo: 'Facturado vs pagado',
+    texto: <>
+      <strong>Facturado:</strong> valor con IVA de las facturas del proveedor emitidas en el mes. <strong>Pagado:</strong> valor de las facturas que terminamos de pagar en el mes.
+      <Nota>Los abonos parciales cuentan hasta que la factura se liquida. El historial del ERP empieza en septiembre de 2024.</Nota>
+    </>,
+  },
+  distribucion_pago_prov: {
+    titulo: 'Cuándo le pagamos',
+    texto: <>Las últimas facturas pagadas (hasta 200), agrupadas por días entre el vencimiento y el último pago, ponderadas por monto.</>,
+  },
+  compras_proveedor: {
+    titulo: 'Compras al proveedor',
+    texto: <>Compras sin IVA facturadas por el proveedor en el período, mismo criterio que la página de Compras. Se compara con el mismo rango del año anterior.</>,
+  },
+  variacion_precio_prov: {
+    titulo: 'Variación de precios',
+    texto: <>
+      Solo artículos que se le compraron en el período y en el mismo rango del año anterior: Σ (precio actual − precio anterior) × unidades actuales ÷ Σ precio anterior × unidades actuales.
+      <Nota>Positivo = nos está cobrando más caro. El monto es lo pagado de más (o de menos) en el período solo por el cambio de precio.</Nota>
+    </>,
+  },
+  senales_proveedor: {
+    titulo: 'Señales',
+    texto: <>Reglas fijas sobre los números de esta ficha (pagos más de 5 días antes o después del vencimiento, saldo vencido, compras ±15%, precios ±3%, plazo menor al de la ficha). No es IA.</>,
+  },
   // ======================= Análisis =======================
   ciclo_caja: {
     titulo: 'Ciclo de caja',

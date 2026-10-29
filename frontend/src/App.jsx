@@ -27,6 +27,7 @@ import InsightsIA from './pages/InsightsIA'
 import CuentasPorCobrar from './pages/CuentasPorCobrar'
 import ClienteCxc from './pages/ClienteCxc'
 import CuentasPorPagar from './pages/CuentasPorPagar'
+import ProveedorCxp from './pages/ProveedorCxp'
 // import CuentasBancarias from './pages/CuentasBancarias'
 import ProyeccionesFinancieras from './pages/ProyeccionesFinancieras'
 import Margenes from './pages/Margenes'
@@ -106,6 +107,7 @@ function AppRoutes() {
                 <Route path="/tesoreria/cuentas-por-cobrar" element={<CuentasPorCobrar />} />
                 <Route path="/tesoreria/cuentas-por-cobrar/cliente/:id" element={<ClienteCxc />} />
                 <Route path="/tesoreria/cuentas-por-pagar" element={<CuentasPorPagar />} />
+                <Route path="/tesoreria/cuentas-por-pagar/proveedor/:id" element={<ProveedorCxp />} />
                 {/* <Route path="/tesoreria/cuentas-bancarias" element={<CuentasBancarias />} /> */}
                 <Route path="/tesoreria/proyecciones" element={<ProyeccionesFinancieras />} />
                 {/* Cierre Mensual */}
