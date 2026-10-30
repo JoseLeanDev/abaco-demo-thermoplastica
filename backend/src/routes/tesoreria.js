@@ -164,10 +164,23 @@ router.get('/cxc', async (req, res) => {
   }
 });
 
+// Nombre sin el código que el ERP le antepone ("101851782-AEROSPRAY" → "aerospray"), para ordenar alfabéticamente
+const sinCodigo = (nombre, codigo) =>
+  `LOWER(TRIM(CASE WHEN ${nombre} LIKE TRIM(${codigo}) || '-%' THEN SUBSTRING(${nombre} FROM LENGTH(TRIM(${codigo})) + 2) ELSE ${nombre} END))`;
+
+// ORDER BY de los listados por documento a partir de ?orden=&dir= (solo columnas permitidas)
+function ordenSql(req, columnas, porDefecto) {
+  const col = columnas[req.query.orden];
+  if (!col) return porDefecto;
+  const dir = req.query.dir === 'asc' ? 'ASC' : 'DESC';
+  return `${col} ${dir} NULLS LAST, ${porDefecto}`;
+}
+
 // GET /api/tesoreria/cxc/detalle
 // Listado paginado de facturas de la cartera vigente.
-// Query params: ?limit=200&offset=0&busqueda=&bucket=
+// Query params: ?limit=200&offset=0&busqueda=&bucket=&orden=&dir=
 //   bucket ∈ 'al_corriente' | '_30_dias' | '_60_dias' | '_90_dias' | 'todos'
+//   orden  ∈ cliente | sucursal | vendedor | documento | emision | vencimiento | credito | saldo | dias | estado
 router.get('/cxc/detalle', async (req, res) => {
   try {
     // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
@@ -224,7 +237,11 @@ router.get('/cxc/detalle', async (req, res) => {
       LEFT JOIN thermoplastica.fact_cxc_factura fac
              ON fac.cliente_id = f.cliente_id AND fac.factura_num = f.documento
       WHERE ${whereSql}
-      ORDER BY f.saldo_total DESC, f.fecha_vencimiento ASC
+      ORDER BY ${ordenSql(req, {
+        cliente: sinCodigo('c.nombre', 'c.codigo_cliente'), sucursal: 's.nombre', vendedor: 'v.nombre', documento: 'f.documento',
+        emision: 'f.fecha_emision', vencimiento: 'f.fecha_vencimiento', credito: 'fac.dias_segun_facturas',
+        saldo: 'f.saldo_total', dias: '(CURRENT_DATE - f.fecha_vencimiento)', estado: 'f.estado_cxc',
+      }, 'f.saldo_total DESC, f.fecha_vencimiento ASC')}
       LIMIT ${limit} OFFSET ${offset}
     `, params);
 
@@ -858,8 +875,9 @@ router.get('/cxp', async (req, res) => {
 
 // GET /api/tesoreria/cxp/detalle
 // Listado paginado de facturas de CxP con filtros.
-// Query params: ?limit=200&offset=0&busqueda=&bucket=&proveedor=
+// Query params: ?limit=200&offset=0&busqueda=&bucket=&proveedor=&orden=&dir=
 //   bucket ∈ 'por_vencer' | 'v_1_30' | 'v_31_60' | 'v_61_90' | 'v_90_mas' | 'todos'
+//   orden  ∈ proveedor | factura | emision | vencimiento | credito | saldo | estado
 router.get('/cxp/detalle', async (req, res) => {
   try {
     // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
@@ -915,7 +933,11 @@ router.get('/cxp/detalle', async (req, res) => {
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       JOIN thermoplastica.dim_sucursal  s ON s.sucursal_id  = f.sucursal_id
       WHERE ${whereSql}
-      ORDER BY f.saldo DESC, f.fecha_vencimiento ASC
+      ORDER BY ${ordenSql(req, {
+        proveedor: sinCodigo('p.nombre', 'p.codigo_proveedor'), factura: 'f.numero_interno', emision: 'f.fecha_emision',
+        vencimiento: 'f.fecha_vencimiento', credito: 'f.dias_segun_facturas', saldo: 'f.saldo',
+        estado: 'f.estado',
+      }, 'f.saldo DESC, f.fecha_vencimiento ASC')}
       LIMIT ${limit} OFFSET ${offset}
     `, params);
 

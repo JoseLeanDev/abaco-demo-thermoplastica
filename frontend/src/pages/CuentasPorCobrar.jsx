@@ -5,6 +5,7 @@ import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
+import ThOrden from '../components/common/ThOrden'
 import {
   ArrowTrendingUpIcon,
   ArrowLeftIcon,
@@ -84,9 +85,10 @@ export default function CuentasPorCobrar() {
     ['cxc', periodo], () => endpoints.tesoreria.cxc(periodo), { keepPreviousData: true }
   )
 
-  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, ...periodo }
+  const [orden, setOrden] = useState({ k: 'saldo', dir: 'desc' })
+  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, orden: orden.k, dir: orden.dir, ...periodo }
   const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
-    ['cxc-detalle', busqueda, bucket, periodo],
+    ['cxc-detalle', busqueda, bucket, orden, periodo],
     () => endpoints.tesoreria.cxcDetalle(detalleParams),
     { keepPreviousData: true, enabled: vista === 'documentos' }
   )
@@ -101,6 +103,7 @@ export default function CuentasPorCobrar() {
   const distribucion  = resumen.distribucion_aging || {}
   const totalFacturas = resumen.facturas || 0
 
+  const ord = { orden, setOrden }
   const filas = detalleData?.data?.filas || []
   const totalFilas   = detalleData?.data?.total_filas || 0
   const sumaFiltrada = detalleData?.data?.suma_saldo || 0
@@ -115,7 +118,7 @@ export default function CuentasPorCobrar() {
         const res = clientesData || await endpoints.tesoreria.cxcClientes({ busqueda, ...periodo })
         await exportarExcel(`cxc_clientes_${corte}.xlsx`, COLUMNAS_CXC_CLIENTES, res?.data?.filas || [], { hoja: 'Clientes' })
       } else {
-        const docs = await traerTodo(endpoints.tesoreria.cxcDetalle, { busqueda, bucket, ...periodo })
+        const docs = await traerTodo(endpoints.tesoreria.cxcDetalle, { busqueda, bucket, orden: orden.k, dir: orden.dir, ...periodo })
         await exportarExcel(`cxc_documentos_${corte}.xlsx`, COLUMNAS_CXC_DOCS, docs, { hoja: 'Documentos' })
       }
     } finally {
@@ -273,16 +276,16 @@ export default function CuentasPorCobrar() {
           <table className="w-full">
             <thead className="bg-[var(--bg-secondary)] border-b border-[var(--border-default)]">
               <tr>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Cliente</th>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Sucursal</th>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Vendedor</th>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Documento</th>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Emisión</th>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Vencimiento</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Crédito <Leyenda k="credito_ficha_factura" /><br /><span className="normal-case font-normal">ficha · factura</span></th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Saldo</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Días <Leyenda k="dias_vencido" /></th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Estado</th>
+                <ThOrden k="cliente" texto {...ord}>Cliente</ThOrden>
+                <ThOrden k="sucursal" texto {...ord}>Sucursal</ThOrden>
+                <ThOrden k="vendedor" texto {...ord}>Vendedor</ThOrden>
+                <ThOrden k="documento" {...ord}>Documento</ThOrden>
+                <ThOrden k="emision" {...ord}>Emisión</ThOrden>
+                <ThOrden k="vencimiento" {...ord}>Vencimiento</ThOrden>
+                <ThOrden k="credito" align="center" {...ord}>Crédito <Leyenda k="credito_ficha_factura" /><br /><span className="normal-case font-normal">ficha · factura</span></ThOrden>
+                <ThOrden k="saldo" align="right" {...ord}>Saldo</ThOrden>
+                <ThOrden k="dias" align="center" {...ord}>Días <Leyenda k="dias_vencido" /></ThOrden>
+                <ThOrden k="estado" texto align="center" {...ord}>Estado</ThOrden>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">

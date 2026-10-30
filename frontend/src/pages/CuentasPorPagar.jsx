@@ -5,6 +5,7 @@ import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
+import ThOrden from '../components/common/ThOrden'
 import {
   ArrowTrendingDownIcon,
   ArrowLeftIcon,
@@ -79,9 +80,11 @@ export default function CuentasPorPagar() {
     ['cxp', periodo], () => endpoints.tesoreria.cxp(periodo), { keepPreviousData: true }
   )
 
-  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, proveedor: proveedorSel, ...periodo }
+  const [orden, setOrden] = useState({ k: 'saldo', dir: 'desc' })
+  const ord = { orden, setOrden }
+  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, proveedor: proveedorSel, orden: orden.k, dir: orden.dir, ...periodo }
   const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
-    ['cxp-detalle', busqueda, bucket, proveedorSel, periodo],
+    ['cxp-detalle', busqueda, bucket, proveedorSel, orden, periodo],
     () => endpoints.tesoreria.cxpDetalle(detalleParams),
     { keepPreviousData: true }
   )
@@ -101,7 +104,7 @@ export default function CuentasPorPagar() {
   const exportar = async () => {
     setExportando(true)
     try {
-      const docs = await traerTodo(endpoints.tesoreria.cxpDetalle, { busqueda, bucket, proveedor: proveedorSel, ...periodo })
+      const docs = await traerTodo(endpoints.tesoreria.cxpDetalle, { busqueda, bucket, proveedor: proveedorSel, orden: orden.k, dir: orden.dir, ...periodo })
       await exportarExcel(`cxp_documentos_${periodo.hasta || 'hoy'}.xlsx`, COLUMNAS_CXP, docs, { hoja: 'Por pagar' })
     } finally {
       setExportando(false)
@@ -345,13 +348,13 @@ export default function CuentasPorPagar() {
           <table className="w-full">
             <thead className="bg-[var(--bg-secondary)] border-b border-[var(--border-default)]">
               <tr>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Proveedor</th>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Factura</th>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Emisión</th>
-                <th className="px-4 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Vencimiento</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Crédito <Leyenda k="credito_ficha_factura" /><br /><span className="normal-case font-normal">ficha · factura</span></th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Saldo</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-[var(--text-muted)] uppercase">Estado</th>
+                <ThOrden k="proveedor" texto {...ord}>Proveedor</ThOrden>
+                <ThOrden k="factura" {...ord}>Factura</ThOrden>
+                <ThOrden k="emision" {...ord}>Emisión</ThOrden>
+                <ThOrden k="vencimiento" {...ord}>Vencimiento</ThOrden>
+                <ThOrden k="credito" align="center" {...ord}>Crédito <Leyenda k="credito_ficha_factura" /><br /><span className="normal-case font-normal">ficha · factura</span></ThOrden>
+                <ThOrden k="saldo" align="right" {...ord}>Saldo</ThOrden>
+                <ThOrden k="estado" texto align="center" {...ord}>Estado</ThOrden>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
