@@ -5,7 +5,6 @@ import {
   BuildingOfficeIcon,
   ChartBarIcon,
   ChevronRightIcon,
-  ExclamationTriangleIcon,
   Squares2X2Icon,
 } from '@heroicons/react/24/outline'
 import { endpoints } from '../../services/cfoApi'
@@ -35,7 +34,6 @@ export default function TabResumen({ filtros, clave, r, cargando, setTab, tipo, 
   if (cargando && !r.serie_mensual) return <div className="space-y-4"><Cargando /><Cargando /></div>
 
   const serie = r.serie_mensual || []
-  const c = r.concentracion || {}
   const tiposConDatos = TIPOS.filter(t => serie.some(m => m[t.id] > 0))
   const provs = (provRes?.data?.items || []).slice(0, 8)
   const cats = (catRes?.data?.items || []).slice(0, 8)
@@ -43,19 +41,6 @@ export default function TabResumen({ filtros, clave, r, cargando, setTab, tipo, 
   return (
     <div className="space-y-6">
       <PageInsights vertical="compras" maxInsights={4} />
-
-      {c.top1_pct >= 25 && c.top1 && (
-        <div className="rounded-lg border border-[var(--warning)] bg-[var(--warning-bg,#fff7ed)] p-4 flex items-start gap-3">
-          <ExclamationTriangleIcon className="w-5 h-5 text-[var(--warning)] flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-semibold text-[var(--warning)]">Alta dependencia de un proveedor</p>
-            <p className="text-[var(--text-secondary)]">
-              <strong>{c.top1.nombre}</strong> representa el <strong>{c.top1_pct}%</strong> de las compras del período.
-              Un retraso o alza de precio de ese proveedor pega directo en la operación: conviene tener una segunda fuente aprobada.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Serie mensual */}
       <Seccion
