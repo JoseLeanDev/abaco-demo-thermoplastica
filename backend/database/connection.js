@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-const { reescribir } = require('../src/services/alcance');
+const { als, reescribir } = require('../src/services/alcance');
 
 // PostgreSQL connection - Production only
 const pool = new Pool({
@@ -31,11 +31,32 @@ console.log('✅ Conectado a base de datos PostgreSQL (Render)');
 // Recorte por usuario (services/alcance.js): las consultas hechas dentro de una
 // petición con alcance salen con las tablas sensibles filtradas. pool.query lo
 // usan directo algunos servicios (laminados, CPP).
+//
+// Con recorte y además un filtro de producto (categoría Liners de un Gerente de Línea
+// de Liners), Postgres subestima cuántas filas quedan y elige nested loops que
+// recalculan v_ventas_costeadas por cada artículo: Ventas y Márgenes pasaban de 60 s.
+// Solo en esas peticiones (middleware/permisos.js) se desactivan los nested loops;
+// sin filtro de producto se dejan, porque ahí ayudan.
+const recortada = () => !!als.getStore()?.sinNestloop;
+
+async function consultar(client, sql, params) {
+  if (!recortada()) return client.query(sql, params);
+  await client.query('SET enable_nestloop = off');
+  try {
+    return await client.query(sql, params);
+  } finally {
+    await client.query('RESET enable_nestloop').catch(() => {});
+  }
+}
+
 const poolQuery = pool.query.bind(pool);
-pool.query = (text, ...rest) => poolQuery(
-  typeof text === 'string' ? reescribir(text) : (text?.text ? { ...text, text: reescribir(text.text) } : text),
-  ...rest
-);
+pool.query = (text, ...rest) => {
+  const q = typeof text === 'string' ? reescribir(text) : (text?.text ? { ...text, text: reescribir(text.text) } : text);
+  // Con callback (API vieja de pg) se deja como estaba
+  if (!recortada() || typeof rest[rest.length - 1] === 'function') return poolQuery(q, ...rest);
+  return pool.connect().then(client =>
+    consultar(client, q, rest[0]).finally(() => client.release()));
+};
 
 // Helper para convertir ? → $1, $2, etc. (y aplicar el alcance del usuario)
 function convertParams(sql) {
@@ -52,7 +73,7 @@ const db = {
     const pgSql = convertParams(sql);
     const client = await pool.connect();
     try {
-      const result = await client.query(pgSql, params);
+      const result = await consultar(client, pgSql, params);
       return { id: result.rows[0]?.id || 0, changes: result.rowCount };
     } catch (e) {
       console.error('[DB ERROR] runAsync:', e.message);
@@ -68,7 +89,7 @@ const db = {
     const pgSql = convertParams(sql);
     const client = await pool.connect();
     try {
-      const result = await client.query(pgSql, params);
+      const result = await consultar(client, pgSql, params);
       return result.rows[0] || null;
     } catch (e) {
       console.error('[DB ERROR] getAsync:', e.message);
@@ -84,7 +105,7 @@ const db = {
     const pgSql = convertParams(sql);
     const client = await pool.connect();
     try {
-      const result = await client.query(pgSql, params);
+      const result = await consultar(client, pgSql, params);
       return result.rows;
     } catch (e) {
       console.error('[DB ERROR] allAsync:', e.message);

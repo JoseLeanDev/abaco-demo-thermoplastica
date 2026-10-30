@@ -51,20 +51,24 @@ function alcanceDeUsuario(u) {
 const lit = (v) => `'${String(v).replace(/'/g, "''")}'`;
 const arr = (xs) => `ARRAY[${xs.map(lit).join(',') || "''"}]::text[]`;
 
-const artIn = (A) => `articulo_id IN (SELECT articulo_id FROM thermoplastica.dim_articulo WHERE TRIM(marca) = ANY(${arr(A.lineas)}))`;
+// Se compara marca sin TRIM a propósito: así Postgres usa las estadísticas de la columna
+// y estima bien cuántos artículos tiene la línea. Con TRIM(marca) estimaba ~50 en vez de
+// ~3,700 (Liners) y, sumado al filtro de categoría de la pantalla, elegía un plan que
+// recalculaba v_ventas_costeadas por cada artículo (>60 s). Ninguna marca trae espacios.
+const artIn = (A) => `articulo_id IN (SELECT articulo_id FROM thermoplastica.dim_articulo WHERE marca = ANY(${arr(A.lineas)}))`;
 const vendIn = (A) => `vendedor_id IN (SELECT vendedor_id FROM thermoplastica.dim_vendedor WHERE codigo_vendedor = ANY(${arr(A.vendedores)}))`;
 // "Sus clientes": a quienes les vendió o los que el ERP le tiene asignados en la cartera
 const cliIn = (A) => `cliente_id IN (SELECT cliente_id FROM thermoplastica.fact_ventas_linea WHERE ${vendIn(A)}
                        UNION SELECT cliente_id FROM thermoplastica.fact_cxc_snapshot_diario WHERE ${vendIn(A)})`;
 // Vistas analíticas sin articulo_id: se cruzan por la descripción del artículo
-const descIn = (A) => `articulo IN (SELECT descripcion FROM thermoplastica.dim_articulo WHERE TRIM(marca) = ANY(${arr(A.lineas)}))`;
+const descIn = (A) => `articulo IN (SELECT descripcion FROM thermoplastica.dim_articulo WHERE marca = ANY(${arr(A.lineas)}))`;
 
 const porLinea = (A) => (A.lineas ? artIn(A) : null);
 const porLineaYVendedor = (A) => [A.lineas && artIn(A), A.vendedores && vendIn(A)].filter(Boolean).join(' AND ') || null;
 
 // tabla → condición según el alcance (null = no se recorta)
 const TABLAS = {
-  'thermoplastica.dim_articulo':             (A) => (A.lineas ? `TRIM(marca) = ANY(${arr(A.lineas)})` : null),
+  'thermoplastica.dim_articulo':             (A) => (A.lineas ? `marca = ANY(${arr(A.lineas)})` : null),
   'thermoplastica.v_ventas_costeadas':       porLineaYVendedor,
   'thermoplastica.fact_ventas_linea':        porLineaYVendedor,
   'thermoplastica.cpp_articulos_venta':      porLineaYVendedor,

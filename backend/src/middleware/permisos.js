@@ -34,7 +34,10 @@ const autorizar = (req, res, next) => {
     const json = res.json.bind(res);
     res.json = (body) => json(limpiar(body, patron));
   }
-  als.run(alcance, next);
+  // Recorte + filtro de producto de la pantalla: Postgres subestima las filas (ver
+  // database/connection.js), así que esas consultas corren sin nested loops
+  const conFiltroProducto = ['categoria', 'subcategoria', 'sublinea'].some(k => req.query?.[k]);
+  als.run(conFiltroProducto ? { ...alcance, sinNestloop: true } : alcance, next);
 };
 
 module.exports = { autorizar };
