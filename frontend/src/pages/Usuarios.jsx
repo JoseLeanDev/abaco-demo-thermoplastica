@@ -16,7 +16,6 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import RolCampos from '../components/usuarios/RolCampos'
-import MatrizPermisos from '../components/usuarios/MatrizPermisos'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://cfo-ai-backend-4n29.onrender.com/api'
 
@@ -394,13 +393,6 @@ export default function Usuarios() {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {/* Matriz de permisos (referencia para asignar roles) */}
-      {!error && !loading && (
-        <div className="mt-6">
-          <MatrizPermisos catalogo={catalogo} />
         </div>
       )}
 
