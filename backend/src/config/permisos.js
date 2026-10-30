@@ -48,11 +48,12 @@ const ROLES = [
   },
   {
     key: 'gerente_linea', nombre: 'Gerente de Línea', alcance: ['lineas'],
-    // La hoja también le da 👁 en gastos, CxC, CxP, proyecciones, análisis y Asistente IA,
-    // pero esos datos no vienen por línea de producto: bloqueados hasta poder recortarlos.
+    // La hoja también le da 👁 en gastos, CxC, CxP, proyecciones, análisis, Asistente IA y
+    // Agentes IA, pero esos datos no vienen por línea de producto (la bitácora de agentes
+    // resume cartera, CxP y caja de toda la empresa): bloqueados hasta poder recortarlos.
     permisos: {
       panel: lineas, ventas: lineas, margenes: lineas, compras: lineas, inventario: lineas,
-      ventas_compras: lineas, capital: lineas, insights: lineas, agentes: P('solo lectura'),
+      ventas_compras: lineas, capital: lineas, insights: lineas,
     },
   },
   {
@@ -74,7 +75,8 @@ const ROLES = [
     permisos: {
       panel: P('solo sus ventas'), ventas: P('solo sus ventas'),
       margenes: P('solo sus clientes y productos'), inventario: P('existencias'),
-      cxc: P('sus clientes'), insights: P('su área'),
+      // Sin insights: se escriben sobre toda la empresa (otros vendedores, otros clientes)
+      cxc: P('sus clientes'),
     },
   },
   {

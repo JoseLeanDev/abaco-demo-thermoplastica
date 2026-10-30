@@ -5,6 +5,7 @@ const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
 const { cicloPeriodo } = require('../services/cicloCaja');
 const { permisosDeUsuario } = require('../config/permisos');
+const { alcanceDeUsuario } = require('../services/alcance');
 
 // Qué módulo necesita cada bloque del panel. Un rol ve solo los bloques de sus
 // módulos (p. ej. Cobranza: cartera; Compras: compras e inventario).
@@ -35,6 +36,9 @@ function recortarPanel(data, user) {
   for (const [mod, keys] of Object.entries(KPIS_POR_MODULO)) {
     if (permisos[mod]) keys.forEach(k => { kpis[k] = data.kpis[k]; });
   }
+  // Quien ve el inventario solo en unidades tampoco ve su valor en Q en el panel
+  const sinMontosInv = (alcanceDeUsuario(user)?.ocultar || []).some(r => r.en.includes('/inventario') && r.que.includes('montos'));
+  if (sinMontosInv && 'inventario_valor' in kpis) kpis.inventario_valor = null;
   const out = { ...data, kpis };
   for (const [mod, keys] of Object.entries(BLOQUES_POR_MODULO)) {
     if (!permisos[mod]) keys.forEach(k => { delete out[k]; });
