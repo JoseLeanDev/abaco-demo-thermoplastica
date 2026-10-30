@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { chatConAgenteSQL } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
+import { useAuth } from '../../context/AuthContext'
 import BloqueVisual from './BloqueVisual'
 
 export const BIENVENIDA = {
@@ -58,12 +59,17 @@ const MD = {
  * o pagina completa) decide el tamaño. Con fullPage=true los mensajes se centran
  * en una columna ancha y las burbujas del asistente ocupan mas espacio.
  */
-const STORAGE_KEY = 'abaco_chat_historial'
+// Una conversacion por usuario: la llave lleva su id, asi quien entra despues en el
+// mismo navegador no ve el chat del anterior.
+const STORAGE_PREFIJO = 'abaco_chat_historial'
 const STORAGE_MAX = 40  // guardar solo los ultimos N mensajes
 
-function cargarHistorial() {
+// La llave vieja era compartida por todos los usuarios del navegador: se descarta.
+try { localStorage.removeItem(STORAGE_PREFIJO) } catch { /* noop */ }
+
+function cargarHistorial(storageKey) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (!raw) return [BIENVENIDA]
     const arr = JSON.parse(raw)
     return Array.isArray(arr) && arr.length ? arr : [BIENVENIDA]
@@ -72,10 +78,18 @@ function cargarHistorial() {
   }
 }
 
-export default function ChatConversacion({ fullPage = false }) {
+export default function ChatConversacion(props) {
+  const { user } = useAuth()
+  if (!user?.id) return null
+  // key: al cambiar de usuario se monta una conversacion nueva con su propio historial
+  const clave = `${STORAGE_PREFIJO}:${user.id}`
+  return <Conversacion key={clave} storageKey={clave} {...props} />
+}
+
+function Conversacion({ fullPage = false, storageKey }) {
   // Período del filtro global: el agente lo usa cuando la pregunta no trae fechas.
   const { params: periodo } = usePeriodo()
-  const [messages, setMessages] = useState(cargarHistorial)
+  const [messages, setMessages] = useState(() => cargarHistorial(storageKey))
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [espera, setEspera] = useState(0)
@@ -87,10 +101,10 @@ export default function ChatConversacion({ fullPage = false }) {
   // Persistir la conversacion en localStorage (por-navegador, sin backend).
   useEffect(() => {
     try {
-      if (messages.length <= 1) { localStorage.removeItem(STORAGE_KEY); return }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-STORAGE_MAX)))
+      if (messages.length <= 1) { localStorage.removeItem(storageKey); return }
+      localStorage.setItem(storageKey, JSON.stringify(messages.slice(-STORAGE_MAX)))
     } catch { /* modo privado o storage lleno: seguir sin persistir */ }
-  }, [messages])
+  }, [messages, storageKey])
 
   useEffect(() => {
     if (!isLoading) { setEspera(0); return }
@@ -142,7 +156,7 @@ export default function ChatConversacion({ fullPage = false }) {
 
   const limpiar = () => {
     setMessages([BIENVENIDA])
-    try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
+    try { localStorage.removeItem(storageKey) } catch { /* noop */ }
   }
 
   const soloBienvenida = messages.length <= 1
