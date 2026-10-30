@@ -6,9 +6,9 @@
 //   'parcial' → 👁 acceso con alcance limitado; `alcance` dice cuál (texto de la hoja)
 //   ausente   → ❌ sin acceso
 //
-// Fase 1 aplica el acceso por módulo (menú, rutas y API). El recorte por fila
-// que describe `alcance` (solo sus líneas, sus clientes, sin costo…) es fase 2:
-// mientras tanto un rol parcial ve el módulo completo.
+// El acceso por módulo se aplica en menú, rutas y API (middleware/permisos.js).
+// El recorte por fila de `alcance` (sus líneas, sus vendedores, sin costo, en
+// unidades) lo aplica services/alcance.js.
 
 const MODULOS = [
   { key: 'panel',        nombre: 'Panel (dashboard)' },
@@ -35,8 +35,8 @@ const lineas = P('solo sus líneas');
 const todo = Object.fromEntries(MODULOS.map(m => [m.key, T]));
 
 // `alcance` del usuario (columna usuarios.alcance):
-//   lineas     → líneas de producto asignadas (gerente de línea)
-//   vendedores → códigos de vendedor (ejecutivo: el suyo; gerente: su equipo)
+//   lineas     → líneas de producto asignadas (gerente de línea) = categoría (marca del ERP)
+//   vendedores → códigos de vendedor (ejecutivo: el suyo; gerente/asistente: su equipo, vacío = todos)
 const ROLES = [
   {
     key: 'direccion', nombre: 'Dirección',
@@ -48,11 +48,11 @@ const ROLES = [
   },
   {
     key: 'gerente_linea', nombre: 'Gerente de Línea', alcance: ['lineas'],
+    // La hoja también le da 👁 en gastos, CxC, CxP, proyecciones, análisis y Asistente IA,
+    // pero esos datos no vienen por línea de producto: bloqueados hasta poder recortarlos.
     permisos: {
       panel: lineas, ventas: lineas, margenes: lineas, compras: lineas, inventario: lineas,
-      gastos: P('solo sus líneas; operativos, no administrativos'),
-      cxc: lineas, cxp: lineas, proyecciones: lineas, analisis: lineas, ventas_compras: lineas,
-      capital: lineas, asistente: lineas, insights: lineas, agentes: P('solo lectura'),
+      ventas_compras: lineas, capital: lineas, insights: lineas, agentes: P('solo lectura'),
     },
   },
   {
@@ -88,14 +88,18 @@ const ROLES = [
   {
     key: 'compras', nombre: 'Compras',
     permisos: {
+      // Asistente IA (👁 acceso restringido en la hoja) bloqueado: el agente SQL ve todas las
+      // tablas, incluidas ventas y márgenes, hasta que se pueda acotar.
       panel: P('compras'), compras: T, inventario: T, cxp: T, ventas_compras: T, capital: T,
-      asistente: P('acceso restringido'), insights: P('su área'),
+      insights: P('su área'),
     },
   },
   {
     key: 'inventario', nombre: 'Inventario',
+    // Capital inmovilizado / Rotación (👁 en unidades en la hoja) bloqueado: esas páginas
+    // están armadas sobre montos en Q y no hay vista en unidades todavía.
     permisos: {
-      panel: P('compras'), inventario: P('en unidades, no en Q'), capital: P('en unidades, no en Q'),
+      panel: P('compras'), inventario: P('en unidades, no en Q'),
     },
   },
   {
@@ -115,6 +119,22 @@ function permisosDeRol(rol) {
 
 function puede(rol, modulo) {
   return !!ROLES_POR_KEY[rol]?.permisos[modulo];
+}
+
+// Un usuario puede tener roles adicionales (p. ej. Cobranza + CxP): ve la unión,
+// y en cada módulo el nivel más amplio de sus roles.
+function rolesDeUsuario(u) {
+  return [u?.rol, ...(u?.roles_adicionales || [])].filter(r => ROLES_POR_KEY[r]);
+}
+
+function permisosDeUsuario(u) {
+  const out = {};
+  for (const rol of rolesDeUsuario(u)) {
+    for (const [m, p] of Object.entries(permisosDeRol(rol))) {
+      if (!out[m] || (out[m].nivel !== 'total' && p.nivel === 'total')) out[m] = p;
+    }
+  }
+  return out;
 }
 
 // Qué módulos habilitan cada endpoint de la API (prefijo bajo /api, primera coincidencia).
@@ -156,4 +176,6 @@ function modulosDeEndpoint(path) {
   return hit ? { modulos: hit[1], ...(hit[2] || {}) } : null;
 }
 
-module.exports = { MODULOS, ROLES, ROLES_POR_KEY, permisosDeRol, puede, modulosDeEndpoint };
+module.exports = {
+  MODULOS, ROLES, ROLES_POR_KEY, permisosDeRol, puede, rolesDeUsuario, permisosDeUsuario, modulosDeEndpoint,
+};

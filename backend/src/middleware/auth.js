@@ -26,7 +26,7 @@ const authenticate = async (req, res, next) => {
       
       // Verificar que el usuario existe y está activo
       const usuario = await db.getAsync(
-        'SELECT id, nombre, email, rol, alcance, avatar_url, activo FROM usuarios WHERE id = ? AND activo = TRUE',
+        'SELECT id, nombre, email, rol, roles_adicionales, alcance, avatar_url, activo FROM usuarios WHERE id = ? AND activo = TRUE',
         [decoded.userId]
       );
       

@@ -721,7 +721,7 @@ function InventarioKpiCard({ kpis: k }) {
       deltaLeyenda="rotacion_inventario"
       icon={CubeIcon}
       color="indigo"
-      valor={fmtM(k.inventario_valor)}
+      valor={k.inventario_valor == null ? `${(k.inventario_con_stock || 0).toLocaleString('es-GT')} con stock` : fmtM(k.inventario_valor)}
       delta={rotacion}
       deltaLabel="rotaciones/año"
       deltaUnit="x"

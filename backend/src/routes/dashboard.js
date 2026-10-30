@@ -4,7 +4,7 @@ const db = require('../../database/connection');
 const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
 const { cicloPeriodo } = require('../services/cicloCaja');
-const { puede } = require('../config/permisos');
+const { permisosDeUsuario } = require('../config/permisos');
 
 // Qué módulo necesita cada bloque del panel. Un rol ve solo los bloques de sus
 // módulos (p. ej. Cobranza: cartera; Compras: compras e inventario).
@@ -28,15 +28,16 @@ const BLOQUES_POR_MODULO = {
   analisis: ['health', 'insights'],
 };
 
-function recortarPanel(data, rol) {
-  if (rol === 'admin') return data;
+function recortarPanel(data, user) {
+  if (user?.rol === 'admin') return data;
+  const permisos = permisosDeUsuario(user);
   const kpis = {};
   for (const [mod, keys] of Object.entries(KPIS_POR_MODULO)) {
-    if (puede(rol, mod)) keys.forEach(k => { kpis[k] = data.kpis[k]; });
+    if (permisos[mod]) keys.forEach(k => { kpis[k] = data.kpis[k]; });
   }
   const out = { ...data, kpis };
   for (const [mod, keys] of Object.entries(BLOQUES_POR_MODULO)) {
-    if (!puede(rol, mod)) keys.forEach(k => { delete out[k]; });
+    if (!permisos[mod]) keys.forEach(k => { delete out[k]; });
   }
   return out;
 }
@@ -618,7 +619,7 @@ router.get('/', async (req, res) => {
           saldo: parseFloat(c.saldo_total) || 0,
         })),
         insights,
-      }, req.user?.rol),
+      }, req.user),
     });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });

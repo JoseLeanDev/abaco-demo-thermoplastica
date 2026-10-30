@@ -6,6 +6,7 @@ const CFOAICore = require('../agents');
 const { parsePeriodo } = require('../services/periodo');
 const M = require('../services/margen');
 const { resumirInv, esQuieto } = require('../services/inventarioSalud');
+const { claveAlcance, filtroInsights } = require('../services/alcance');
 
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
@@ -269,8 +270,14 @@ router.get('/insights', async (req, res) => {
     const skipCache = req.query.skip_cache === 'true';
     const umbral = parseFloat(req.query.umbral) || 20;
 
+    // Los insights en vivo son de toda la empresa (y se guardan en el histórico):
+    // un rol acotado solo ve los del histórico de su área (/insights/historico).
+    if (filtroInsights(req.user)) {
+      return res.json({ status: 'success', source: 'restringido', empresa_id: empresaId, context, insights: [], acciones_prioritarias: [] });
+    }
+
     // Verificar cache
-    const cacheKey = `insights_${empresaId}_${context}`;
+    const cacheKey = `insights_${empresaId}_${context}${claveAlcance()}`;
     const cached = insightsCache.get(cacheKey);
     
     if (!skipCache && cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
@@ -604,6 +611,13 @@ router.get('/insights/historico', async (req, res) => {
     if (soloPlaybooks) {
       query += ` AND agent_source LIKE 'playbook:%'`;
     }
+
+    // Solo los de su área (roles acotados)
+    const fi = filtroInsights(req.user);
+    if (fi) {
+      query += ` AND ${fi.sql}`;
+      params.push(...fi.params);
+    }
     
     query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
     params.push(limit, offset);
@@ -641,7 +655,8 @@ router.get('/insights/historico', async (req, res) => {
       FROM insights_historico
       WHERE empresa_id = ? AND status = 'active'
         AND created_at >= CURRENT_DATE - INTERVAL '${days} days'
-    `, [empresaId]);
+        ${fi ? `AND ${fi.sql}` : ''}
+    `, [empresaId, ...(fi ? fi.params : [])]);
     
     res.json({
       status: 'success',
@@ -844,10 +859,12 @@ router.get('/salud', async (req, res) => {
 //
 // La vista es cara (agrega toda la historia de ventas y compras) y son ~1,200
 // artículos con stock, así que se lee una sola vez, se guarda 5 minutos en
-// memoria y los filtros/agrupaciones se hacen aquí.
-let cacheInv = { t: 0, filas: null, corte: null };
+// memoria (por alcance del usuario) y los filtros/agrupaciones se hacen aquí.
+const cacheInv = new Map();
 async function inventarioSalud(db) {
-  if (cacheInv.filas && Date.now() - cacheInv.t < 5 * 60 * 1000) return cacheInv;
+  const key = claveAlcance();
+  const hit = cacheInv.get(key);
+  if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit;
   const limpio = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;
   const [filas, corte] = await Promise.all([
     db.allAsync(`
@@ -864,7 +881,7 @@ async function inventarioSalud(db) {
     db.getAsync(`SELECT MAX(fecha_snapshot) AS f FROM thermoplastica.fact_inventario_snapshot`),
   ]);
   const num = (x) => (x === null || x === undefined ? null : Number(x));
-  cacheInv = {
+  const datos = {
     t: Date.now(),
     corte: corte?.f,
     filas: filas.map(r => {
@@ -881,7 +898,9 @@ async function inventarioSalud(db) {
       };
     }),
   };
-  return cacheInv;
+  cacheInv.set(key, datos);
+  if (cacheInv.size > 20) cacheInv.delete(cacheInv.keys().next().value);
+  return datos;
 }
 
 
@@ -1011,7 +1030,7 @@ const TRAMOS_ROT = [
 // ventas y compras completas)
 const cacheSalida = new Map();
 async function salidaPorArticulo(db, P) {
-  const key = `${P.desde}|${P.hasta}`;
+  const key = `${P.desde}|${P.hasta}${claveAlcance()}`;
   const hit = cacheSalida.get(key);
   if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit;
   const limpio = (e, vacio) => `COALESCE(NULLIF(TRIM(${e}), ''), '${vacio}')`;

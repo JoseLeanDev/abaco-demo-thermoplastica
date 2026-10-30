@@ -36,6 +36,9 @@ test('matriz: algunos cruces de la hoja', () => {
   assert.ok(!puede('inventario', 'insights'));
   assert.ok(!puede('gerente_linea', 'usuarios'));
   assert.ok(!puede('rol_inexistente', 'panel'));
+  // Gerente de Línea: sin los módulos que no vienen por línea de producto
+  for (const m of ['cxc', 'cxp', 'proyecciones', 'analisis', 'gastos', 'asistente']) assert.ok(!puede('gerente_linea', m), m);
+  for (const m of ['ventas', 'margenes', 'compras', 'inventario', 'ventas_compras', 'capital']) assert.ok(puede('gerente_linea', m), m);
 });
 
 test('el middleware bloquea por módulo y deja pasar endpoints compartidos', () => {
@@ -54,7 +57,10 @@ test('el middleware bloquea por módulo y deja pasar endpoints compartidos', () 
   assert.ok(pasa('ejecutivo_ventas', '/api/ventas/desglose'));
   assert.ok(pasa('ejecutivo_ventas', '/api/margenes/vendedores'));
   assert.ok(!pasa('asistente_ventas', '/api/margenes'));
-  assert.ok(pasa('compras', '/api/agents/chat-agente', 'POST'));
+  // Asistente IA bloqueado para Compras y Gerente de Línea (el agente ve todas las tablas)
+  assert.ok(!pasa('compras', '/api/agents/chat-agente', 'POST'));
+  assert.ok(!pasa('gerente_linea', '/api/agents/chat-agente', 'POST'));
+  assert.ok(pasa('direccion', '/api/agents/chat-agente', 'POST'));
   assert.ok(!pasa('cobranza', '/api/agents/chat-agente', 'POST'));
 });
 

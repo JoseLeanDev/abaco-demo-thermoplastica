@@ -329,12 +329,13 @@ const NO_INVENTARIO = `(COALESCE(a.es_gasto_operativo, FALSE)
   OR a.linea ILIKE 'activo fijo%' OR a.linea ILIKE 'gastos de importaci%' OR a.linea ILIKE 'costo% de producci%'
   OR a.marca IN ('Contable', 'Articulos de Servicio', 'Maquila')
   OR a.codigo_articulo IN ('GENARTICULO', 'GENARTICULOEXENTO', 'GENSERV', 'GENSERVICIO'))`;
+const { claveAlcance } = require('../services/alcance');
 const cacheAnalitica = new Map();
 
 router.get('/analitica', async (req, res) => {
   try {
     const P = parsePeriodo(req);
-    const key = `${P.desde}|${P.hasta}`;
+    const key = `${P.desde}|${P.hasta}${claveAlcance()}`;
     const hit = cacheAnalitica.get(key);
     if (hit && Date.now() - hit.t < 5 * 60 * 1000) return res.json(hit.body);
 

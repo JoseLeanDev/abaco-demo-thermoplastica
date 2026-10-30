@@ -40,6 +40,7 @@ export default function Usuarios() {
     email: '',
     password: '',
     rol: '',
+    roles_adicionales: [],
     alcance: {}
   })
 
@@ -101,7 +102,7 @@ export default function Usuarios() {
       const data = await res.json()
       if (res.ok) {
         setMessage('Usuario creado exitosamente')
-        setNewUser({ nombre: '', email: '', password: '', rol: '', alcance: {} })
+        setNewUser({ nombre: '', email: '', password: '', rol: '', roles_adicionales: [], alcance: {} })
         setShowCreate(false)
         fetchUsuarios()
       } else {
@@ -128,6 +129,7 @@ export default function Usuarios() {
         body: JSON.stringify({
           nombre: showEdit.nombre,
           rol: showEdit.rol,
+          roles_adicionales: showEdit.roles_adicionales || [],
           alcance: showEdit.alcance || {},
           activo: showEdit.activo
         })
@@ -325,6 +327,9 @@ export default function Usuarios() {
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRolColor(u.rol)}`}>
                         {nombreRol(u.rol)}
                       </span>
+                      {(u.roles_adicionales || []).map(r => (
+                        <span key={r} className="ml-1 text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-700">+ {nombreRol(r)}</span>
+                      ))}
                       {resumenAlcance(u) && (
                         <p className="text-[11px] text-[var(--text-muted)] mt-1 truncate max-w-[200px]">{resumenAlcance(u)}</p>
                       )}

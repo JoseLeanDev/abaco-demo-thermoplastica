@@ -9,7 +9,8 @@ export default function MatrizPermisos({ catalogo }) {
         <h2 className="font-semibold text-[var(--text-primary)]">Permisos por módulo y rol</h2>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           ✅ acceso completo · 👁 acceso con alcance limitado · — sin acceso.
-          El alcance por fila (solo sus líneas, sus clientes, sin costo…) todavía no se aplica a los datos: hoy un 👁 ve el módulo completo.
+          En 👁 los datos salen recortados: líneas asignadas (Gerente de Línea), vendedores asignados (Ejecutivo; Gerente y Asistente si se les asigna equipo),
+          sin costo / sin márgenes / sin montos en Q según el rol.
         </p>
       </div>
       <div className="overflow-x-auto">

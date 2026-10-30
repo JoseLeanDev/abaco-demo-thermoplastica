@@ -127,6 +127,9 @@ export function AuthProvider({ children }) {
   // puede('cxc') → el rol tiene ese módulo; puedeVer('/ventas') → puede abrir esa página
   const puede = (modulo) => !!permisos[modulo]
   const puedeVer = (pathname) => puedeVerRuta(permisos, pathname)
+  // oculta('/ventas', 'costo') → el backend quita ese monto en ese módulo para este rol
+  // ('costo' | 'margen' | 'montos' = todo lo que está en Q); sirve para no dibujar columnas vacías
+  const oculta = (api, que) => (user?.ocultar?.[api] || []).includes(que)
 
   const value = {
     user,
@@ -137,6 +140,7 @@ export function AuthProvider({ children }) {
     permisos,
     puede,
     puedeVer,
+    oculta,
     login,
     register,
     logout,

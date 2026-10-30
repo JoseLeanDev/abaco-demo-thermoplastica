@@ -8,6 +8,7 @@ const nombreCliente = (r) => {
 };
 const suma = (rows, campo) => rows.reduce((n, r) => n + Number(r[campo] || 0), 0);
 const contar = (rows, campo) => new Set(rows.map((r) => r[campo]).filter((v) => v !== null && v !== undefined && v !== '')).size;
+const { claveAlcance } = require('./alcance');
 const cache = new Map();
 
 function ultimoMesCerrado(now = new Date()) {
@@ -120,7 +121,7 @@ async function obtenerReporte(req, pool, { now = new Date(), cargar = leerLamina
   const linea = LINEAS.includes(req.query.categoria) ? req.query.categoria : 'Laminados';
   const tabla = linea === 'Laminados' ? 'cpp_laminados_publicacion' : 'cpp_articulos_publicacion';
   const publicacion = cargar === leerLaminados ? (await pool.query(`SELECT importacion_id FROM thermoplastica.${tabla} WHERE singleton`)).rows[0]?.importacion_id : null;
-  const key = JSON.stringify([linea, desde, hasta, corte, publicacion]);
+  const key = JSON.stringify([linea, desde, hasta, corte, publicacion]) + claveAlcance();
   let cached = cache.get(key);
   if (cargar !== leerLaminados || !cached || cached.hasta < Date.now()) {
     const promise = cargar(pool, { desde, hasta, corte, ...(linea === 'Laminados' ? {} : {lineas:[linea]}) });

@@ -5,11 +5,14 @@ const ETIQUETA_ALCANCE = {
   vendedores: { titulo: 'Vendedores', ayuda: 'El ejecutivo: su propio código. Gerente o asistente: los vendedores de su equipo.' },
 }
 
-// Selector de rol + alcance (líneas o vendedores) y resumen de lo que el rol puede ver.
-// `value` = { rol, alcance }, `catalogo` = respuesta de /auth/roles
+// Selector de rol (+ roles adicionales) y alcance (líneas o vendedores), con el resumen
+// de lo que puede ver. `value` = { rol, roles_adicionales, alcance }, `catalogo` = /auth/roles
 export default function RolCampos({ value, onChange, catalogo }) {
-  const rol = catalogo?.roles.find(r => r.key === value.rol)
+  const extra = (value.roles_adicionales || []).filter(k => k !== value.rol)
+  const roles = (catalogo?.roles || []).filter(r => r.key === value.rol || extra.includes(r.key))
+  const rol = roles.length ? unir(roles) : null
   const alcance = value.alcance || {}
+  const alternarExtra = (k) => onChange({ ...value, roles_adicionales: extra.includes(k) ? extra.filter(x => x !== k) : [...extra, k] })
 
   return (
     <div className="space-y-3">
@@ -25,6 +28,22 @@ export default function RolCampos({ value, onChange, catalogo }) {
           {(catalogo?.roles || []).map(r => <option key={r.key} value={r.key}>{r.nombre}</option>)}
         </select>
       </div>
+
+      {value.rol && (
+        <details className="text-sm" open={extra.length > 0}>
+          <summary className="cursor-pointer text-[var(--text-secondary)]">
+            Roles adicionales{extra.length ? ` (${extra.length})` : ''}
+          </summary>
+          <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+            {catalogo.roles.filter(r => r.key !== value.rol).map(r => (
+              <label key={r.key} className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={extra.includes(r.key)} onChange={() => alternarExtra(r.key)} className="w-3.5 h-3.5 rounded" />
+                {r.nombre}
+              </label>
+            ))}
+          </div>
+        </details>
+      )}
 
       {rol && (
         <div className="flex flex-wrap gap-1">
@@ -54,6 +73,17 @@ export default function RolCampos({ value, onChange, catalogo }) {
       ))}
     </div>
   )
+}
+
+// Permisos combinados de varios roles: en cada módulo el nivel más amplio
+function unir(roles) {
+  const permisos = {}
+  for (const r of roles) {
+    for (const [m, p] of Object.entries(r.permisos)) {
+      if (!permisos[m] || (permisos[m].nivel !== 'total' && p.nivel === 'total')) permisos[m] = p
+    }
+  }
+  return { permisos, alcance: [...new Set(roles.flatMap(r => r.alcance))] }
 }
 
 function ListaAlcance({ titulo, ayuda, opciones, seleccion, onChange }) {

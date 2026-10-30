@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { reescribir } = require('../src/services/alcance');
 
 // PostgreSQL connection - Production only
 const pool = new Pool({
@@ -27,10 +28,19 @@ pool.on('connect', (client) => {
 
 console.log('✅ Conectado a base de datos PostgreSQL (Render)');
 
-// Helper para convertir ? → $1, $2, etc.
+// Recorte por usuario (services/alcance.js): las consultas hechas dentro de una
+// petición con alcance salen con las tablas sensibles filtradas. pool.query lo
+// usan directo algunos servicios (laminados, CPP).
+const poolQuery = pool.query.bind(pool);
+pool.query = (text, ...rest) => poolQuery(
+  typeof text === 'string' ? reescribir(text) : (text?.text ? { ...text, text: reescribir(text.text) } : text),
+  ...rest
+);
+
+// Helper para convertir ? → $1, $2, etc. (y aplicar el alcance del usuario)
 function convertParams(sql) {
   let paramCount = 0;
-  return sql.replace(/\?/g, () => {
+  return reescribir(sql).replace(/\?/g, () => {
     paramCount++;
     return `$${paramCount}`;
   });

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { usePeriodo } from '../context/PeriodoContext'
+import { useAuth } from '../context/AuthContext'
 import { useQuery } from 'react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
@@ -91,7 +92,7 @@ const COLUMNAS_VENTAS = [
   { label: 'Total sin IVA', get: f => f.total_sin_iva.toFixed(2) },
   { label: 'IVA', get: f => f.iva.toFixed(2) },
   { label: 'Total con IVA', get: f => f.total_con_iva.toFixed(2) },
-  { label: 'Costo', get: f => (f.sin_costo ? '' : f.costo_total_facturado.toFixed(2)) },
+  { label: 'Costo', get: f => (f.sin_costo || f.costo_total_facturado == null ? '' : f.costo_total_facturado.toFixed(2)) },
   { label: 'Margen bruto', get: f => (f.margen_bruto === null ? '' : f.margen_bruto.toFixed(2)) },
   { label: 'Margen %', get: f => (f.margen_bruto_pct === null ? '' : Number(f.margen_bruto_pct).toFixed(1)) },
 ]
@@ -292,6 +293,9 @@ function KPIs({ r, loading }) {
     )
   }
   const v = (x) => x
+  // Asistente de Ventas: sin márgenes (el backend no los manda)
+  const { oculta } = useAuth()
+  const sinMargen = oculta('/ventas', 'margen')
   const deltaMargen = r.margen_bruto_pct != null && r.margen_pct_prev != null ? r.margen_bruto_pct - r.margen_pct_prev : null
   const deltaClientes = r.clientes_prev ? r.clientes - r.clientes_prev : null
   return (
@@ -303,6 +307,7 @@ function KPIs({ r, loading }) {
           <Var pct={r.variacion_pct} /> vs {fmtM(r.ventas_prev)} año anterior <Leyenda k="vs_anio_anterior" />
         </p>
       </div>
+      {!sinMargen && (
       <div className="kpi-card">
         <span className="kpi-label flex items-center gap-1">{r.metodologia ? 'Margen sobre materia prima' : 'Margen bruto'} <Leyenda k={r.metodologia ? 'margen_mp' : 'margen_bruto'} /></span>
         <p className={`kpi-value ${margenTone(r.margen_bruto_pct)}`}>{v(fmtPct(r.margen_bruto_pct))}</p>
@@ -314,6 +319,7 @@ function KPIs({ r, loading }) {
         </p>
         <SinCosto pct={r.pct_ventas_sin_costo} />
       </div>
+      )}
       <div className="kpi-card">
         <span className="kpi-label flex items-center gap-1">Clientes que compraron <Leyenda k="clientes_compraron" /></span>
         <p className="kpi-value">{v(fmtInt(r.clientes))}</p>

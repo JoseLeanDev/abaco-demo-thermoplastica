@@ -3,14 +3,25 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../../database/connection');
 const { authenticate, generateToken, JWT_SECRET } = require('../middleware/auth');
-const { MODULOS, ROLES, ROLES_POR_KEY, permisosDeRol } = require('../config/permisos');
+const { MODULOS, ROLES, ROLES_POR_KEY, permisosDeRol, permisosDeUsuario } = require('../config/permisos');
+const { alcanceDeUsuario } = require('../services/alcance');
 
 // El usuario que ve el frontend lleva sus permisos por módulo (menú y rutas salen de ahí)
-const conPermisos = (u) => ({ ...u, permisos: permisosDeRol(u.rol) });
+// y qué montos le oculta su rol (para no dibujar columnas vacías).
+function conPermisos(u) {
+  const A = alcanceDeUsuario(u);
+  const ocultar = {};
+  for (const r of A?.ocultar || []) for (const pre of r.en) ocultar[pre] = [...new Set([...(ocultar[pre] || []), ...r.que])];
+  return { ...u, permisos: permisosDeUsuario(u), ocultar };
+}
 
-// Alcance válido para el rol: solo las llaves que el rol usa, como listas de texto
-function limpiarAlcance(rol, alcance) {
-  const llaves = ROLES_POR_KEY[rol]?.alcance || [];
+// Roles adicionales válidos (sin repetir el principal)
+const limpiarRoles = (rol, extra) =>
+  [...new Set((Array.isArray(extra) ? extra : []).filter(r => ROLES_POR_KEY[r] && r !== rol))];
+
+// Alcance válido para los roles: solo las llaves que usan, como listas de texto
+function limpiarAlcance(roles, alcance) {
+  const llaves = [...new Set([].concat(roles).flatMap(r => ROLES_POR_KEY[r]?.alcance || []))];
   const out = {};
   for (const k of llaves) {
     const v = alcance?.[k];
@@ -35,7 +46,7 @@ router.post('/login', async (req, res) => {
 
     // Buscar usuario
     const usuario = await db.getAsync(
-      'SELECT id, nombre, email, password_hash, rol, alcance, avatar_url, activo FROM usuarios WHERE email = ?',
+      'SELECT id, nombre, email, password_hash, rol, roles_adicionales, alcance, avatar_url, activo FROM usuarios WHERE email = ?',
       [email.toLowerCase().trim()]
     );
 
@@ -101,7 +112,7 @@ router.post('/login', async (req, res) => {
 //   3. El rol debe existir en el catálogo (config/permisos.js); el alcance se limpia según el rol.
 router.post('/register', async (req, res) => {
   try {
-    const { nombre, email, password, alcance } = req.body;
+    const { nombre, email, password, alcance, roles_adicionales } = req.body;
     let { rol } = req.body;
 
     if (!nombre || !email || !password) {
@@ -162,6 +173,8 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    const extra = limpiarRoles(rol, roles_adicionales);
+
     // Verificar si el email ya existe
     const existing = await db.getAsync(
       'SELECT id FROM usuarios WHERE email = ?',
@@ -181,18 +194,19 @@ router.post('/register', async (req, res) => {
 
     // Crear usuario
     const result = await db.runAsync(
-      'INSERT INTO usuarios (nombre, email, password_hash, rol, alcance) VALUES (?, ?, ?, ?, ?)',
-      [nombre.trim(), email.toLowerCase().trim(), passwordHash, rol, JSON.stringify(limpiarAlcance(rol, alcance))]
+      'INSERT INTO usuarios (nombre, email, password_hash, rol, roles_adicionales, alcance) VALUES (?, ?, ?, ?, ?, ?)',
+      [nombre.trim(), email.toLowerCase().trim(), passwordHash, rol, extra,
+       JSON.stringify(limpiarAlcance([rol, ...extra], alcance))]
     );
 
     const newUser = await db.getAsync(
-      'SELECT id, nombre, email, rol, alcance, activo, created_at FROM usuarios WHERE id = ?',
+      'SELECT id, nombre, email, rol, roles_adicionales, alcance, activo, created_at FROM usuarios WHERE id = ?',
       [result.id || result.rows?.[0]?.id]
     );
 
     // Si no podemos obtener el ID de result, lo buscamos por email
     const user = newUser || await db.getAsync(
-      'SELECT id, nombre, email, rol, alcance, activo, created_at FROM usuarios WHERE email = ?',
+      'SELECT id, nombre, email, rol, roles_adicionales, alcance, activo, created_at FROM usuarios WHERE email = ?',
       [email.toLowerCase().trim()]
     );
 
@@ -305,7 +319,7 @@ router.get('/usuarios', authenticate, async (req, res) => {
     }
 
     const usuarios = await db.allAsync(
-      'SELECT id, nombre, email, rol, alcance, avatar_url, activo, ultimo_login, created_at FROM usuarios ORDER BY created_at DESC'
+      'SELECT id, nombre, email, rol, roles_adicionales, alcance, avatar_url, activo, ultimo_login, created_at FROM usuarios ORDER BY created_at DESC'
     );
 
     res.json({
@@ -326,7 +340,7 @@ router.get('/usuarios', authenticate, async (req, res) => {
 router.patch('/usuarios/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, rol, activo, alcance } = req.body;
+    const { nombre, rol, activo, alcance, roles_adicionales } = req.body;
 
     // Solo admin o el propio usuario puede actualizar
     if (req.user.rol !== 'admin' && req.user.id !== parseInt(id)) {
@@ -337,7 +351,7 @@ router.patch('/usuarios/:id', authenticate, async (req, res) => {
     }
 
     // Solo admin puede cambiar rol, alcance o activo
-    if ((rol !== undefined || activo !== undefined || alcance !== undefined) && req.user.rol !== 'admin') {
+    if ((rol !== undefined || activo !== undefined || alcance !== undefined || roles_adicionales !== undefined) && req.user.rol !== 'admin') {
       return res.status(403).json({
         status: 'error',
         message: 'No tiene permisos para cambiar rol o estado'
@@ -373,13 +387,17 @@ router.patch('/usuarios/:id', authenticate, async (req, res) => {
       updates.push(`rol = $${paramCount}`);
       values.push(rol);
     }
-    if ((rol !== undefined || alcance !== undefined) && req.user.rol === 'admin') {
-      // El alcance se guarda limpio para el rol que queda (el nuevo o el actual)
-      const actual = await db.getAsync('SELECT rol, alcance FROM usuarios WHERE id = ?', [parseInt(id)]);
+    if ((rol !== undefined || alcance !== undefined || roles_adicionales !== undefined) && req.user.rol === 'admin') {
+      // Roles adicionales y alcance se guardan limpios para los roles que quedan
+      const actual = await db.getAsync('SELECT rol, roles_adicionales, alcance FROM usuarios WHERE id = ?', [parseInt(id)]);
       const rolFinal = rol ?? actual?.rol;
+      const extra = limpiarRoles(rolFinal, roles_adicionales ?? actual?.roles_adicionales);
+      paramCount++;
+      updates.push(`roles_adicionales = $${paramCount}`);
+      values.push(extra);
       paramCount++;
       updates.push(`alcance = $${paramCount}`);
-      values.push(JSON.stringify(limpiarAlcance(rolFinal, alcance ?? actual?.alcance)));
+      values.push(JSON.stringify(limpiarAlcance([rolFinal, ...extra], alcance ?? actual?.alcance)));
     }
     if (activo !== undefined && req.user.rol === 'admin') {
       paramCount++;
@@ -401,7 +419,7 @@ router.patch('/usuarios/:id', authenticate, async (req, res) => {
     await db.runAsync(sql, values);
 
     const usuario = await db.getAsync(
-      'SELECT id, nombre, email, rol, alcance, avatar_url, activo, ultimo_login, created_at FROM usuarios WHERE id = ?',
+      'SELECT id, nombre, email, rol, roles_adicionales, alcance, avatar_url, activo, ultimo_login, created_at FROM usuarios WHERE id = ?',
       [parseInt(id)]
     );
 

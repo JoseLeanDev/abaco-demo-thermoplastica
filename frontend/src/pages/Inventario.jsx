@@ -13,6 +13,8 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { usePeriodo } from '../context/PeriodoContext'
+import { useAuth } from '../context/AuthContext'
+import Existencias, { COLUMNAS_EXISTENCIAS } from '../components/inventario/Existencias'
 import { endpoints } from '../services/cfoApi'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
@@ -35,6 +37,9 @@ const PESTANAS = [
 
 export default function Inventario() {
   const { params: periodo } = usePeriodo()
+  // Roles que ven existencias pero no montos en Q: solo la tabla en unidades
+  const { oculta } = useAuth()
+  const soloExistencias = oculta('/inventario', 'montos')
   const [tab, setTab] = useState('resumen')
   const [producto, setProducto] = useState(FILTRO_VACIO)
   const [clase, setClase] = useState('')
@@ -66,6 +71,38 @@ export default function Inventario() {
   const exportar = () => exportarExcel(`inventario_${d?.fecha_corte || 'hoy'}.xlsx`, COLUMNAS_DETALLE(dias, objetivo), filas)
 
   const ctx = { filas, todas, tot, dias, objetivo, setObjetivo, producto, setProducto, setClase, setAbc, setProveedor, irDetalle, vista, setVista, setTab, periodo: d?.periodo }
+
+  if (soloExistencias) {
+    return (
+      <div className="space-y-6 animate-fade-in max-w-7xl">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 shrink-0 rounded-lg bg-[#001639] flex items-center justify-center">
+              <CubeIcon className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold">Inventario</h1>
+              <p className="text-sm text-[var(--text-muted)]">
+                {cargando && !d ? 'Cargando…' : `Existencias en unidades · foto del ${fmtFecha(d?.fecha_corte)}`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => exportarExcel(`existencias_${d?.fecha_corte || 'hoy'}.xlsx`, COLUMNAS_EXISTENCIAS, filas)}
+            disabled={!filas.length}
+            className="btn-secondary flex items-center gap-2 disabled:opacity-60"
+          >
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            Exportar
+          </button>
+        </div>
+        <FiltroProducto value={producto} onChange={setProducto} opciones={opciones} />
+        {cargando && !d
+          ? <div className="h-64 rounded-lg bg-[var(--bg-secondary)] animate-pulse" />
+          : <Existencias filas={filas} />}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl">
