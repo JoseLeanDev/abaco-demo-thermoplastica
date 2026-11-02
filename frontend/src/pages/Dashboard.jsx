@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useDashboard } from '../hooks/useCfoData'
+import { useDashboard, useUltimaActualizacion } from '../hooks/useCfoData'
 import { usePeriodo } from '../context/PeriodoContext'
 import { useAuth } from '../context/AuthContext'
 import { NOMBRE_ROL } from '../config/permisos'
@@ -79,6 +79,7 @@ const healthColor = (grade) => {
 // ============================================================
 export default function Dashboard() {
   const { data, isLoading, error } = useDashboard()
+  const { data: ultimaCarga } = useUltimaActualizacion()
   // Cada bloque sale solo con su módulo (el backend ya recorta los datos que el rol no ve)
   const { puede, user } = useAuth()
   const d = data?.data || {}
@@ -88,8 +89,10 @@ export default function Dashboard() {
   const cxcAg = d.cxc_aging || {}
   const cxpAg = d.cxp_aging || {}
   const lineas = d.top_lineas || []
-  const actualizado = data?.timestamp
-    ? new Date(data.timestamp).toLocaleString('es-GT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  // Última carga completa desde el ERP (la misma hora del topbar), no la hora de la consulta
+  const ultima = ultimaCarga?.data?.ultima
+  const actualizado = ultima
+    ? new Date(ultima).toLocaleString('es-GT', { timeZone: 'America/Guatemala', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : '—'
 
   if (isLoading) {
