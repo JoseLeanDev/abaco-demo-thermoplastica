@@ -20,6 +20,7 @@ import Inventario from './pages/Inventario'
 import LogActividades from './pages/LogActividades'
 import Usuarios from './pages/Usuarios'
 import Login from './pages/Login'
+import CambiarClave from './pages/CambiarClave'
 import AsistenteIA from './pages/AsistenteIA'
 import InsightsIA from './pages/InsightsIA'
 // Páginas secundarias
@@ -37,7 +38,7 @@ import Margenes from './pages/Margenes'
 // import ConciliacionBancaria from './pages/ConciliacionBancaria'
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, user } = useAuth()
 
   if (loading) {
     return (
@@ -50,7 +51,9 @@ function ProtectedRoute({ children }) {
     )
   }
 
-  return isAuthenticated ? children : <Navigate to="/login" replace />
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  // Contraseña asignada por el administrador: no entra a la plataforma hasta cambiarla
+  return user?.debe_cambiar_clave ? <CambiarClave /> : children
 }
 
 // Página fuera de los permisos del rol (p. ej. un enlace directo): aviso en lugar del módulo

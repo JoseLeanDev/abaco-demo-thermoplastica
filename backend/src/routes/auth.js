@@ -46,7 +46,7 @@ router.post('/login', async (req, res) => {
 
     // Buscar usuario
     const usuario = await db.getAsync(
-      'SELECT id, nombre, email, password_hash, rol, roles_adicionales, alcance, avatar_url, activo FROM usuarios WHERE email = ?',
+      'SELECT id, nombre, email, password_hash, rol, roles_adicionales, alcance, avatar_url, activo, debe_cambiar_clave FROM usuarios WHERE email = ?',
       [email.toLowerCase().trim()]
     );
 
@@ -192,11 +192,11 @@ router.post('/register', async (req, res) => {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Crear usuario
+    // Crear usuario (si lo crea un admin, la contraseña es temporal: debe cambiarla al entrar)
     const result = await db.runAsync(
-      'INSERT INTO usuarios (nombre, email, password_hash, rol, roles_adicionales, alcance) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO usuarios (nombre, email, password_hash, rol, roles_adicionales, alcance, debe_cambiar_clave) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [nombre.trim(), email.toLowerCase().trim(), passwordHash, rol, extra,
-       JSON.stringify(limpiarAlcance([rol, ...extra], alcance))]
+       JSON.stringify(limpiarAlcance([rol, ...extra], alcance)), !isBootstrap]
     );
 
     const newUser = await db.getAsync(
@@ -465,11 +465,18 @@ router.post('/cambiar-password', authenticate, async (req, res) => {
       });
     }
 
+    if (passwordNuevo === passwordActual) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'La nueva contraseña debe ser distinta de la actual'
+      });
+    }
+
     // Hash nuevo password
     const newHash = await bcrypt.hash(passwordNuevo, 10);
 
     await db.runAsync(
-      'UPDATE usuarios SET password_hash = ?, updated_at = NOW() WHERE id = ?',
+      'UPDATE usuarios SET password_hash = ?, debe_cambiar_clave = FALSE, updated_at = NOW() WHERE id = ?',
       [newHash, req.user.id]
     );
 

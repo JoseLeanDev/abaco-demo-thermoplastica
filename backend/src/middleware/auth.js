@@ -7,6 +7,8 @@ if (!JWT_SECRET) {
   throw new Error('JWT_SECRET missing');
 }
 
+const RUTAS_CAMBIO_CLAVE = ['/api/auth/me', '/api/auth/cambiar-password', '/api/auth/logout'];
+
 // Middleware para verificar token JWT
 const authenticate = async (req, res, next) => {
   try {
@@ -26,7 +28,7 @@ const authenticate = async (req, res, next) => {
       
       // Verificar que el usuario existe y está activo
       const usuario = await db.getAsync(
-        'SELECT id, nombre, email, rol, roles_adicionales, alcance, avatar_url, activo FROM usuarios WHERE id = ? AND activo = TRUE',
+        'SELECT id, nombre, email, rol, roles_adicionales, alcance, avatar_url, activo, debe_cambiar_clave FROM usuarios WHERE id = ? AND activo = TRUE',
         [decoded.userId]
       );
       
@@ -34,6 +36,15 @@ const authenticate = async (req, res, next) => {
         return res.status(401).json({
           status: 'error',
           message: 'Usuario no encontrado o inactivo'
+        });
+      }
+
+      // Con contraseña asignada por el administrador solo puede cambiarla (o salir)
+      if (usuario.debe_cambiar_clave && !RUTAS_CAMBIO_CLAVE.includes(req.baseUrl + req.path)) {
+        return res.status(403).json({
+          status: 'error',
+          code: 'CAMBIO_CLAVE',
+          message: 'Debe cambiar su contraseña antes de continuar'
         });
       }
       
