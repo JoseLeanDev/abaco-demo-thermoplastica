@@ -294,43 +294,10 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
           <p className="text-xs text-white/40 mt-0.5">
             Datos actualizados: {actualizado}
           </p>
-
-          {/* Composite Health Score */}
-          <div className="mt-5 flex items-center flex-wrap gap-x-6 gap-y-4">
-            <div className="flex items-center gap-4">
-            <div className="relative w-24 h-24 shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart innerRadius="72%" outerRadius="100%" data={scoreData} startAngle={90} endAngle={-270}>
-                  <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                  <RadialBar dataKey="value" cornerRadius={12} background={{ fill: 'rgba(255,255,255,0.1)' }} />
-                </RadialBarChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-2xl font-bold tabular-nums ${color.text}`}>{h.score || 0}</span>
-                <span className="text-[9px] uppercase tracking-wider text-white/50">/100</span>
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center gap-1">Health Score <Leyenda k="health_score" claro /></p>
-              <p className={`text-lg font-semibold capitalize ${color.text}`}>{h.grade || '—'}</p>
-              <p className="text-xs text-white/50 mt-1 whitespace-nowrap">Compuesto de 7 dimensiones <Leyenda k="score_componentes" claro /></p>
-            </div>
-            </div>
-
-            {/* Mini componentes del score */}
-            <div className="grid grid-cols-4 gap-x-5 gap-y-2 shrink-0">
-              <ScorePip label="Crec." value={h.componentes?.crecimiento} />
-              <ScorePip label="Margen" value={h.componentes?.margen} />
-              <ScorePip label="EBITDA" value={h.componentes?.ebitda} />
-              <ScorePip label="WC" value={h.componentes?.cobertura} />
-              <ScorePip label="Cobros" value={h.componentes?.cobros} />
-              <ScorePip label="Concent." value={h.componentes?.concentracion} />
-              <ScorePip label="Disc." value={h.componentes?.disciplina} />
-            </div>
-          </div>
         </div>
 
         {/* Números north-star a la derecha */}
+        <div className="space-y-5">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 xl:text-right border-t border-white/10 pt-5 xl:border-0 xl:pt-0">
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center xl:justify-end gap-1">Ventas del período <Leyenda k="ventas" claro /></p>
@@ -355,6 +322,40 @@ function ExecutiveHero({ empresa, actualizado, kpis: k, health: h }) {
               {fmtM(k.posicion_neta_wc)}
             </p>
             <p className="text-[10px] text-white/50 mt-1">cobertura {k.cobertura_cxc_cxp != null ? Number(k.cobertura_cxc_cxp).toFixed(2) + 'x' : '—'}</p>
+          </div>
+        </div>
+          {/* Composite Health Score: debajo de los KPIs, a la derecha (contenedor más bajo) */}
+          <div className="flex items-center flex-wrap gap-x-8 gap-y-4 xl:justify-end border-t border-white/10 pt-5">
+            <div className="flex items-center gap-4">
+            <div className="relative w-24 h-24 shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart innerRadius="72%" outerRadius="100%" data={scoreData} startAngle={90} endAngle={-270}>
+                  <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                  <RadialBar dataKey="value" cornerRadius={12} background={{ fill: 'rgba(255,255,255,0.1)' }} />
+                </RadialBarChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className={`text-2xl font-bold tabular-nums ${color.text}`}>{h.score || 0}</span>
+                <span className="text-[9px] uppercase tracking-wider text-white/50">/100</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 flex items-center gap-1">Health Score <Leyenda k="health_score" claro /></p>
+              <p className={`text-lg font-semibold capitalize ${color.text}`}>{h.grade || '—'}</p>
+              <p className="text-xs text-white/50 mt-1 whitespace-nowrap">Compuesto de 7 dimensiones <Leyenda k="score_componentes" claro /></p>
+            </div>
+            </div>
+
+            {/* Mini componentes del score */}
+            <div className="grid grid-cols-4 2xl:grid-cols-7 gap-x-5 gap-y-2 shrink-0">
+              <ScorePip label="Crec." value={h.componentes?.crecimiento} />
+              <ScorePip label="Margen" value={h.componentes?.margen} />
+              <ScorePip label="EBITDA" value={h.componentes?.ebitda} />
+              <ScorePip label="WC" value={h.componentes?.cobertura} />
+              <ScorePip label="Cobros" value={h.componentes?.cobros} />
+              <ScorePip label="Concent." value={h.componentes?.concentracion} />
+              <ScorePip label="Disc." value={h.componentes?.disciplina} />
+            </div>
           </div>
         </div>
       </div>
