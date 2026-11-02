@@ -31,8 +31,13 @@ const JOINS = `
 
 // Filtros comunes a todos los endpoints:
 //   ?tipo=inventario,gasto  ?categoria= ?subcategoria= ?sublinea= ?proveedor=<código> ?articulo=<código>
+// Los fletes no se muestran en Compras (ni vista ni resumen): los de importación (sublínea
+// Flete Marítimo/aéreo/Terrestre) y la cuenta contable "Pasajes, Fletes y Acarreos".
+// Siguen en Gastos Operativos.
+const SIN_FLETES = `NOT (COALESCE(a.sublinea, '') ILIKE 'flete%' OR COALESCE(a.descripcion, '') ILIKE '%flete%')`;
+
 function filtros(q, params) {
-  const where = [];
+  const where = [SIN_FLETES];
   for (const k of ['categoria', 'subcategoria', 'sublinea', 'proveedor', 'articulo']) {
     const val = q[k];
     if (val === undefined || val === '') continue;
