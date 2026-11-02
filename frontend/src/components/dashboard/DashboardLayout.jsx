@@ -47,7 +47,7 @@ function UltimaActualizacion() {
     <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--text-muted)]"
       title={`Última carga completa de datos del ERP: ${new Date(ultima).toLocaleString('es-GT', { timeZone: 'America/Guatemala', dateStyle: 'long', timeStyle: 'short' })}`}>
       <ArrowPathIcon className="w-3.5 h-3.5" />
-      <span>Datos al {textoActualizacion(ultima)}</span>
+      <span>Actualizado {textoActualizacion(ultima)}</span>
     </div>
   )
 }
