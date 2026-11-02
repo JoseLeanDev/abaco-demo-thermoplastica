@@ -18,12 +18,39 @@ import {
   TagIcon,
   CubeIcon,
   SparklesIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import AgentChat from '../agents/AgentChat'
 import FiltroPeriodo from '../common/FiltroPeriodo'
 import { NOMBRE_ROL } from '../../config/permisos'
+import { useUltimaActualizacion } from '../../hooks/useCfoData'
+
+// "hoy 5:00 a. m." / "ayer 5:00 a. m." / "31 oct, 5:00 a. m." en hora de Guatemala
+function textoActualizacion(iso) {
+  const f = new Date(iso)
+  const tz = 'America/Guatemala'
+  const dia = (d) => d.toLocaleDateString('en-CA', { timeZone: tz })
+  const hora = f.toLocaleTimeString('es-GT', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
+  const hoy = new Date()
+  if (dia(f) === dia(hoy)) return `hoy ${hora}`
+  if (dia(f) === dia(new Date(hoy.getTime() - 864e5))) return `ayer ${hora}`
+  return `${f.toLocaleDateString('es-GT', { timeZone: tz, day: 'numeric', month: 'short' })}, ${hora}`
+}
+
+function UltimaActualizacion() {
+  const { data } = useUltimaActualizacion()
+  const ultima = data?.data?.ultima
+  if (!ultima) return null
+  return (
+    <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--text-muted)]"
+      title={`Última carga completa de datos del ERP: ${new Date(ultima).toLocaleString('es-GT', { timeZone: 'America/Guatemala', dateStyle: 'long', timeStyle: 'short' })}`}>
+      <ArrowPathIcon className="w-3.5 h-3.5" />
+      <span>Datos al {textoActualizacion(ultima)}</span>
+    </div>
+  )
+}
 
 const navigation = [
   { name: 'Panel', href: '/', icon: HomeIcon },
@@ -255,6 +282,8 @@ export default function DashboardLayout({ children }) {
             </div>
 
             <div className="flex items-center gap-4">
+              <UltimaActualizacion />
+
               {/* Filtro de fechas global: siempre visible, aplica a todos los módulos */}
               <FiltroPeriodo />
 

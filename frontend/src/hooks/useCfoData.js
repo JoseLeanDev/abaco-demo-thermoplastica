@@ -5,6 +5,13 @@ import { usePeriodo } from '../context/PeriodoContext'
 // Los hooks de datos con ventana temporal leen el filtro de fechas global
 // (default: año en curso) y lo incluyen en la query key.
 
+// Hora de la última carga completa desde el ERP (aviso del topbar)
+export const useUltimaActualizacion = () =>
+  useQuery('ultima-actualizacion', () => endpoints.ultimaActualizacion(), {
+    refetchInterval: 15 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+  })
+
 export const useDashboard = () => {
   const { params } = usePeriodo()
   return useQuery(['dashboard', params], () => endpoints.dashboard(params), {

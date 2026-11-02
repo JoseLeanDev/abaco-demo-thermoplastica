@@ -46,6 +46,25 @@ function recortarPanel(data, user) {
   return out;
 }
 
+// GET /api/dashboard/ultima-actualizacion
+// Hora en que la plataforma quedó al día con el ERP: la carga OK más vieja entre las vistas
+// que se siguen cargando (si una falla hoy, la hora no avanza hasta que vuelva a entrar).
+router.get('/ultima-actualizacion', async (req, res) => {
+  try {
+    const r = await db.getAsync(`
+      SELECT MIN(ultima) AS ultima FROM (
+        SELECT MAX(finished_at) FILTER (WHERE status = 'ok') AS ultima
+        FROM raw_thermoplastica.batches
+        WHERE started_at > NOW() - INTERVAL '30 days'
+        GROUP BY source_view
+      ) s`);
+    res.json({ status: 'success', data: { ultima: r?.ultima || null } });
+  } catch (error) {
+    console.error('[DASHBOARD ULTIMA ACTUALIZACION]', error);
+    res.status(500).json({ status: 'error', message: 'Error en el servidor' });
+  }
+});
+
 // GET /api/dashboard
 // Executive briefing CEO-grade: KPIs, aging, YoY, márgenes, inventario, concentración, insights.
 router.get('/', async (req, res) => {

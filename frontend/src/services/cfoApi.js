@@ -35,6 +35,7 @@ cfoApi.interceptors.response.use(
 // Endpoints específicos
 export const endpoints = {
   dashboard: (params = {}) => cfoApi.get('/dashboard', { params }),
+  ultimaActualizacion: () => cfoApi.get('/dashboard/ultima-actualizacion'),
   tesoreria: {
     proyeccion: (semanas = 13) => cfoApi.get('/tesoreria/proyeccion', { params: { semanas } }),
     posicion: (params = {}) => cfoApi.get('/tesoreria/posicion', { params }),
