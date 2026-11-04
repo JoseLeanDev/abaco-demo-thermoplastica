@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
 // Filtro de fechas global: lo comparten todos los módulos y vive en la barra
 // superior del layout. Default: AÑO EN CURSO (1 de enero → hoy).
@@ -45,6 +45,21 @@ const PeriodoContext = createContext(null)
 export function PeriodoProvider({ children }) {
   const [preset, setPreset] = useState('ytd')
   const [custom, setCustom] = useState(() => rangoDePreset('ytd'))
+  // "Hoy" cambia aunque la pestaña siga abierta: sin esto los presets quedan
+  // congelados en el día en que se abrió la app y excluyen los datos nuevos.
+  const [hoy, setHoy] = useState(() => isoLocal(new Date()))
+
+  useEffect(() => {
+    const revisar = () => setHoy(isoLocal(new Date()))
+    const timer = setInterval(revisar, 60 * 1000)
+    document.addEventListener('visibilitychange', revisar)
+    window.addEventListener('focus', revisar)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', revisar)
+      window.removeEventListener('focus', revisar)
+    }
+  }, [])
 
   const value = useMemo(() => {
     const { desde, hasta } = preset === 'custom' ? custom : rangoDePreset(preset)
@@ -64,7 +79,7 @@ export function PeriodoProvider({ children }) {
       },
       setCustom: (r) => { setCustom(r); setPreset('custom') },
     }
-  }, [preset, custom])
+  }, [preset, custom, hoy])
 
   return <PeriodoContext.Provider value={value}>{children}</PeriodoContext.Provider>
 }
