@@ -137,7 +137,7 @@ export default function ClienteCxc() {
           sub={comportamiento.actual.atraso !== null ? `atraso promedio ${comportamiento.actual.atraso > 0 ? '+' : ''}${Math.round(comportamiento.actual.atraso)} d` : 'sin facturas pagadas'} />
         <Kpi titulo="Compras del período" leyenda="compras_cliente" valor={fmtM(compras.actual.ventas)}
           delta={compras.variacion_pct} sub="vs año anterior" />
-        <Kpi titulo="Margen bruto" leyenda="margen_bruto" valor={fmtPct(compras.actual.margen_pct)}
+        <Kpi titulo="Margen bruto" leyenda="margen_bruto" valor={fmtPct(compras.actual.margen_pct)} className="col-margen"
           sub={compras.cada_dias ? `compra cada ${compras.cada_dias} d` : `${compras.actual.facturas} facturas`} />
       </div>
 
@@ -191,9 +191,9 @@ function Esqueleto() {
 
 const TONOS = { success: 'text-[var(--success)]', warning: 'text-[var(--warning)]', danger: 'text-[var(--danger)]' }
 
-function Kpi({ titulo, leyenda, valor, sub, tono, delta }) {
+function Kpi({ titulo, leyenda, valor, sub, tono, delta, className = '' }) {
   return (
-    <div className="kpi-card">
+    <div className={`kpi-card ${className}`}>
       <span className="kpi-label flex items-center gap-1">{titulo} {leyenda && <Leyenda k={leyenda} />}</span>
       <p className={`text-xl font-bold tabular-nums mt-1 ${tono ? TONOS[tono] : ''}`}>{valor}</p>
       <p className="text-xs text-[var(--text-muted)] mt-1">
@@ -569,7 +569,7 @@ function TabCompras({ d }) {
                     <th className={`${th} text-left`}>Categoría</th>
                     <th className={`${th} text-right`}>Ventas</th>
                     <th className={`${th} text-right`}>vs año ant.</th>
-                    <th className={`${th} text-right`}>Margen</th>
+                    <th className={`${th} text-right col-margen`}>Margen</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-default)]">
@@ -588,7 +588,7 @@ function TabCompras({ d }) {
                         <td className={`${td} text-right tabular-nums ${v === null ? 'text-[var(--text-muted)]' : v >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                           {v === null ? (x.ventas > 0 ? 'nueva' : '—') : `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`}
                         </td>
-                        <td className={`${td} text-right tabular-nums`}>{fmtPct(x.margen_pct)}</td>
+                        <td className={`${td} text-right tabular-nums col-margen`}>{fmtPct(x.margen_pct)}</td>
                       </tr>
                     )
                   })}
@@ -607,7 +607,7 @@ function TabCompras({ d }) {
                     <th className={`${th} text-right`}>Unidades</th>
                     <th className={`${th} text-right`}>Ventas</th>
                     <th className={`${th} text-right`}>vs año ant.</th>
-                    <th className={`${th} text-right`}>Margen</th>
+                    <th className={`${th} text-right col-margen`}>Margen</th>
                     <th className={`${th} text-left`}>Última</th>
                   </tr>
                 </thead>
@@ -626,7 +626,7 @@ function TabCompras({ d }) {
                         <td className={`${td} text-right tabular-nums ${v === null ? 'text-[var(--text-muted)]' : v >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                           {x.ventas === 0 ? 'no compró' : v === null ? 'nuevo' : `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`}
                         </td>
-                        <td className={`${td} text-right tabular-nums`}>{fmtPct(x.margen_pct)}</td>
+                        <td className={`${td} text-right tabular-nums col-margen`}>{fmtPct(x.margen_pct)}</td>
                         <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.ultima_compra)}</td>
                       </tr>
                     )
@@ -648,7 +648,7 @@ function TabCompras({ d }) {
                 <th className={`${th} text-left`}>Factura</th>
                 <th className={`${th} text-left`}>Productos</th>
                 <th className={`${th} text-right`}>Total sin IVA</th>
-                <th className={`${th} text-right`}>Margen</th>
+                <th className={`${th} text-right col-margen`}>Margen</th>
                 <th className={`${th} text-left`}>Pago</th>
               </tr>
             </thead>
@@ -666,7 +666,7 @@ function TabCompras({ d }) {
                       </p>
                     </td>
                     <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ2(f.total_sin_iva)}</td>
-                    <td className={`${td} text-right tabular-nums`}>{fmtPct(f.margen_pct)}</td>
+                    <td className={`${td} text-right tabular-nums col-margen`}>{fmtPct(f.margen_pct)}</td>
                     <td className={td}><EstadoPago f={f} /></td>
                   </tr>
                   {abierta === f.documento && (

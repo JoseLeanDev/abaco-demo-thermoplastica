@@ -299,6 +299,10 @@ export const LEYENDAS = {
     titulo: 'Facturación mensual',
     texto: <>Barras: ventas sin IVA de cada mes y del mismo mes del año anterior. Línea: margen % del mes. La línea punteada es el promedio mensual del período.</>,
   },
+  facturacion_yoy_sin_margen: {
+    titulo: 'Facturación mensual',
+    texto: <>Barras: ventas sin IVA de cada mes y del mismo mes del año anterior. La línea punteada es el promedio mensual del período.</>,
+  },
   compras_mp: {
     titulo: 'Compras de materia prima',
     texto: <>Compras sin IVA del período de artículos que no son gasto operativo. % = compras ÷ ventas del período.</>,
@@ -314,6 +318,10 @@ export const LEYENDAS = {
   mix_lineas: {
     titulo: 'Mix de líneas',
     texto: <>Las 6 subcategorías (líneas) con más ventas del período, con su margen %. No incluye artículos genéricos del ERP (GENARTICULO, GENSERV…).</>,
+  },
+  mix_lineas_sin_margen: {
+    titulo: 'Mix de líneas',
+    texto: <>Las 6 subcategorías (líneas) con más ventas del período. No incluye artículos genéricos del ERP (GENARTICULO, GENSERV…).</>,
   },
   top_deudores: {
     titulo: 'Top clientes deudores',

@@ -81,7 +81,8 @@ export default function Dashboard() {
   const { data, isLoading, error } = useDashboard()
   const { data: ultimaCarga } = useUltimaActualizacion()
   // Cada bloque sale solo con su módulo (el backend ya recorta los datos que el rol no ve)
-  const { puede, user } = useAuth()
+  const { puede, oculta, user } = useAuth()
+  const sinMargen = oculta('/dashboard', 'margen')
   const d = data?.data || {}
   const k = d.kpis || {}
   const h = d.health || {}
@@ -139,7 +140,7 @@ export default function Dashboard() {
       <InsightsCarousel />
 
       {/* ============ 3. FACTURACIÓN & MARGEN — ComposedChart YoY ============ */}
-      {puede('ventas') && <VentasTrendCard serie={serie} kpis={k} />}
+      {puede('ventas') && <VentasTrendCard serie={serie} kpis={k} sinMargen={sinMargen} />}
 
       {/* ============ 4. CASH CONVERSION + WATERFALL P&L ============ */}
       {puede('analisis') && (
@@ -188,7 +189,7 @@ export default function Dashboard() {
       {/* ============ 7. CONCENTRACIÓN + MIX DE PRODUCTO ============ */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {puede('ventas') && <div className="lg:col-span-3">
-          <MixLineasCard lineas={lineas} />
+          <MixLineasCard lineas={lineas} sinMargen={sinMargen} />
         </div>}
         <div className="lg:col-span-2 space-y-4">
           {puede('cxc') && <ConcentracionCard
@@ -405,7 +406,7 @@ function DeltaBadge({ value, suffix, size = 'sm', unit = '%', leyenda }) {
 // ============================================================
 // 3. VENTAS TREND — ComposedChart YoY
 // ============================================================
-function VentasTrendCard({ serie, kpis: k }) {
+function VentasTrendCard({ serie, kpis: k, sinMargen }) {
   if (!serie || serie.length === 0) {
     return (
       <div className="card p-8 text-center text-sm text-[var(--text-muted)]">Sin datos de ventas.</div>
@@ -419,12 +420,12 @@ function VentasTrendCard({ serie, kpis: k }) {
         <div className="flex items-center gap-2">
           <ChartBarIcon className="w-5 h-5 text-[var(--accent-blue)]" />
           <h2 className="font-semibold">Facturación mensual · comparativo YoY</h2>
-          <Leyenda k="facturacion_yoy" />
+          <Leyenda k={sinMargen ? 'facturacion_yoy_sin_margen' : 'facturacion_yoy'} />
         </div>
         <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-3">
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#001639] rounded-sm" /> Este período</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-slate-300 rounded-sm" /> Año anterior</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-4 h-0.5 bg-emerald-500" /> Margen %</span>
+          {!sinMargen && <span className="flex items-center gap-1"><span className="inline-block w-4 h-0.5 bg-emerald-500" /> Margen %</span>}
           <Link to="/ventas" className="text-[var(--accent-blue)] flex items-center gap-1 hover:underline ml-2">
             Ver ventas <ArrowRightIcon className="w-3 h-3" />
           </Link>
@@ -448,7 +449,7 @@ function VentasTrendCard({ serie, kpis: k }) {
               stroke="var(--text-muted)"
               width={65}
             />
-            <YAxis
+            {!sinMargen && <YAxis
               yAxisId="right"
               orientation="right"
               tickFormatter={(v) => `${v}%`}
@@ -456,7 +457,7 @@ function VentasTrendCard({ serie, kpis: k }) {
               stroke="var(--text-muted)"
               width={40}
               domain={[0, 60]}
-            />
+            />}
             <Tooltip
               formatter={(v, name) => name === 'Margen %' ? `${v}%` : fmtQ(v)}
               labelFormatter={fmtPeriod}
@@ -465,7 +466,7 @@ function VentasTrendCard({ serie, kpis: k }) {
             <ReferenceLine yAxisId="left" y={promedio} stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: `Prom ${fmtM(promedio)}`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 10 }} />
             <Bar yAxisId="left" dataKey="ventas_prev" name="Año anterior" fill="#cbd5e1" radius={[4, 4, 0, 0]} maxBarSize={26} />
             <Bar yAxisId="left" dataKey="ventas" name="Este período" fill="url(#ventasGrad)" radius={[6, 6, 0, 0]} maxBarSize={26} />
-            <Line yAxisId="right" dataKey="margen_pct" name="Margen %" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />
+            {!sinMargen && <Line yAxisId="right" dataKey="margen_pct" name="Margen %" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -793,15 +794,15 @@ function MiniKpiCard({ titulo, leyenda, deltaLeyenda, icon: Icon, color, valor, 
 // ============================================================
 // 7a. MIX DE LÍNEAS (bar + margen overlay)
 // ============================================================
-function MixLineasCard({ lineas }) {
+function MixLineasCard({ lineas, sinMargen }) {
   if (!lineas || lineas.length === 0) return null
   return (
     <div className="card h-full">
       <div className="section-header">
         <div className="flex items-center gap-2">
           <CubeIcon className="w-5 h-5 text-indigo-500" />
-          <h2 className="font-semibold">Mix de líneas · ventas y margen del período</h2>
-          <Leyenda k="mix_lineas" />
+          <h2 className="font-semibold">Mix de líneas · ventas{sinMargen ? '' : ' y margen'} del período</h2>
+          <Leyenda k={sinMargen ? 'mix_lineas_sin_margen' : 'mix_lineas'} />
         </div>
         <Link to="/ventas" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline">
           Ver ventas <ArrowRightIcon className="w-3 h-3" />
@@ -819,7 +820,7 @@ function MixLineasCard({ lineas }) {
               stroke="var(--text-muted)"
               width={60}
             />
-            <YAxis
+            {!sinMargen && <YAxis
               yAxisId="right"
               orientation="right"
               tickFormatter={(v) => `${v}%`}
@@ -827,13 +828,13 @@ function MixLineasCard({ lineas }) {
               stroke="var(--text-muted)"
               width={40}
               domain={[0, 70]}
-            />
+            />}
             <Tooltip
               formatter={(v, name) => name === 'Margen %' ? `${v}%` : fmtQ(v)}
               contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }}
             />
             <Bar yAxisId="left" dataKey="ventas" name="Ventas" fill="#6366f1" radius={[6, 6, 0, 0]} />
-            <Line yAxisId="right" dataKey="margen_pct" name="Margen %" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} />
+            {!sinMargen && <Line yAxisId="right" dataKey="margen_pct" name="Margen %" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} />}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

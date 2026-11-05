@@ -19,10 +19,13 @@ const als = new AsyncLocalStorage();
 const SIN_RECORTE = ['direccion', 'finanzas', 'admin'];
 
 // Qué montos oculta cada rol y en qué endpoints (prefijo bajo /api)
+// ('*' = en todos los endpoints). Los vendedores, salvo el gerente, no ven nada de márgenes en
+// ninguna pantalla, ni el costo de lo vendido con que se calculan (ficha de cliente incluida).
+// El costo del inventario (Capital inmovilizado) no es margen y se deja.
 const OCULTAR = {
   gerente_ventas:   [{ en: ['/ventas', '/dashboard'], que: ['costo'] }, { en: ['/inventario'], que: ['montos'] }],
-  asistente_ventas: [{ en: ['/ventas', '/dashboard'], que: ['costo', 'margen'] }, { en: ['/inventario'], que: ['montos'] }],
-  ejecutivo_ventas: [{ en: ['/inventario'], que: ['montos'] }],
+  asistente_ventas: [{ en: ['*'], que: ['margen'] }, { en: ['/ventas', '/dashboard', '/tesoreria'], que: ['costo'] }, { en: ['/inventario'], que: ['montos'] }],
+  ejecutivo_ventas: [{ en: ['*'], que: ['margen'] }, { en: ['/ventas', '/dashboard', '/tesoreria'], que: ['costo'] }, { en: ['/inventario'], que: ['montos'] }],
   inventario:       [{ en: ['/inventario', '/dashboard'], que: ['montos'] }],
 };
 
@@ -180,7 +183,7 @@ function limpiar(x, re) {
 function patronPara(A, path) {
   const que = new Set();
   for (const regla of A?.ocultar || []) {
-    if (regla.en.some(pre => path === pre || path.startsWith(pre + '/') || path.startsWith(pre + '-'))) regla.que.forEach(q => que.add(q));
+    if (regla.en.some(pre => pre === '*' || path === pre || path.startsWith(pre + '/') || path.startsWith(pre + '-'))) regla.que.forEach(q => que.add(q));
   }
   if (!que.size) return null;
   return new RegExp([...que].map(q => PATRONES[q].source).join('|'), 'i');

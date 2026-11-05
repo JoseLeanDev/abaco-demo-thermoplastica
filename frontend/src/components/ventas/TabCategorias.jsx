@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from 'react-query'
 import { endpoints } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
+import { useAuth } from '../../context/AuthContext'
 import { NIVELES_PRODUCTO } from './FiltroProducto'
 import { Leyenda } from '../common/leyendas'
 import {
@@ -132,6 +133,7 @@ function fraseResumen({ titulo, d, nivel }) {
 
 export default function TabCategorias({ filtro, onFiltro }) {
   const { desde, hasta } = usePeriodo()
+  const sinMargen = useAuth().oculta('/ventas', 'margen')
   const [orden, setOrden] = useState({ col: 'ventas', dir: 'desc' })
   const [busqueda, setBusqueda] = useState('')
   const [masColumnas, setMasColumnas] = useState(false)
@@ -197,8 +199,8 @@ export default function TabCategorias({ filtro, onFiltro }) {
   }
   const sortBy = (col) => setOrden(o => ({ col, dir: o.col === col && o.dir === 'desc' ? 'asc' : 'desc' }))
 
-  const Th = ({ col, children, align = 'right', ayuda }) => (
-    <th className={`text-${align} font-semibold pb-2 px-2 cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-primary)]`} onClick={() => sortBy(col)}>
+  const Th = ({ col, children, align = 'right', ayuda, className = '' }) => (
+    <th className={`${className} text-${align} font-semibold pb-2 px-2 cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-primary)]`} onClick={() => sortBy(col)}>
       {children}{ayuda && <Leyenda k={ayuda} className="ml-1" />}{orden.col === col ? (orden.dir === 'desc' ? ' ↓' : ' ↑') : ''}
     </th>
   )
@@ -253,8 +255,10 @@ export default function TabCategorias({ filtro, onFiltro }) {
                 { label: 'Ventas año anterior', get: f => f.ventas_prev.toFixed(2) },
                 { label: 'Variación %', get: f => f.variacion_pct },
                 { label: '% del total', get: f => f.participacion },
-                { label: 'Margen %', get: f => f.margen_pct },
-                { label: 'Margen % año anterior', get: f => f.margen_pct_prev },
+                ...(sinMargen ? [] : [
+                  { label: 'Margen %', get: f => f.margen_pct },
+                  { label: 'Margen % año anterior', get: f => f.margen_pct_prev },
+                ]),
                 { label: 'Clientes', get: f => f.clientes },
                 { label: 'Unidades', get: f => f.unidades },
                 { label: 'Precio promedio', get: f => f.precio_promedio?.toFixed(2) },
@@ -282,7 +286,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm nombre-articulo">{it.nombre}</p>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                    {it.participacion}% del total · margen <span className={margenTone(it.margen_pct)}>{it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}</span>
+                    {it.participacion}% del total<span className="col-margen"> · margen <span className={margenTone(it.margen_pct)}>{it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}</span></span>
                   </p>
                 </div>
                 <div className="text-right shrink-0">
@@ -303,7 +307,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
                 <Th col="ventas" align="left" ayuda="vs_anio_anterior">Ventas vs año anterior</Th>
                 <Th col="variacion_pct" ayuda="cambio">Cambio</Th>
                 <Th col="participacion" ayuda="participacion">% del total</Th>
-                <Th col="margen_pct" ayuda="margen_bruto">Margen</Th>
+                <Th col="margen_pct" ayuda="margen_bruto" className="col-margen">Margen</Th>
                 <Th col="clientes">Clientes</Th>
                 {masColumnas && <>
                   <Th col="unidades" ayuda="unidades">Unidades</Th>
@@ -342,7 +346,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
                     )}
                   </td>
                   <td className="py-2.5 px-2 text-right tabular-nums text-[var(--text-secondary)]">{it.participacion}%</td>
-                  <td className={`py-2.5 px-2 text-right tabular-nums font-semibold whitespace-nowrap ${margenTone(it.margen_pct)}`}>
+                  <td className={`py-2.5 px-2 text-right tabular-nums font-semibold whitespace-nowrap col-margen ${margenTone(it.margen_pct)}`}>
                     {it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}
                     {it.margen_pct !== null && it.margen_pct_prev !== null && Math.abs(it.margen_pct - it.margen_pct_prev) >= 0.1 && (
                       <p className="text-[10px] font-normal text-[var(--text-muted)]">
@@ -546,7 +550,7 @@ function RankingCruzado({ icon: Icon, titulo, subtitulo, data, loading }) {
                 <th className="text-right font-semibold pb-2">Ventas</th>
                 <th className="text-right font-semibold pb-2">Cambio <Leyenda k="cambio" /></th>
                 <th className="text-right font-semibold pb-2">% del total <Leyenda k="participacion" /></th>
-                <th className="text-right font-semibold pb-2">Margen <Leyenda k="margen_bruto" /></th>
+                <th className="text-right font-semibold pb-2 col-margen">Margen <Leyenda k="margen_bruto" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
@@ -556,7 +560,7 @@ function RankingCruzado({ icon: Icon, titulo, subtitulo, data, loading }) {
                   <td className="py-1.5 text-right tabular-nums font-semibold">{fmtM(i.ventas)}</td>
                   <td className="py-1.5 text-right"><Variacion pct={i.variacion_pct} nuevo={i.nuevo} /></td>
                   <td className="py-1.5 text-right tabular-nums text-xs">{i.participacion}%</td>
-                  <td className={`py-1.5 text-right tabular-nums ${margenTone(i.margen_pct)}`}>{i.margen_pct === null ? '—' : `${i.margen_pct.toFixed(1)}%`}</td>
+                  <td className={`py-1.5 text-right tabular-nums col-margen ${margenTone(i.margen_pct)}`}>{i.margen_pct === null ? '—' : `${i.margen_pct.toFixed(1)}%`}</td>
                 </tr>
               ))}
             </tbody>

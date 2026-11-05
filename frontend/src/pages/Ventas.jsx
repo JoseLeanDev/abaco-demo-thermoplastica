@@ -104,6 +104,8 @@ const PIE_COLORS = ['#001639', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b
 // -------------------------------------------------------------------
 export default function Ventas() {
   const { desde, hasta } = usePeriodo()
+  const { oculta } = useAuth()
+  const sinMargen = oculta('/ventas', 'margen')
   // ?tab=vendedores al volver desde la ficha de un vendedor
   const [searchParams] = useSearchParams()
   const [tab, setTab]             = useState(searchParams.get('tab') || 'resumen')
@@ -169,7 +171,8 @@ export default function Ventas() {
       const lineas = await traerTodo(endpoints.ventas.detalle, {
         ...commonParams, ...prodParams, busqueda, codigo_cliente: clienteSel, vendedor: vendedorSel,
       })
-      await exportarExcel(`ventas_${desde}_${hasta}.xlsx`, COLUMNAS_VENTAS, lineas, { hoja: 'Ventas' })
+      const columnas = sinMargen ? COLUMNAS_VENTAS.filter(c => !/costo|margen/i.test(c.label)) : COLUMNAS_VENTAS
+      await exportarExcel(`ventas_${desde}_${hasta}.xlsx`, columnas, lineas, { hoja: 'Ventas' })
     } finally {
       setExportando(false)
     }
@@ -245,7 +248,7 @@ export default function Ventas() {
       )}
       {tab === 'resumen'    && (
         <TabResumen
-          serie={serie} articulos={articulos} filas={filas} totalFilas={totalFilas}
+          serie={serie} articulos={articulos} filas={filas} totalFilas={totalFilas} sinMargen={sinMargen}
           sumaFiltrada={sumaFiltrada} fetchingDetalle={fetchingDetalle}
           busqueda={busqueda} setBusqueda={setBusqueda}
           clienteSel={clienteSel} vendedorSel={vendedorSel}
@@ -267,7 +270,7 @@ export default function Ventas() {
         <TabClientes clientes={clientes} resumen={cRes?.data} />
       )}
 
-      <p className="text-xs text-[var(--text-muted)] italic">
+      <p className="text-xs text-[var(--text-muted)] italic col-margen">
         {r.metodologia ? <>Margen sobre costo de compras: ventas sin IVA menos {r.metodologia.unidad === 'millar' ? 'millares' : 'kilos'} vendidos por CPP. Compras hasta {r.metodologia.corte_cpp}; ventas hasta {r.metodologia.hasta_efectivo}. Las ventas sin CPP se excluyen del margen. Mes abierto: ventas visibles y CPP pendiente. <Leyenda k="margen_mp" /></> : <>Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras de meses cerrados. Las otras líneas conservan el costo del ERP. Las ventas sin CPP quedan fuera del margen.</>}
       </p>
     </div>
@@ -278,11 +281,14 @@ export default function Ventas() {
 // KPIs globales
 // -------------------------------------------------------------------
 function KPIs({ r, loading }) {
+  // Asistente y Ejecutivo de Ventas: sin márgenes (el backend no los manda)
+  const { oculta } = useAuth()
+  const sinMargen = oculta('/ventas', 'margen')
   // Mientras carga no se muestran ceros ni números del filtro anterior
   if (loading) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {['Ventas (sin IVA)', 'Margen bruto', 'Clientes que compraron', 'Ticket promedio'].map(l => (
+        {['Ventas (sin IVA)', !sinMargen && 'Margen bruto', 'Clientes que compraron', 'Ticket promedio'].filter(Boolean).map(l => (
           <div key={l} className="kpi-card">
             <span className="kpi-label">{l}</span>
             <span className="block h-7 w-24 mt-1 rounded bg-[var(--bg-tertiary)] animate-pulse" />
@@ -293,9 +299,6 @@ function KPIs({ r, loading }) {
     )
   }
   const v = (x) => x
-  // Asistente de Ventas: sin márgenes (el backend no los manda)
-  const { oculta } = useAuth()
-  const sinMargen = oculta('/ventas', 'margen')
   const deltaMargen = r.margen_bruto_pct != null && r.margen_pct_prev != null ? r.margen_bruto_pct - r.margen_pct_prev : null
   const deltaClientes = r.clientes_prev ? r.clientes - r.clientes_prev : null
   return (
@@ -340,7 +343,7 @@ function KPIs({ r, loading }) {
 // TAB: RESUMEN
 // -------------------------------------------------------------------
 function TabResumen({
-  serie, articulos, filas, totalFilas, sumaFiltrada, fetchingDetalle,
+  serie, articulos, filas, totalFilas, sumaFiltrada, fetchingDetalle, sinMargen,
   busqueda, setBusqueda, clienteSel, vendedorSel, setCliente, setVendedor,
 }) {
   return (
@@ -350,13 +353,13 @@ function TabResumen({
         <div className="section-header">
           <div className="flex items-center gap-2">
             <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-            <h2 className="font-semibold">Ventas y margen mensual</h2>
-            <Leyenda k="serie_mensual" />
+            <h2 className="font-semibold">Ventas{sinMargen ? '' : ' y margen'} mensual</h2>
+            {!sinMargen && <Leyenda k="serie_mensual" />}
           </div>
           <div className="text-xs text-[var(--text-muted)] flex items-center gap-3">
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#001639] rounded-sm" /> Ventas</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-emerald-500 rounded-sm" /> Margen</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-4 h-0.5 bg-amber-500" /> Margen %</span>
+            <span className="flex items-center gap-1 col-margen"><span className="inline-block w-3 h-3 bg-emerald-500 rounded-sm" /> Margen</span>
+            <span className="flex items-center gap-1 col-margen"><span className="inline-block w-4 h-0.5 bg-amber-500" /> Margen %</span>
           </div>
         </div>
         <div className="p-5 pt-0">
@@ -368,15 +371,15 @@ function TabResumen({
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
                 <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
                 <YAxis yAxisId="q" tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
-                <YAxis yAxisId="pct" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={45} />
+                {!sinMargen && <YAxis yAxisId="pct" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={45} />}
                 <Tooltip
                   formatter={(v, k) => k === 'margen_pct' ? `${Number(v).toFixed(1)}%` : fmtQ(v)}
                   labelFormatter={fmtPeriod}
                   contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8 }}
                 />
                 <Bar  yAxisId="q"   dataKey="ventas" fill="#001639" radius={[6,6,0,0]} />
-                <Bar  yAxisId="q"   dataKey="margen" fill="#10b981" radius={[6,6,0,0]} />
-                <Line yAxisId="pct" dataKey="margen_pct" stroke="#f59e0b" strokeWidth={2} dot={false} name="Margen %" />
+                {!sinMargen && <Bar  yAxisId="q"   dataKey="margen" fill="#10b981" radius={[6,6,0,0]} />}
+                {!sinMargen && <Line yAxisId="pct" dataKey="margen_pct" stroke="#f59e0b" strokeWidth={2} dot={false} name="Margen %" />}
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -388,7 +391,7 @@ function TabResumen({
         <div className="section-header">
           <CubeIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Top 15 artículos por facturación</h2>
-          <Leyenda k="margen_bruto" />
+          {!sinMargen && <Leyenda k="margen_bruto" />}
         </div>
         <div className="p-5 pt-0 overflow-x-auto">
           <table className="w-full">
@@ -399,8 +402,8 @@ function TabResumen({
                 <th className="text-right font-semibold pb-2">Clientes</th>
                 <th className="text-right font-semibold pb-2">Unidades</th>
                 <th className="text-right font-semibold pb-2">Ventas</th>
-                <th className="text-right font-semibold pb-2">Margen</th>
-                <th className="text-right font-semibold pb-2">Margen%</th>
+                <th className="text-right font-semibold pb-2 col-margen">Margen</th>
+                <th className="text-right font-semibold pb-2 col-margen">Margen%</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
@@ -417,8 +420,8 @@ function TabResumen({
                   <td className="py-2 text-right tabular-nums">{fmtInt(a.clientes)}</td>
                   <td className="py-2 text-right tabular-nums">{fmtNum(a.unidades)}</td>
                   <td className="py-2 text-right tabular-nums font-semibold">{fmtM(a.ventas)}</td>
-                  <td className="py-2 text-right tabular-nums">{fmtM(a.margen)}</td>
-                  <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(a.margen_pct)}`}>
+                  <td className="py-2 text-right tabular-nums col-margen">{fmtM(a.margen)}</td>
+                  <td className={`py-2 text-right tabular-nums font-semibold col-margen ${margenTone(a.margen_pct)}`}>
                     {a.margen_pct !== null ? `${a.margen_pct.toFixed(1)}%` : '—'}
                     <SinCosto pct={a.pct_sin_costo} />
                   </td>
@@ -471,7 +474,7 @@ function TabResumen({
                 <th className="px-3 py-3 text-left  text-xs font-semibold text-[var(--text-muted)] uppercase">Artículo</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Unid.</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Sin IVA</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase">Margen% <Leyenda k="margen_bruto" /></th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-[var(--text-muted)] uppercase col-margen">Margen% <Leyenda k="margen_bruto" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
@@ -502,7 +505,7 @@ function TabResumen({
                   </td>
                   <td className="px-3 py-2 text-right text-sm tabular-nums">{fmtNum(f.unidades)}</td>
                   <td className="px-3 py-2 text-right text-sm tabular-nums font-semibold">{fmtM(f.total_sin_iva)}</td>
-                  <td className={`px-3 py-2 text-right text-sm tabular-nums font-semibold ${margenTone(f.margen_bruto_pct)}`}>
+                  <td className={`px-3 py-2 text-right text-sm tabular-nums font-semibold col-margen ${margenTone(f.margen_bruto_pct)}`}>
                     {f.margen_bruto_pct !== null ? `${f.margen_bruto_pct.toFixed(1)}%` : (
                       <span className="text-xs font-normal text-[var(--text-muted)]" title="El ERP no trae costo para esta línea">sin costo</span>
                     )}
@@ -544,7 +547,7 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
             </p>
             <p className="text-[var(--text-secondary)]">
               <strong>{topVendedor.vendedor}</strong> concentra el <strong>{fmtPct(topPct, 2)}</strong> de las ventas ({fmtM(topVendedor.ventas)})
-              con {topVendedor.clientes} clientes {topVendedor.margen_pct !== null ? `y margen del ${fmtPct(topVendedor.margen_pct)}` : ''}.
+              con {topVendedor.clientes} clientes {topVendedor.margen_pct != null ? `y margen del ${fmtPct(topVendedor.margen_pct)}` : ''}.
               {topPct >= 40 ? ' Revisar plan de sucesión y redistribución de cartera.' : ''}
             </p>
           </div>
@@ -649,8 +652,8 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                 <th className="text-right font-semibold pb-2">Ventas</th>
                 <th className="text-right font-semibold pb-2">Año ant. <Leyenda k="vs_anio_anterior" /></th>
                 <th className="text-right font-semibold pb-2">Var. <Leyenda k="cambio" /></th>
-                <th className="text-right font-semibold pb-2">Margen% año ant.</th>
-                <th className="text-right font-semibold pb-2">Margen% <Leyenda k="margen_bruto" /></th>
+                <th className="text-right font-semibold pb-2 col-margen">Margen% año ant.</th>
+                <th className="text-right font-semibold pb-2 col-margen">Margen% <Leyenda k="margen_bruto" /></th>
                 <th className="text-right font-semibold pb-2">Share <Leyenda k="participacion" /></th>
               </tr>
             </thead>
@@ -682,8 +685,8 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                   <td className="py-2 text-right tabular-nums font-semibold">{fmtM(v.ventas)}</td>
                   <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{v.ventas_prev ? fmtM(v.ventas_prev) : '—'}</td>
                   <td className="py-2 text-right"><Var pct={v.variacion_pct} nuevo={v.nuevo} /></td>
-                  <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{fmtPct(v.margen_pct_prev)}</td>
-                  <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(v.margen_pct)}`}>
+                  <td className="py-2 text-right tabular-nums text-[var(--text-muted)] col-margen">{fmtPct(v.margen_pct_prev)}</td>
+                  <td className={`py-2 text-right tabular-nums font-semibold col-margen ${margenTone(v.margen_pct)}`}>
                     {v.margen_pct !== null ? `${v.margen_pct.toFixed(1)}%` : '—'}
                   {v.margen_pct !== null && v.margen_pct_prev !== null && (
                     <p className="text-[10px] font-normal text-[var(--text-muted)]">{v.margen_pct - v.margen_pct_prev >= 0 ? '+' : ''}{(v.margen_pct - v.margen_pct_prev).toFixed(1)} pts</p>
@@ -812,8 +815,8 @@ function TabClientes({ clientes, resumen }) {
                 <th className="text-right font-semibold pb-2">Ventas</th>
                 <th className="text-right font-semibold pb-2">Año ant. <Leyenda k="vs_anio_anterior" /></th>
                 <th className="text-right font-semibold pb-2">Var. <Leyenda k="cambio" /></th>
-                <th className="text-right font-semibold pb-2">Margen</th>
-                <th className="text-right font-semibold pb-2">Margen% <Leyenda k="margen_bruto" /></th>
+                <th className="text-right font-semibold pb-2 col-margen">Margen</th>
+                <th className="text-right font-semibold pb-2 col-margen">Margen% <Leyenda k="margen_bruto" /></th>
                 <th className="text-right font-semibold pb-2">Share <Leyenda k="participacion" /></th>
               </tr>
             </thead>
@@ -835,8 +838,8 @@ function TabClientes({ clientes, resumen }) {
                   <td className="py-2 text-right tabular-nums font-semibold">{fmtM(c.ventas)}</td>
                   <td className="py-2 text-right tabular-nums text-[var(--text-muted)]">{c.ventas_prev ? fmtM(c.ventas_prev) : '—'}</td>
                   <td className="py-2 text-right"><Var pct={c.variacion_pct} nuevo={c.nuevo} /></td>
-                  <td className="py-2 text-right tabular-nums">{c.margen === null ? '—' : fmtM(c.margen)}</td>
-                  <td className={`py-2 text-right tabular-nums font-semibold ${margenTone(c.margen_pct)}`}>
+                  <td className="py-2 text-right tabular-nums col-margen">{c.margen === null ? '—' : fmtM(c.margen)}</td>
+                  <td className={`py-2 text-right tabular-nums font-semibold col-margen ${margenTone(c.margen_pct)}`}>
                     {c.margen_pct !== null ? `${c.margen_pct.toFixed(1)}%` : '—'}
                     <SinCosto pct={c.pct_sin_costo} />
                   </td>
@@ -864,7 +867,7 @@ function TabClientes({ clientes, resumen }) {
                   <tr className="text-xs text-[var(--text-muted)] uppercase">
                     <th className="text-left font-semibold pb-2">Cliente</th>
                     <th className="text-right font-semibold pb-2">Ventas año ant.</th>
-                    <th className="text-right font-semibold pb-2">Margen% año ant.</th>
+                    <th className="text-right font-semibold pb-2 col-margen">Margen% año ant.</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-default)]">
@@ -872,7 +875,7 @@ function TabClientes({ clientes, resumen }) {
                     <tr key={c.codigo} className="text-sm">
                       <td className="py-2 pr-2">{c.cliente}</td>
                       <td className="py-2 text-right tabular-nums font-semibold text-[var(--danger)]">{fmtM(c.ventas_prev)}</td>
-                      <td className="py-2 text-right tabular-nums">{c.margen_pct_prev === null ? '—' : `${c.margen_pct_prev.toFixed(1)}%`}</td>
+                      <td className="py-2 text-right tabular-nums col-margen">{c.margen_pct_prev === null ? '—' : `${c.margen_pct_prev.toFixed(1)}%`}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
+import { useAuth } from '../context/AuthContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
 import FiltroProducto, { FILTRO_VACIO } from '../components/ventas/FiltroProducto'
@@ -161,7 +162,7 @@ export default function VendedorVentas() {
           delta={r.variacion_pct} sub={`vs ${fmtM(r.ventas_prev)} año ant.`} />
         <Kpi titulo="% de las ventas" leyenda="participacion" valor={fmtPct(r.participacion)}
           sub={r.posicion ? `#${r.posicion} de ${r.n_vendedores} vendedores` : 'sin ventas en el período'} />
-        <Kpi titulo="Margen bruto" leyenda="margen_bruto" valor={fmtPct(r.margen_pct)}
+        <Kpi titulo="Margen bruto" leyenda="margen_bruto" valor={fmtPct(r.margen_pct)} className="col-margen"
           tono={r.margen_pct === null || e.margen_pct === null ? undefined : r.margen_pct >= e.margen_pct ? 'success' : 'warning'}
           sub={<>equipo {fmtPct(e.margen_pct)}{r.margen_pct_prev !== null && <> · año ant. {fmtPct(r.margen_pct_prev)}</>}</>} />
         <Kpi titulo="Clientes atendidos" leyenda="clientes_compraron" valor={fmtInt(r.clientes)}
@@ -228,6 +229,7 @@ function calcularSenales(d) {
 // TAB: RESUMEN
 // -------------------------------------------------------------------
 function TabResumen({ d }) {
+  const sinMargen = useAuth().oculta('/ventas', 'margen')
   const { desde, hasta } = d.ventana
   const enPeriodo = (p) => p >= desde.slice(0, 7) && p <= hasta.slice(0, 7)
   const maxCat = Math.max(...d.categorias.map(c => c.ventas), 1)
@@ -243,7 +245,7 @@ function TabResumen({ d }) {
           <div className="text-xs text-[var(--text-muted)] flex items-center gap-3">
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#001639] rounded-sm" /> En el período</span>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-[#94a3b8] rounded-sm" /> Fuera</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-4 h-0.5 bg-amber-500" /> Margen %</span>
+            <span className="flex items-center gap-1 col-margen"><span className="inline-block w-4 h-0.5 bg-amber-500" /> Margen %</span>
           </div>
         }>
         {d.serie.length === 0 ? (
@@ -254,7 +256,7 @@ function TabResumen({ d }) {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
               <XAxis dataKey="periodo" tickFormatter={fmtPeriod} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
               <YAxis yAxisId="q" tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={60} />
-              <YAxis yAxisId="pct" orientation="right" domain={[ticksPct[0], 100]} ticks={ticksPct} allowDataOverflow tickFormatter={(x) => `${x}%`} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={42} />
+              {!sinMargen && <YAxis yAxisId="pct" orientation="right" domain={[ticksPct[0], 100]} ticks={ticksPct} allowDataOverflow tickFormatter={(x) => `${x}%`} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={42} />}
               <Tooltip
                 cursor={{ fill: 'var(--bg-secondary)' }}
                 content={({ active, payload }) => {
@@ -264,7 +266,7 @@ function TabResumen({ d }) {
                     <div style={tooltipStyle} className="px-3 py-2 space-y-0.5">
                       <p className="font-semibold">{fmtPeriod(p.periodo)}</p>
                       <p className="tabular-nums">Ventas {fmtQ(p.ventas)}</p>
-                      <p className="tabular-nums">Margen {fmtPct(p.margen_pct)}</p>
+                      {!sinMargen && <p className="tabular-nums">Margen {fmtPct(p.margen_pct)}</p>}
                       <p className="tabular-nums text-[var(--text-muted)]">{fmtInt(p.facturas)} facturas · {fmtInt(p.clientes)} clientes</p>
                       <p className="tabular-nums text-[var(--text-muted)]">{fmtPct(p.participacion)} de la empresa</p>
                     </div>
@@ -274,7 +276,7 @@ function TabResumen({ d }) {
               <Bar yAxisId="q" dataKey="ventas" radius={[4, 4, 0, 0]}>
                 {d.serie.map(m => <Cell key={m.periodo} fill={enPeriodo(m.periodo) ? '#001639' : '#94a3b8'} />)}
               </Bar>
-              <Line yAxisId="pct" dataKey="margen_pct" stroke="#f59e0b" strokeWidth={2} dot={false} connectNulls />
+              {!sinMargen && <Line yAxisId="pct" dataKey="margen_pct" stroke="#f59e0b" strokeWidth={2} dot={false} connectNulls />}
             </ComposedChart>
           </ResponsiveContainer>
         )}
@@ -302,7 +304,7 @@ function TabResumen({ d }) {
                       <span className="font-semibold">{fmtM(c.ventas)}</span>
                       <span className="text-xs text-[var(--text-muted)] ml-2">{fmtPct(c.participacion)}</span>
                       <span className="text-xs ml-2"><Var pct={c.variacion_pct} nuevo={c.nuevo} /></span>
-                      <span className={`text-xs ml-2 ${margenTone(c.margen_pct)}`}>mg {fmtPct(c.margen_pct)}</span>
+                      <span className={`text-xs ml-2 col-margen ${margenTone(c.margen_pct)}`}>mg {fmtPct(c.margen_pct)}</span>
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-[var(--bg-tertiary)] mt-1">
@@ -345,7 +347,7 @@ function TabClientes({ d }) {
               {!verPerdidos && <th className="px-3 py-2.5 text-right font-semibold">Ventas</th>}
               <th className="px-3 py-2.5 text-right font-semibold">Año ant.</th>
               {!verPerdidos && <th className="px-3 py-2.5 text-right font-semibold">Var.</th>}
-              {!verPerdidos && <th className="px-3 py-2.5 text-right font-semibold">Margen%</th>}
+              {!verPerdidos && <th className="px-3 py-2.5 text-right font-semibold col-margen">Margen%</th>}
               {!verPerdidos && <th className="px-3 py-2.5 text-right font-semibold">% de sus ventas</th>}
               {!verPerdidos && <th className="px-4 py-2.5 text-right font-semibold">Última compra</th>}
             </tr>
@@ -364,7 +366,7 @@ function TabClientes({ d }) {
                 <td className="px-3 py-2 text-right tabular-nums text-[var(--text-muted)]">{c.ventas_prev ? fmtM(c.ventas_prev) : '—'}</td>
                 {!verPerdidos && <td className="px-3 py-2 text-right"><Var pct={c.variacion_pct} nuevo={c.nuevo} /></td>}
                 {!verPerdidos && (
-                  <td className={`px-3 py-2 text-right tabular-nums font-semibold ${margenTone(c.margen_pct)}`}>
+                  <td className={`px-3 py-2 text-right tabular-nums font-semibold col-margen ${margenTone(c.margen_pct)}`}>
                     {fmtPct(c.margen_pct)}
                     <SinCosto pct={c.pct_sin_costo} />
                   </td>
@@ -397,7 +399,7 @@ function TabProductos({ d }) {
               <th className="px-3 py-2.5 text-right font-semibold">Precio prom. <Leyenda k="precio_promedio" /></th>
               <th className="px-3 py-2.5 text-right font-semibold">Ventas</th>
               <th className="px-3 py-2.5 text-right font-semibold">Var.</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Margen%</th>
+              <th className="px-4 py-2.5 text-right font-semibold col-margen">Margen%</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-default)]">
@@ -416,7 +418,7 @@ function TabProductos({ d }) {
                 <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{a.precio_promedio === null ? '—' : `Q${fmtNum(a.precio_promedio)}`}</td>
                 <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtM(a.ventas)}</td>
                 <td className="px-3 py-2 text-right"><Var pct={a.variacion_pct} nuevo={a.nuevo} /></td>
-                <td className={`px-4 py-2 text-right tabular-nums font-semibold ${margenTone(a.margen_pct)}`}>
+                <td className={`px-4 py-2 text-right tabular-nums font-semibold col-margen ${margenTone(a.margen_pct)}`}>
                   {fmtPct(a.margen_pct)}
                   <SinCosto pct={a.pct_sin_costo} />
                 </td>
@@ -435,6 +437,7 @@ function TabProductos({ d }) {
 const PAGINA = 100
 
 function TabHistorial({ vendedor, params }) {
+  const sinMargen = useAuth().oculta('/ventas', 'margen')
   const [busqueda, setBusqueda] = useState('')
   const [exportando, setExportando] = useState(false)
   const filtros = { ...params, vendedor, busqueda }
@@ -458,7 +461,8 @@ function TabHistorial({ vendedor, params }) {
     setExportando(true)
     try {
       const lineas = await traerTodo(endpoints.ventas.detalle, filtros)
-      await exportarExcel(`ventas_${vendedor.replace(/\s+/g, '_')}_${params.desde}_${params.hasta}.xlsx`, COLUMNAS_LINEAS, lineas, { hoja: 'Ventas' })
+      const columnas = sinMargen ? COLUMNAS_LINEAS.filter(c => !/costo|margen/i.test(c.label)) : COLUMNAS_LINEAS
+      await exportarExcel(`ventas_${vendedor.replace(/\s+/g, '_')}_${params.desde}_${params.hasta}.xlsx`, columnas, lineas, { hoja: 'Ventas' })
     } finally {
       setExportando(false)
     }
@@ -500,7 +504,7 @@ function TabHistorial({ vendedor, params }) {
                 <th className="px-3 py-3 text-left font-semibold">Artículo</th>
                 <th className="px-3 py-3 text-right font-semibold">Unid.</th>
                 <th className="px-3 py-3 text-right font-semibold">Sin IVA</th>
-                <th className="px-3 py-3 text-right font-semibold">Margen% <Leyenda k="margen_bruto" /></th>
+                <th className="px-3 py-3 text-right font-semibold col-margen">Margen% <Leyenda k="margen_bruto" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
@@ -524,7 +528,7 @@ function TabHistorial({ vendedor, params }) {
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtNum(f.unidades)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtM(f.total_sin_iva)}</td>
-                  <td className={`px-3 py-2 text-right tabular-nums font-semibold ${margenTone(f.margen_bruto_pct)}`}>
+                  <td className={`px-3 py-2 text-right tabular-nums font-semibold col-margen ${margenTone(f.margen_bruto_pct)}`}>
                     {f.margen_bruto_pct !== null ? `${f.margen_bruto_pct.toFixed(1)}%` : (
                       <span className="text-xs font-normal text-[var(--text-muted)]" title="El ERP no trae costo para esta línea">sin costo</span>
                     )}
@@ -638,9 +642,9 @@ function Esqueleto() {
 
 const TONOS = { success: 'text-[var(--success)]', warning: 'text-[var(--warning)]', danger: 'text-[var(--danger)]' }
 
-function Kpi({ titulo, leyenda, valor, sub, tono, delta }) {
+function Kpi({ titulo, leyenda, valor, sub, tono, delta, className = '' }) {
   return (
-    <div className="kpi-card">
+    <div className={`kpi-card ${className}`}>
       <span className="kpi-label flex items-center gap-1">{titulo} {leyenda && <Leyenda k={leyenda} />}</span>
       <p className={`text-xl font-bold tabular-nums mt-1 ${tono ? TONOS[tono] : ''}`}>{valor}</p>
       <p className="text-xs text-[var(--text-muted)] mt-1">

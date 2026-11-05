@@ -3,6 +3,7 @@ import { useQuery } from 'react-query'
 import { TableCellsIcon } from '@heroicons/react/24/outline'
 import { endpoints } from '../../services/cfoApi'
 import { usePeriodo } from '../../context/PeriodoContext'
+import { useAuth } from '../../context/AuthContext'
 import { Leyenda } from '../common/leyendas'
 
 // Tabla cruzada de ventas entre dos dimensiones (p. ej. categoría × vendedor) como
@@ -32,6 +33,7 @@ const fmtM = (n) => {
 
 export default function TabMatriz({ filtroProducto }) {
   const { desde, hasta } = usePeriodo()
+  const sinMargen = useAuth().oculta('/ventas', 'margen')
   const [filas, setFilas] = useState('categoria')
   const [columnas, setColumnas] = useState('vendedor')
   const [modo, setModo] = useState('q')
@@ -91,7 +93,7 @@ export default function TabMatriz({ filtroProducto }) {
             </select>
           </label>
           <div className="flex rounded-md border border-[var(--border-default)] overflow-hidden">
-            {MODOS.map(x => (
+            {MODOS.filter(x => !(sinMargen && x.id === 'margen')).map(x => (
               <button
                 key={x.id}
                 onClick={() => setModo(x.id)}
@@ -153,7 +155,7 @@ export default function TabMatriz({ filtroProducto }) {
           </table>
         )}
         <p className="text-[11px] text-[var(--text-muted)] mt-3">
-          Hasta 40 filas y 10 columnas; el resto se agrupa en “Otros”. Margen % solo con líneas que traen costo (s/c = sin costo).
+          Hasta 40 filas y 10 columnas; el resto se agrupa en “Otros”.<span className="col-margen"> Margen % solo con líneas que traen costo (s/c = sin costo).</span>
         </p>
       </div>
     </div>

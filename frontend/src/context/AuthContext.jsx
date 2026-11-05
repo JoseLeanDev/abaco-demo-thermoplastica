@@ -128,8 +128,9 @@ export function AuthProvider({ children }) {
   const puede = (modulo) => !!permisos[modulo]
   const puedeVer = (pathname) => puedeVerRuta(permisos, pathname)
   // oculta('/ventas', 'costo') → el backend quita ese monto en ese módulo para este rol
-  // ('costo' | 'margen' | 'montos' = todo lo que está en Q); sirve para no dibujar columnas vacías
-  const oculta = (api, que) => (user?.ocultar?.[api] || []).includes(que)
+  // ('costo' | 'margen' | 'montos' = todo lo que está en Q); sirve para no dibujar columnas vacías.
+  // La llave '*' vale para todos los módulos (vendedores sin márgenes en ninguna pantalla).
+  const oculta = (api, que) => [...(user?.ocultar?.[api] || []), ...(user?.ocultar?.['*'] || [])].includes(que)
 
   const value = {
     user,

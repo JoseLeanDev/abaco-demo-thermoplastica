@@ -110,7 +110,7 @@ export default function DashboardLayout({ children }) {
   const location = useLocation()
   const enSeccion = enSeccionDe(location.pathname)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, logout, isAdmin, puede, puedeVer } = useAuth()
+  const { user, logout, isAdmin, puede, puedeVer, oculta } = useAuth()
   const menu = menuDelRol(puedeVer)
 
   const handleLogout = async () => {
@@ -305,7 +305,8 @@ export default function DashboardLayout({ children }) {
         </header>
 
         {/* Page content */}
-        <main className="p-6 animate-fade-in">
+        {/* Vendedores sin márgenes: las columnas marcadas col-margen no se dibujan (index.css) */}
+        <main className={`p-6 animate-fade-in ${oculta('*', 'margen') ? 'sin-margen' : ''}`}>
           {children}
         </main>
       </div>

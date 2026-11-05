@@ -73,8 +73,9 @@ const ROLES = [
   {
     key: 'ejecutivo_ventas', nombre: 'Ejecutivo de Ventas', alcance: ['vendedores'],
     permisos: {
-      panel: P('solo sus ventas'), ventas: P('solo sus ventas'),
-      margenes: P('solo sus clientes y productos'), inventario: P('existencias'),
+      // Sin Márgenes (la hoja le daba 👁): ningún vendedor salvo el gerente ve márgenes
+      panel: P('solo sus ventas, sin márgenes'), ventas: P('solo sus ventas, sin costo y sin márgenes'),
+      inventario: P('existencias'),
       // Sin insights: se escriben sobre toda la empresa (otros vendedores, otros clientes)
       cxc: P('sus clientes'),
     },

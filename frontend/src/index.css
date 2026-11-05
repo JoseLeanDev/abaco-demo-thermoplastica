@@ -375,6 +375,10 @@
    UTILITIES
    ============================================ */
 
+/* Roles de ventas sin márgenes (ver oculta en AuthContext): el backend ya manda esos
+   campos vacíos; esto quita las columnas y textos marcados con col-margen */
+.sin-margen .col-margen { display: none !important; }
+
 @layer utilities {
   .text-brand {
     color: var(--brand-primary);
