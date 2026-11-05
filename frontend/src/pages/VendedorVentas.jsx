@@ -85,6 +85,7 @@ const TABS = [
 
 export default function VendedorVentas() {
   const { codigo } = useParams()
+  const sinMargen = useAuth().oculta('/ventas', 'margen')
   const { desde, hasta } = usePeriodo()
   const [tab, setTab] = useState('resumen')
   const [producto, setProducto] = useState(FILTRO_VACIO)
@@ -157,7 +158,7 @@ export default function VendedorVentas() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className={`grid grid-cols-2 lg:grid-cols-3 gap-4 ${sinMargen ? 'xl:grid-cols-5' : 'xl:grid-cols-6'}`}>
         <Kpi titulo="Ventas del período" leyenda="ventas" valor={fmtM(r.ventas)}
           delta={r.variacion_pct} sub={`vs ${fmtM(r.ventas_prev)} año ant.`} />
         <Kpi titulo="% de las ventas" leyenda="participacion" valor={fmtPct(r.participacion)}

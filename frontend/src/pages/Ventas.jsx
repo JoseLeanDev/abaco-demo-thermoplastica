@@ -287,7 +287,7 @@ function KPIs({ r, loading }) {
   // Mientras carga no se muestran ceros ni números del filtro anterior
   if (loading) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-2 gap-4 ${sinMargen ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
         {['Ventas (sin IVA)', !sinMargen && 'Margen bruto', 'Clientes que compraron', 'Ticket promedio'].filter(Boolean).map(l => (
           <div key={l} className="kpi-card">
             <span className="kpi-label">{l}</span>
@@ -302,7 +302,7 @@ function KPIs({ r, loading }) {
   const deltaMargen = r.margen_bruto_pct != null && r.margen_pct_prev != null ? r.margen_bruto_pct - r.margen_pct_prev : null
   const deltaClientes = r.clientes_prev ? r.clientes - r.clientes_prev : null
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className={`grid grid-cols-2 gap-4 ${sinMargen ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
       <div className="kpi-card">
         <span className="kpi-label flex items-center gap-1">Ventas (sin IVA) <Leyenda k="ventas" /></span>
         <p className="kpi-value">{v(fmtM(r.ventas_sin_iva))}</p>

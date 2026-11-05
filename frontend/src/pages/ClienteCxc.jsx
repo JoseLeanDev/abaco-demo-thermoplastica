@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
+import { useAuth } from '../context/AuthContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
 import { descargarEstadoCuentaPdf } from '../services/estadoCuentaPdf'
@@ -42,6 +43,7 @@ const TABS = [
 
 export default function ClienteCxc() {
   const { id } = useParams()
+  const sinMargen = useAuth().oculta('/tesoreria', 'margen')
   const { params: periodo } = usePeriodo()
   const [tab, setTab] = useState('cuenta')
 
@@ -120,7 +122,7 @@ export default function ClienteCxc() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className={`grid grid-cols-2 lg:grid-cols-3 gap-4 ${sinMargen ? 'xl:grid-cols-5' : 'xl:grid-cols-6'}`}>
         <Kpi titulo="Saldo actual" leyenda="saldo_cliente" valor={fmtQ(saldo.total)}
           sub={`${saldo.documentos} documento${saldo.documentos === 1 ? '' : 's'} abiertos`} />
         <Kpi titulo="Vencido" leyenda="dias_vencido" valor={fmtQ(saldo.vencido)}
