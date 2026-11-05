@@ -97,7 +97,7 @@ function construirReporte(datos, P, { corte, query = {} }) {
   });
   const meta = { metodologia: linea === 'Laminados' ? 'CPP_LAMINADOS_JONATHAN_2026_10_21' : 'CPP_COMPRAS_PROPIAS_2026_10_22', corte_cpp: corte, unidad: UNIDADES[linea].unidad,
     periodo_solicitado: P.ventana(), hasta_efectivo: P.hasta,
-    fuente: 'snapshots_completos_erp', cargas: datos.metadata || [], incidencias_compras: c.incidencias,
+    fuente: 'snapshots_completos_erp', cargas: datos.metadata || [], incidencias_compras: c.incidencias, compras_omitidas: c.omitidas,
     alcance: linea === 'Laminados' ? 'Solo linea original Laminados; Almacen General y Flexografia se concilian por separado.' : `${linea}: compras del mismo artículo; incluye sus compras anteriores disponibles.` };
   return { P, meta, actual, anterior, filas: filtradas, ids, items, metricas: a, metricas_previas: h,
     data: { metodologia: meta, resumen: { total_margen_bruto_q: a.margen_mp,

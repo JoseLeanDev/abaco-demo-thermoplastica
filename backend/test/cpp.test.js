@@ -32,6 +32,13 @@ test('flete de Maximore cambia por año y no se multiplica por una cantidad de u
   assert.equal(fleteCompra(compra({ proveedor: 'BESEL', linea: 'Inyectables' })).por_unidad, null);
   close(engine([compra({ proveedor: 'BESEL' })]).buscar(venta()).cpp, 23.9);
 });
+test('compra con flete sin regla (otra línea) se omite y no bloquea ni contamina el CPP', () => {
+  const c = engine([compra(), compra({ proveedor: 'BESEL', linea: 'Flexografía', total_sin_iva: 900000 })]);
+  assert.equal(c.incidencias.length, 0);
+  assert.equal(c.omitidas.length, 1);
+  assert.equal(c.omitidas[0].motivo, 'unidad_flete_pendiente');
+  close(c.buscar(venta()).cpp, 20);
+});
 test('Foil 25 micras Mate 2026 siempre utiliza 75.99', () => {
   const campos = { categoria: 'Foil de Aluminio', sublinea: '25 micras', color: 'Mate' };
   const r = engine([compra({ ...campos, total_sin_iva: 3000 })]).buscar(venta(campos));

@@ -57,7 +57,7 @@ function crearCalculador(compras, { corte } = {}) {
   }
   const grupos = new Map();
   const aniosPorArticulo = new Map();
-  const incidencias = [];
+  const incidencias = [], omitidas = [];
   let primeraCompra = null;
   for (const r of compras) {
     const f = fecha(r.fec_emis);
@@ -68,6 +68,12 @@ function crearCalculador(compras, { corte } = {}) {
     }
     const cantidad = numero(r.unidades), importe = numero(r.total_sin_iva);
     const flete = fleteCompra(r);
+    // Compra de un proveedor con flete por kilo pero de otra línea (p. ej. Flexografía):
+    // no hay regla de flete, así que se omite y se sigue con el resto en vez de bloquear.
+    if (flete.estado === 'unidad_flete_pendiente') {
+      omitidas.push({ motivo: flete.estado, factura: r.fact_num, articulo: r.codigo_articulo, linea: limpiar(r.linea) });
+      continue;
+    }
     const error = cantidad === null || importe === null ? 'compra_incompleta' : flete.por_unidad === null ? flete.estado : null;
     if (error) {
       incidencias.push({ motivo: error, factura: r.fact_num, articulo: r.codigo_articulo });
@@ -161,7 +167,7 @@ function crearCalculador(compras, { corte } = {}) {
       codigo_vendedor: linea === 'Laminados' && cliente.includes('COLGATE') ? null : r.codigo_vendedor,
     };
   }
-  return { buscar, calcularVenta, corte, primeraCompra, incidencias };
+  return { buscar, calcularVenta, corte, primeraCompra, incidencias, omitidas };
 }
 
 function resumir(ventas) {

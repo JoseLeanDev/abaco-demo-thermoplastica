@@ -79,6 +79,20 @@ async function publicar(pool, {forzar=false} = {}) {
     }
     if (!rows.length) throw new Error('Publicación vacía; se conserva la anterior.');
     await db.query('INSERT INTO thermoplastica.cpp_laminados_clave SELECT * FROM jsonb_populate_recordset(NULL::thermoplastica.cpp_laminados_clave,$1::jsonb) ON CONFLICT DO NOTHING',[JSON.stringify(claves)]);
+    // Artículo reclasificado en el ERP (p. ej. a Flexografía): la última carga del ERP
+    // lo trae en otra línea y esta publicación no lo incluye. Se suelta la clave para
+    // que la venta vuelva a contar desde fact_ventas_linea en vez de desaparecer.
+    await db.query(`DELETE FROM thermoplastica.cpp_laminados_clave k
+      USING raw_thermoplastica.ventas_lineas r
+      JOIN thermoplastica.dim_sucursal s ON s.codigo_sucursal=btrim(r.co_sucu)
+      JOIN thermoplastica.dim_articulo a ON a.codigo_articulo=btrim(r.codigo_articulo)
+      WHERE r.batch_id=(SELECT batch_id FROM raw_thermoplastica.batches WHERE source_view='vstFacturas_Devoluciones'
+                        AND status='ok' ORDER BY started_at DESC LIMIT 1)
+        AND btrim(r.linea)<>'Laminados'
+        AND k.fact_num=r.fact_num AND k.tipo_doc=btrim(r.tipo_doc) AND k.sucursal_id=s.sucursal_id AND k.articulo_id=a.articulo_id
+        AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::thermoplastica.cpp_laminados_clave,$1::jsonb) c
+                        WHERE c.fact_num=k.fact_num AND c.tipo_doc=k.tipo_doc AND c.sucursal_id=k.sucursal_id AND c.articulo_id=k.articulo_id)`,
+      [JSON.stringify(claves)]);
     const cols=Object.keys(rows[0]);
     for(let i=0;i<rows.length;i+=250) {
       await db.query(`INSERT INTO thermoplastica.cpp_laminados_venta(${cols.join(',')}) SELECT ${cols.join(',')} FROM jsonb_populate_recordset(NULL::thermoplastica.cpp_laminados_venta,$1::jsonb)`,[JSON.stringify(rows.slice(i,i+250))]);
