@@ -388,7 +388,7 @@ export default function CuentasPorPagar() {
         {vista === 'proveedores' && <select
           value={filtroProv}
           onChange={(e) => setFiltroProv(e.target.value)}
-          className="input min-w-[220px]"
+          className="input sm:w-auto shrink-0"
         >
           {FILTROS_PROV.map(f => (
             <option key={f.id} value={f.id}>{f.label} ({todosProv.filter(f.f).length})</option>
@@ -397,7 +397,7 @@ export default function CuentasPorPagar() {
         {vista === 'documentos' && <select
           value={bucket}
           onChange={(e) => setBucket(e.target.value)}
-          className="input min-w-[200px]"
+          className="input sm:w-auto sm:min-w-[200px] shrink-0"
         >
           <option value="todos">Todos los buckets</option>
           <option value="por_vencer">Por vencer</option>
