@@ -45,6 +45,7 @@ export const endpoints = {
     cxcCliente: (id, params = {}) => cfoApi.get(`/tesoreria/cxc/cliente/${id}`, { params }),
     cxp: (params = {}) => cfoApi.get('/tesoreria/cxp', { params }),
     cxpDetalle: (params = {}) => cfoApi.get('/tesoreria/cxp/detalle', { params }),
+    cxpProveedores: (params = {}) => cfoApi.get('/tesoreria/cxp/proveedores', { params }),
     cxpProveedor: (id, params = {}) => cfoApi.get(`/tesoreria/cxp/proveedor/${id}`, { params })
   },
   compras: {

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery } from 'react-query'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
@@ -18,6 +18,7 @@ import {
   UserGroupIcon,
   ChartBarIcon,
   InformationCircleIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline'
 import { exportarExcel, traerTodo } from '../services/excel'
 
@@ -52,7 +53,33 @@ const badgeForDias = (dias) => {
   return                { label: `${dias}d`,       color: 'badge-danger',  icon: ExclamationCircleIcon }
 }
 
+// Filtros de la vista por proveedor
+const FILTROS_PROV = [
+  { id: 'todos',     label: 'Todos los proveedores', f: () => true },
+  { id: 'saldo',     label: 'Con saldo',             f: r => r.saldo > 0 },
+  { id: 'vencido',   label: 'Con saldo vencido',     f: r => r.vencido > 0 },
+  { id: 'sin_saldo', label: 'Sin saldo',             f: r => !(r.saldo > 0) },
+  { id: 'compras',   label: 'Con compras en el período', f: r => r.compras > 0 },
+]
+
 // Columnas del Excel
+const COLUMNAS_CXP_PROVEEDORES = [
+  { label: 'Código', get: r => r.codigo_proveedor },
+  { label: 'Proveedor', get: r => r.proveedor },
+  { label: 'NIT', get: r => r.nit },
+  { label: 'Facturas abiertas', get: r => r.documentos },
+  { label: 'Le debemos', get: r => r.saldo.toFixed(2) },
+  { label: '% del total', get: r => r.pct_saldo },
+  { label: 'Vencido', get: r => r.vencido.toFixed(2) },
+  { label: 'Facturas vencidas', get: r => r.documentos_vencidos },
+  { label: 'Atraso máximo (días)', get: r => r.atraso_max },
+  { label: 'Días de crédito', get: r => r.dias_credito },
+  { label: 'Días en que le pagamos', get: r => r.dias_pago },
+  { label: '% pagado a tiempo', get: r => r.pct_a_tiempo },
+  { label: 'Compras del período (sin IVA)', get: r => r.compras.toFixed(2) },
+  { label: 'Compras año anterior (sin IVA)', get: r => r.compras_prev.toFixed(2) },
+  { label: 'Última compra', get: r => r.ultima_compra },
+]
 const COLUMNAS_CXP = [
   { label: 'Código proveedor', get: r => r.codigo_proveedor },
   { label: 'Proveedor', get: r => r.proveedor },
@@ -74,6 +101,15 @@ export default function CuentasPorPagar() {
   const [busqueda, setBusqueda]     = useState('')
   const [bucket, setBucket]         = useState('todos')
   const [proveedorSel, setProveedor] = useState('')
+  const [vista, setVista]           = useState('proveedores') // 'proveedores' | 'documentos'
+  const [filtroProv, setFiltroProv] = useState('todos')
+  const tablaRef = useRef(null)
+  const navigate = useNavigate()
+  const irAProveedor = (id) => navigate(`/tesoreria/cuentas-por-pagar/proveedor/${id}`)
+  const verVista = (v) => {
+    setVista(v)
+    tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const { params: periodo } = usePeriodo()
   const { data: cxpData, isLoading: loadingResumen } = useQuery(
@@ -86,8 +122,15 @@ export default function CuentasPorPagar() {
   const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
     ['cxp-detalle', busqueda, bucket, proveedorSel, orden, periodo],
     () => endpoints.tesoreria.cxpDetalle(detalleParams),
-    { keepPreviousData: true }
+    { keepPreviousData: true, enabled: vista === 'documentos' }
   )
+  const { data: provData, isLoading: loadingProv, isFetching: fetchingProv } = useQuery(
+    ['cxp-proveedores', busqueda, periodo],
+    () => endpoints.tesoreria.cxpProveedores({ busqueda, ...periodo }),
+    { keepPreviousData: true, enabled: vista === 'proveedores' }
+  )
+  const todosProv = provData?.data?.filas || []
+  const proveedores = todosProv.filter(FILTROS_PROV.find(f => f.id === filtroProv).f)
 
   const resumen       = cxpData?.data || {}
   const distribucion  = resumen.distribucion_aging || {}
@@ -99,13 +142,18 @@ export default function CuentasPorPagar() {
   const totalFilas   = detalleData?.data?.total_filas || 0
   const sumaFiltrada = detalleData?.data?.suma_saldo || 0
 
-  // Exporta los documentos con la búsqueda, antigüedad y proveedor activos
+  // Exporta la vista activa: proveedores (con su filtro) o documentos (búsqueda, antigüedad y proveedor)
   const [exportando, setExportando] = useState(false)
   const exportar = async () => {
     setExportando(true)
     try {
-      const docs = await traerTodo(endpoints.tesoreria.cxpDetalle, { busqueda, bucket, proveedor: proveedorSel, orden: orden.k, dir: orden.dir, ...periodo })
-      await exportarExcel(`cxp_documentos_${periodo.hasta || 'hoy'}.xlsx`, COLUMNAS_CXP, docs, { hoja: 'Por pagar' })
+      const corte = periodo.hasta || 'hoy'
+      if (vista === 'proveedores') {
+        await exportarExcel(`cxp_proveedores_${corte}.xlsx`, COLUMNAS_CXP_PROVEEDORES, proveedores, { hoja: 'Proveedores' })
+      } else {
+        const docs = await traerTodo(endpoints.tesoreria.cxpDetalle, { busqueda, bucket, proveedor: proveedorSel, orden: orden.k, dir: orden.dir, ...periodo })
+        await exportarExcel(`cxp_documentos_${corte}.xlsx`, COLUMNAS_CXP, docs, { hoja: 'Por pagar' })
+      }
     } finally {
       setExportando(false)
     }
@@ -233,7 +281,10 @@ export default function CuentasPorPagar() {
                   <tr
                     key={p.codigo}
                     className={`text-sm hover:bg-[var(--bg-secondary)] cursor-pointer ${proveedorSel === p.codigo ? 'bg-[var(--bg-secondary)]' : ''}`}
-                    onClick={() => setProveedor(p.codigo === proveedorSel ? '' : p.codigo)}
+                    onClick={() => {
+                      setProveedor(p.codigo === proveedorSel ? '' : p.codigo)
+                      verVista('documentos')
+                    }}
                   >
                     <td className="py-2 pr-2">
                       <NombreProveedor id={p.proveedor_id} nombre={p.proveedor} />
@@ -253,15 +304,23 @@ export default function CuentasPorPagar() {
                 ))}
               </tbody>
             </table>
-            <p className="mt-3 text-xs text-[var(--text-muted)]">Clic en la fila filtra la tabla de abajo; clic en el nombre abre la ficha del proveedor.</p>
-            {proveedorSel && (
+            <p className="mt-3 text-xs text-[var(--text-muted)]">Clic en la fila muestra sus facturas abajo; clic en el nombre abre la ficha del proveedor.</p>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
               <button
-                onClick={() => setProveedor('')}
-                className="mt-3 text-xs text-[var(--accent-blue)] hover:underline"
+                onClick={() => verVista('proveedores')}
+                className="text-xs font-medium text-[var(--accent-blue)] hover:underline flex items-center gap-0.5"
               >
-                Limpiar filtro de proveedor
+                Ver todos los proveedores <ChevronRightIcon className="w-3 h-3" />
               </button>
-            )}
+              {proveedorSel && (
+                <button
+                  onClick={() => setProveedor('')}
+                  className="text-xs text-[var(--accent-blue)] hover:underline"
+                >
+                  Limpiar filtro de proveedor
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -306,18 +365,36 @@ export default function CuentasPorPagar() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div ref={tablaRef} className="flex flex-col sm:flex-row gap-4 scroll-mt-4">
+        <div className="flex rounded-lg border border-[var(--border-default)] overflow-hidden shrink-0 self-start sm:self-auto">
+          {[{ id: 'proveedores', label: 'Por proveedor' }, { id: 'documentos', label: 'Por factura' }].map(v => (
+            <button
+              key={v.id}
+              onClick={() => setVista(v.id)}
+              className={`px-4 py-2 text-sm font-medium ${vista === v.id ? 'bg-[#001639] text-white' : 'hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)]'}`}
+            >{v.label}</button>
+          ))}
+        </div>
         <div className="relative flex-1">
           <MagnifyingGlassIcon className="w-5 h-5 text-[var(--text-muted)] absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar por proveedor, código o número de factura…"
+            placeholder={vista === 'proveedores' ? 'Buscar por proveedor, código, NIT o número de factura…' : 'Buscar por proveedor, código o número de factura…'}
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             className="input w-full pl-12"
           />
         </div>
-        <select
+        {vista === 'proveedores' && <select
+          value={filtroProv}
+          onChange={(e) => setFiltroProv(e.target.value)}
+          className="input min-w-[220px]"
+        >
+          {FILTROS_PROV.map(f => (
+            <option key={f.id} value={f.id}>{f.label} ({todosProv.filter(f.f).length})</option>
+          ))}
+        </select>}
+        {vista === 'documentos' && <select
           value={bucket}
           onChange={(e) => setBucket(e.target.value)}
           className="input min-w-[200px]"
@@ -328,11 +405,20 @@ export default function CuentasPorPagar() {
           <option value="v_31_60">31-60 días vencido</option>
           <option value="v_61_90">61-90 días vencido</option>
           <option value="v_90_mas">90+ días vencido</option>
-        </select>
+        </select>}
       </div>
 
+      {vista === 'proveedores' && (
+        <TablaProveedores
+          filas={proveedores}
+          cargando={loadingProv}
+          actualizando={fetchingProv && !loadingProv}
+          onClick={irAProveedor}
+        />
+      )}
+
       {/* Tabla detalle */}
-      <div className="card overflow-hidden">
+      {vista === 'documentos' && <div className="card overflow-hidden">
         <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)] flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
@@ -340,6 +426,15 @@ export default function CuentasPorPagar() {
               {loadingDetalle ? 'Cargando…' : `${filas.length.toLocaleString()} de ${totalFilas.toLocaleString()} facturas`}
               {isFetching && !loadingDetalle && ' · actualizando…'}
             </span>
+            {proveedorSel && (
+              <button
+                onClick={() => setProveedor('')}
+                title="Quitar filtro de proveedor"
+                className="text-xs px-2 py-0.5 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                Proveedor {proveedorSel} ✕
+              </button>
+            )}
           </div>
           <span className="text-sm font-semibold">Total filtrado: {fmtQ(sumaFiltrada)}</span>
         </div>
@@ -440,7 +535,7 @@ export default function CuentasPorPagar() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       {/* Nota metodológica */}
       <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 flex items-start gap-3">
@@ -452,6 +547,111 @@ export default function CuentasPorPagar() {
             las desviaciones {'>'} 5 días se marcan en color. Sincronización diaria via n8n.
           </p>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Todos los proveedores con su resumen (mismas cifras que la ficha); cada fila abre la ficha
+function TablaProveedores({ filas, cargando, actualizando, onClick }) {
+  const [orden, setOrden] = useState({ k: 'saldo', dir: -1 })
+  // Los vacíos (sin pagos o sin compras) siempre al final
+  const ordenadas = [...filas].sort((a, b) => {
+    const x = a[orden.k], y = b[orden.k]
+    if (x === null || x === undefined) return (y === null || y === undefined) ? 0 : 1
+    if (y === null || y === undefined) return -1
+    return (typeof x === 'string' ? x.localeCompare(y) : x - y) * orden.dir
+  })
+  const conSaldo = filas.filter(r => r.saldo > 0).length
+  const total = filas.reduce((t, r) => t + r.saldo, 0)
+  const Th = ({ k, children, align = 'right', leyenda }) => (
+    <th
+      onClick={() => setOrden(o => ({ k, dir: o.k === k ? -o.dir : (align === 'left' ? 1 : -1) }))}
+      className={`px-4 py-3 text-${align} text-xs font-semibold text-[var(--text-muted)] uppercase cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-secondary)]`}
+    >
+      {children}{orden.k === k ? (orden.dir < 0 ? ' ↓' : ' ↑') : ''} {leyenda && <Leyenda k={leyenda} />}
+    </th>
+  )
+  return (
+    <div className="card overflow-hidden">
+      <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-2 flex-wrap bg-[var(--bg-secondary)]">
+        <div className="flex items-center gap-2">
+          <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <span className="text-sm text-[var(--text-muted)]">
+            {cargando ? 'Cargando…' : `${filas.length.toLocaleString()} proveedores · ${conSaldo.toLocaleString()} con saldo · clic para ver su ficha`}
+            {actualizando && ' · actualizando…'}
+          </span>
+          <Leyenda k="cxp_por_proveedor" />
+        </div>
+        <span className="text-sm font-semibold">Le debemos: {fmtQ(total)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-[var(--bg-secondary)] border-b border-[var(--border-default)]">
+            <tr>
+              <Th k="proveedor" align="left">Proveedor</Th>
+              <Th k="saldo" leyenda="saldo_proveedor">Le debemos</Th>
+              <Th k="vencido" leyenda="dias_vencido">Vencido</Th>
+              <Th k="atraso_max">Atraso máx.</Th>
+              <Th k="dias_credito" leyenda="dias_credito">Crédito</Th>
+              <Th k="dias_pago" leyenda="dias_pago_proveedor">Le pagamos en</Th>
+              <Th k="pct_a_tiempo" leyenda="pct_a_tiempo_prov">A tiempo</Th>
+              <Th k="compras" leyenda="compras_proveedor">Compras</Th>
+              <Th k="ultima_compra">Última compra</Th>
+              <th className="w-8" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border-default)]">
+            {cargando && filas.length === 0 && (
+              <tr><td colSpan={10} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Cargando proveedores…</td></tr>
+            )}
+            {!cargando && filas.length === 0 && (
+              <tr><td colSpan={10} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">No hay proveedores que coincidan.</td></tr>
+            )}
+            {ordenadas.map(r => {
+              const lento = r.dias_pago !== null && r.dias_credito !== null && r.dias_pago > r.dias_credito + 5
+              return (
+                <tr key={r.proveedor_id} onClick={() => onClick(r.proveedor_id)} className="hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer group">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-[var(--text-primary)] truncate max-w-[280px] group-hover:underline">{r.proveedor}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {r.codigo_proveedor}
+                      {r.documentos > 0 && ` · ${r.documentos} factura${r.documentos === 1 ? '' : 's'} abierta${r.documentos === 1 ? '' : 's'}`}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {r.saldo > 0 ? <>
+                      <p className="font-bold tabular-nums">{fmtQ(r.saldo)}</p>
+                      <p className="text-xs text-[var(--text-muted)] tabular-nums">{r.pct_saldo}% del total</p>
+                    </> : <span className="text-sm text-[var(--text-muted)]">—</span>}
+                  </td>
+                  <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.vencido > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
+                    {r.vencido > 0 ? fmtQ(r.vencido) : '—'}
+                    {r.documentos_vencidos > 0 && <p className="text-xs font-normal">{r.documentos_vencidos} factura{r.documentos_vencidos === 1 ? '' : 's'}</p>}
+                  </td>
+                  <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.atraso_max > 60 ? 'text-[var(--danger)] font-semibold' : r.atraso_max > 0 ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}>
+                    {r.atraso_max > 0 ? `${r.atraso_max} d` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)]">{r.dias_credito !== null ? `${r.dias_credito} d` : '—'}</td>
+                  <td className={`px-4 py-3 text-right tabular-nums text-sm ${lento ? 'text-[var(--warning)] font-semibold' : 'text-[var(--text-secondary)]'}`}>
+                    {r.dias_pago !== null ? `${r.dias_pago} d` : '—'}
+                  </td>
+                  <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.pct_a_tiempo === null ? 'text-[var(--text-muted)]' : r.pct_a_tiempo >= 80 ? 'text-[var(--success)]' : r.pct_a_tiempo >= 50 ? 'text-[var(--warning)]' : 'text-[var(--danger)]'}`}>
+                    {r.pct_a_tiempo !== null ? `${r.pct_a_tiempo}%` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm">
+                    {r.compras > 0 ? fmtM(r.compras) : <span className="text-[var(--text-muted)]">—</span>}
+                    {r.variacion_compras_pct !== null && (
+                      <p className="text-xs text-[var(--text-muted)]">{r.variacion_compras_pct > 0 ? '+' : ''}{r.variacion_compras_pct.toFixed(1)}% vs año ant.</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.ultima_compra)}</td>
+                  <td className="pr-3"><ChevronRightIcon className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]" /></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )

@@ -826,6 +826,18 @@ export const LEYENDAS = {
 
 
   // ---- Ficha de proveedor ----
+  cxp_por_proveedor: {
+    titulo: 'Todos los proveedores',
+    texto: <>
+      Cada proveedor del ERP, tenga saldo o no, con las mismas cifras de su ficha.
+      <L>
+        <li><strong>Le debemos y Vencido:</strong> saldo a hoy de todas sus facturas abiertas, sin importar cuándo se emitieron (ya depurado).</li>
+        <li><strong>Le pagamos en y A tiempo:</strong> facturas que terminamos de pagar en el período.</li>
+        <li><strong>Compras:</strong> sin IVA, facturadas en el período; se compara con el mismo rango del año anterior.</li>
+      </L>
+      <Nota>Por eso la suma puede diferir del Total por Pagar de arriba, que solo cuenta facturas emitidas en el período. Clic en un proveedor para ver su ficha.</Nota>
+    </>,
+  },
   saldo_proveedor: {
     titulo: 'Saldo con el proveedor',
     texto: <>

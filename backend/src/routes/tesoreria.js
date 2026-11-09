@@ -983,6 +983,107 @@ router.get('/cxp/detalle', async (req, res) => {
   }
 });
 
+// GET /api/tesoreria/cxp/proveedores?busqueda=
+// Todos los proveedores (dim_proveedor), tengan saldo o no, con las mismas cifras
+// que la ficha: saldo a hoy de todas sus facturas abiertas, comportamiento de pago
+// de las facturas que terminamos de pagar en el período y compras sin IVA del
+// período (y del mismo rango del año anterior).
+router.get('/cxp/proveedores', async (req, res) => {
+  try {
+    const P = parsePeriodo(req);
+    const busqueda = (req.query.busqueda || '').trim();
+    const params = [];
+    let filtroBusqueda = '';
+    if (busqueda) {
+      params.push(`%${busqueda}%`);
+      filtroBusqueda = `AND (p.nombre ILIKE $1 OR p.codigo_proveedor ILIKE $1 OR p.rif ILIKE $1 OR EXISTS (
+        SELECT 1 FROM thermoplastica.fact_cxp_factura x
+        WHERE x.proveedor_id = p.proveedor_id AND x.saldo > 0
+          AND (x.numero_interno::text ILIKE $1 OR x.factura_proveedor ILIKE $1)))`;
+    }
+
+    const rows = await db.allAsync(`
+      WITH s AS (
+        SELECT proveedor_id, SUM(saldo) AS saldo,
+          COALESCE(SUM(saldo) FILTER (WHERE fecha_vencimiento < CURRENT_DATE), 0) AS vencido,
+          COUNT(*) AS documentos, COUNT(*) FILTER (WHERE fecha_vencimiento < CURRENT_DATE) AS documentos_vencidos,
+          MAX(CURRENT_DATE - fecha_vencimiento) FILTER (WHERE fecha_vencimiento < CURRENT_DATE) AS atraso_max
+        FROM thermoplastica.fact_cxp_factura
+        WHERE saldo > 0
+        GROUP BY proveedor_id
+      ), pago AS (
+        SELECT proveedor_id, COUNT(*) AS pagadas,
+          SUM(valor * GREATEST(fecha_ultimo_pago - fecha_emision, 0)) / NULLIF(SUM(valor), 0) AS dias_pago,
+          SUM(valor * (fecha_ultimo_pago - fecha_vencimiento)) / NULLIF(SUM(valor), 0) AS atraso_pago,
+          COALESCE(SUM(valor) FILTER (WHERE fecha_ultimo_pago <= fecha_vencimiento), 0) / NULLIF(SUM(valor), 0) * 100 AS pct_a_tiempo
+        FROM thermoplastica.fact_cxp_factura
+        WHERE saldo = 0 AND fecha_ultimo_pago BETWEEN ${P.D} AND ${P.H}
+        GROUP BY proveedor_id
+      ), ficha AS (
+        SELECT DISTINCT ON (proveedor_id) proveedor_id, dias_credito_ficha
+        FROM thermoplastica.fact_cxp_factura
+        WHERE dias_credito_ficha IS NOT NULL
+        ORDER BY proveedor_id, fecha_emision DESC
+      ), comp AS (
+        SELECT proveedor_id,
+          SUM(total_sin_iva) FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}) AS compras,
+          SUM(total_sin_iva) FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}) AS compras_prev,
+          ${fecha('MAX(fecha_emision)')} AS ultima_compra
+        FROM thermoplastica.fact_compras_linea
+        GROUP BY proveedor_id
+      )
+      SELECT p.proveedor_id, p.codigo_proveedor, ${NOMBRE_LIMPIO('p.nombre')} AS proveedor, p.rif,
+        s.saldo, s.vencido, s.documentos, s.documentos_vencidos, s.atraso_max,
+        pago.pagadas, pago.dias_pago, pago.atraso_pago, pago.pct_a_tiempo,
+        ficha.dias_credito_ficha, comp.compras, comp.compras_prev, comp.ultima_compra
+      FROM thermoplastica.dim_proveedor p
+      LEFT JOIN s     ON s.proveedor_id     = p.proveedor_id
+      LEFT JOIN pago  ON pago.proveedor_id  = p.proveedor_id
+      LEFT JOIN ficha ON ficha.proveedor_id = p.proveedor_id
+      LEFT JOIN comp  ON comp.proveedor_id  = p.proveedor_id
+      WHERE TRUE ${filtroBusqueda}
+      ORDER BY COALESCE(s.saldo, 0) DESC, COALESCE(comp.compras, 0) DESC`, params);
+
+    const total = rows.reduce((t, r) => t + (Number(r.saldo) || 0), 0);
+    res.json({
+      status: 'success',
+      timestamp: new Date().toISOString(),
+      data: {
+        periodo: P.ventana(),
+        total_proveedores: rows.length,
+        suma_saldo: total,
+        filas: rows.map(r => {
+          const compras = num(r.compras) || 0;
+          const prev = num(r.compras_prev) || 0;
+          return {
+            proveedor_id: parseInt(r.proveedor_id),
+            codigo_proveedor: r.codigo_proveedor,
+            proveedor: r.proveedor,
+            nit: r.rif,
+            saldo: num(r.saldo) || 0,
+            pct_saldo: total > 0 ? redondo((Number(r.saldo) || 0) / total * 100) : 0,
+            vencido: num(r.vencido) || 0,
+            documentos: parseInt(r.documentos) || 0,
+            documentos_vencidos: parseInt(r.documentos_vencidos) || 0,
+            atraso_max: r.atraso_max === null ? 0 : parseInt(r.atraso_max),
+            pagadas: parseInt(r.pagadas) || 0,
+            dias_pago: redondo(r.dias_pago, 0),
+            atraso_pago: redondo(r.atraso_pago, 0),
+            pct_a_tiempo: redondo(r.pct_a_tiempo, 0),
+            dias_credito: r.dias_credito_ficha === null ? null : parseInt(r.dias_credito_ficha),
+            compras,
+            compras_prev: prev,
+            variacion_compras_pct: prev > 0 ? redondo((compras - prev) / prev * 100) : null,
+            ultima_compra: r.ultima_compra,
+          };
+        }),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // GET /api/tesoreria/cxp/proveedor/:id
 // Ficha de un proveedor: estado de cuenta, cómo le pagamos y qué le compramos.
 //
