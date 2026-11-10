@@ -748,10 +748,15 @@ export const LEYENDAS = {
 
   // ======================= Ficha de cliente (CxC) =======================
   cxc_por_cliente: {
-    titulo: 'Cartera por cliente',
+    titulo: 'Todos los clientes',
     texto: <>
-      Saldo del último corte de cartera del ERP sumado por cliente (documentos emitidos en el período).
-      <Nota>“Paga en” y “A tiempo” salen de las facturas que el cliente terminó de pagar en el período. Clic en un cliente para ver su ficha.</Nota>
+      Cada cliente con alguna factura o venta registrada (historia desde septiembre de 2024), tenga saldo o no, con las mismas cifras de su ficha.
+      <L>
+        <li><strong>Saldo, Por vencer y Vencido:</strong> todos sus documentos al último corte de cartera del ERP, sin importar cuándo se emitieron.</li>
+        <li><strong>Paga en y A tiempo:</strong> facturas que el cliente terminó de pagar en el período.</li>
+        <li><strong>Compras:</strong> ventas sin IVA facturadas al cliente en el período; se compara con el mismo rango del año anterior.</li>
+      </L>
+      <Nota>Por eso la suma puede diferir del Total por Cobrar de arriba, que solo cuenta documentos emitidos en el período. Clic en un cliente para ver su ficha.</Nota>
     </>,
   },
   saldo_cliente: {

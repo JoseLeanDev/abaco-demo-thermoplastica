@@ -353,8 +353,13 @@ const compras = (r) => ({
 });
 
 // GET /api/tesoreria/cxc/clientes?busqueda=
-// Cartera agrupada por cliente (documentos emitidos en el período, último corte),
-// con el comportamiento de pago de las facturas que terminó de pagar en el período.
+// Todos los clientes con movimiento (alguna factura en CxC o venta registrada,
+// historia desde sep-2024), tengan saldo o no, con las mismas cifras que la ficha:
+// saldo de todos sus documentos al último corte de cartera (sin filtro de período),
+// comportamiento de pago de las facturas que terminó de pagar en el período y
+// compras sin IVA del período (y del mismo rango del año anterior).
+// La lista sale de tablas con recorte por vendedor (alcance.js): un ejecutivo solo
+// ve sus clientes; dim_cliente no se recorta y por eso no se lista completa.
 router.get('/cxc/clientes', async (req, res) => {
   try {
     const P = parsePeriodo(req);
@@ -369,14 +374,18 @@ router.get('/cxc/clientes', async (req, res) => {
     }
 
     const rows = await db.allAsync(`
-      WITH s AS (
+      WITH base AS (
+        SELECT cliente_id FROM thermoplastica.fact_cxc_factura
+        UNION SELECT cliente_id FROM thermoplastica.fact_ventas_linea
+        UNION SELECT cliente_id FROM thermoplastica.fact_cxc_snapshot_diario WHERE fecha_snapshot = ${SNAP_MAX}
+      ), s AS (
         SELECT cliente_id,
           SUM(saldo_total) AS saldo, SUM(porvencer) AS por_vencer, SUM(vencido) AS vencido,
           SUM(v61a90 + v91a120 + v120) AS mas_60,
           COUNT(*) AS documentos, COUNT(*) FILTER (WHERE vencido > 0) AS documentos_vencidos,
           MAX(CASE WHEN vencido > 0 THEN (CURRENT_DATE - fecha_vencimiento)::int END) AS atraso_max
         FROM thermoplastica.fact_cxc_snapshot_diario
-        WHERE fecha_snapshot = ${SNAP_MAX} AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+        WHERE fecha_snapshot = ${SNAP_MAX}
         GROUP BY cliente_id
       ), pago AS (
         SELECT cliente_id, COUNT(*) AS pagadas,
@@ -385,22 +394,32 @@ router.get('/cxc/clientes', async (req, res) => {
           COALESCE(SUM(valor) FILTER (WHERE fecha_ultimo_cobro <= fecha_vencimiento), 0) / NULLIF(SUM(valor), 0) * 100 AS pct_a_tiempo
         FROM thermoplastica.fact_cxc_factura
         WHERE saldo = 0 AND fecha_ultimo_cobro BETWEEN ${P.D} AND ${P.H}
-          AND cliente_id IN (SELECT cliente_id FROM s)
         GROUP BY cliente_id
       ), ficha AS (
         SELECT DISTINCT ON (cliente_id) cliente_id, dias_credito_ficha
         FROM thermoplastica.fact_cxc_factura
-        WHERE dias_credito_ficha IS NOT NULL AND cliente_id IN (SELECT cliente_id FROM s)
+        WHERE dias_credito_ficha IS NOT NULL
         ORDER BY cliente_id, fecha_emision DESC
+      ), comp AS (
+        SELECT cliente_id,
+          SUM(total_sin_iva) FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}) AS compras,
+          SUM(total_sin_iva) FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}) AS compras_prev,
+          ${fecha('MAX(fecha_emision)')} AS ultima_compra
+        FROM thermoplastica.v_ventas_costeadas
+        GROUP BY cliente_id
       )
       SELECT c.cliente_id, c.codigo_cliente, ${NOMBRE_LIMPIO('c.nombre')} AS cliente, c.forma_pago AS sector,
-        s.*, pago.pagadas, pago.dias_pago, pago.atraso_pago, pago.pct_a_tiempo, ficha.dias_credito_ficha
-      FROM s
-      JOIN thermoplastica.dim_cliente c ON c.cliente_id = s.cliente_id
-      LEFT JOIN pago  ON pago.cliente_id  = s.cliente_id
-      LEFT JOIN ficha ON ficha.cliente_id = s.cliente_id
+        s.saldo, s.por_vencer, s.vencido, s.mas_60, s.documentos, s.documentos_vencidos, s.atraso_max,
+        pago.pagadas, pago.dias_pago, pago.atraso_pago, pago.pct_a_tiempo, ficha.dias_credito_ficha,
+        comp.compras, comp.compras_prev, comp.ultima_compra
+      FROM base
+      JOIN thermoplastica.dim_cliente c ON c.cliente_id = base.cliente_id
+      LEFT JOIN s     ON s.cliente_id     = base.cliente_id
+      LEFT JOIN pago  ON pago.cliente_id  = base.cliente_id
+      LEFT JOIN ficha ON ficha.cliente_id = base.cliente_id
+      LEFT JOIN comp  ON comp.cliente_id  = base.cliente_id
       WHERE TRUE ${filtroBusqueda}
-      ORDER BY s.saldo DESC`, params);
+      ORDER BY COALESCE(s.saldo, 0) DESC, COALESCE(comp.compras, 0) DESC`, params);
 
     const total = rows.reduce((t, r) => t + (Number(r.saldo) || 0), 0);
     res.json({
@@ -410,25 +429,33 @@ router.get('/cxc/clientes', async (req, res) => {
         periodo: P.ventana(),
         total_clientes: rows.length,
         suma_saldo: total,
-        filas: rows.map(r => ({
-          cliente_id: parseInt(r.cliente_id),
-          codigo_cliente: r.codigo_cliente,
-          cliente: r.cliente,
-          sector: r.sector,
-          saldo: num(r.saldo) || 0,
-          pct_saldo: total > 0 ? redondo((Number(r.saldo) || 0) / total * 100) : 0,
-          por_vencer: num(r.por_vencer) || 0,
-          vencido: num(r.vencido) || 0,
-          mas_60: num(r.mas_60) || 0,
-          documentos: parseInt(r.documentos) || 0,
-          documentos_vencidos: parseInt(r.documentos_vencidos) || 0,
-          atraso_max: r.atraso_max === null ? 0 : parseInt(r.atraso_max),
-          pagadas: parseInt(r.pagadas) || 0,
-          dias_pago: redondo(r.dias_pago, 0),
-          atraso_pago: redondo(r.atraso_pago, 0),
-          pct_a_tiempo: redondo(r.pct_a_tiempo, 0),
-          dias_credito: r.dias_credito_ficha === null ? null : parseInt(r.dias_credito_ficha),
-        })),
+        filas: rows.map(r => {
+          const compras = num(r.compras) || 0;
+          const prev = num(r.compras_prev) || 0;
+          return {
+            cliente_id: parseInt(r.cliente_id),
+            codigo_cliente: r.codigo_cliente,
+            cliente: r.cliente,
+            sector: r.sector,
+            saldo: num(r.saldo) || 0,
+            pct_saldo: total > 0 ? redondo((Number(r.saldo) || 0) / total * 100) : 0,
+            por_vencer: num(r.por_vencer) || 0,
+            vencido: num(r.vencido) || 0,
+            mas_60: num(r.mas_60) || 0,
+            documentos: parseInt(r.documentos) || 0,
+            documentos_vencidos: parseInt(r.documentos_vencidos) || 0,
+            atraso_max: r.atraso_max === null ? 0 : parseInt(r.atraso_max),
+            pagadas: parseInt(r.pagadas) || 0,
+            dias_pago: redondo(r.dias_pago, 0),
+            atraso_pago: redondo(r.atraso_pago, 0),
+            pct_a_tiempo: redondo(r.pct_a_tiempo, 0),
+            dias_credito: r.dias_credito_ficha === null ? null : parseInt(r.dias_credito_ficha),
+            compras,
+            compras_prev: prev,
+            variacion_compras_pct: prev > 0 ? redondo((compras - prev) / prev * 100) : null,
+            ultima_compra: r.ultima_compra,
+          };
+        }),
       },
     });
   } catch (error) {

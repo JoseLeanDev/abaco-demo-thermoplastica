@@ -22,6 +22,12 @@ import {
 import { exportarExcel, traerTodo } from '../services/excel'
 
 const fmtQ = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
+const fmtM = (n) => {
+  const v = Number(n) || 0
+  if (Math.abs(v) >= 1e6) return `Q${(v / 1e6).toFixed(1)}M`
+  if (Math.abs(v) >= 1e3) return `Q${Math.round(v / 1e3)}k`
+  return fmtQ(v)
+}
 const fmtDate = (d) => {
   if (!d) return '—'
   const s = typeof d === 'string' ? d : String(d)
@@ -34,6 +40,15 @@ const badgeForDias = (dias) => {
   if (dias <= 60) return { label: `${dias}d`,      color: 'badge-warning', icon: ExclamationCircleIcon }
   return                       { label: `${dias}d`, color: 'badge-danger',  icon: ExclamationCircleIcon }
 }
+
+// Filtros de la vista por cliente
+const FILTROS_CLI = [
+  { id: 'todos',     label: 'Todos los clientes',        f: () => true },
+  { id: 'saldo',     label: 'Con saldo',                 f: r => r.saldo > 0 },
+  { id: 'vencido',   label: 'Con saldo vencido',         f: r => r.vencido > 0 },
+  { id: 'sin_saldo', label: 'Sin saldo',                 f: r => !(r.saldo > 0) },
+  { id: 'compras',   label: 'Con compras en el período', f: r => r.compras > 0 },
+]
 
 // Columnas del Excel
 const COLUMNAS_CXC_CLIENTES = [
@@ -49,6 +64,9 @@ const COLUMNAS_CXC_CLIENTES = [
   { label: 'Días de crédito', get: r => r.dias_credito },
   { label: 'Días reales de pago', get: r => r.dias_pago },
   { label: '% pagado a tiempo', get: r => r.pct_a_tiempo },
+  { label: 'Compras del período (sin IVA)', get: r => r.compras.toFixed(2) },
+  { label: 'Compras año anterior (sin IVA)', get: r => r.compras_prev.toFixed(2) },
+  { label: 'Última compra', get: r => r.ultima_compra },
 ]
 const COLUMNAS_CXC_DOCS = [
   { label: 'Código cliente', get: r => r.codigo_cliente },
@@ -77,6 +95,7 @@ export default function CuentasPorCobrar() {
   const [busqueda, setBusqueda] = useState('')
   const [bucket, setBucket]     = useState('todos')
   const [vista, setVista]       = useState('clientes') // 'clientes' | 'documentos'
+  const [filtroCli, setFiltroCli] = useState('todos')
   const navigate = useNavigate()
   const irACliente = (id) => navigate(`/tesoreria/cuentas-por-cobrar/cliente/${id}`)
 
@@ -97,7 +116,8 @@ export default function CuentasPorCobrar() {
     () => endpoints.tesoreria.cxcClientes({ busqueda, ...periodo }),
     { keepPreviousData: true, enabled: vista === 'clientes' }
   )
-  const clientes = clientesData?.data?.filas || []
+  const todosCli = clientesData?.data?.filas || []
+  const clientes = todosCli.filter(FILTROS_CLI.find(f => f.id === filtroCli).f)
 
   const resumen       = cxcData?.data || {}
   const distribucion  = resumen.distribucion_aging || {}
@@ -115,8 +135,7 @@ export default function CuentasPorCobrar() {
     try {
       const corte = periodo.hasta || 'hoy'
       if (vista === 'clientes') {
-        const res = clientesData || await endpoints.tesoreria.cxcClientes({ busqueda, ...periodo })
-        await exportarExcel(`cxc_clientes_${corte}.xlsx`, COLUMNAS_CXC_CLIENTES, res?.data?.filas || [], { hoja: 'Clientes' })
+        await exportarExcel(`cxc_clientes_${corte}.xlsx`, COLUMNAS_CXC_CLIENTES, clientes, { hoja: 'Clientes' })
       } else {
         const docs = await traerTodo(endpoints.tesoreria.cxcDetalle, { busqueda, bucket, orden: orden.k, dir: orden.dir, ...periodo })
         await exportarExcel(`cxc_documentos_${corte}.xlsx`, COLUMNAS_CXC_DOCS, docs, { hoja: 'Documentos' })
@@ -236,10 +255,19 @@ export default function CuentasPorCobrar() {
             className="input w-full pl-12"
           />
         </div>
+        {vista === 'clientes' && <select
+          value={filtroCli}
+          onChange={(e) => setFiltroCli(e.target.value)}
+          className="input sm:w-auto shrink-0"
+        >
+          {FILTROS_CLI.map(f => (
+            <option key={f.id} value={f.id}>{f.label} ({todosCli.filter(f.f).length})</option>
+          ))}
+        </select>}
         {vista === 'documentos' && <select
           value={bucket}
           onChange={(e) => setBucket(e.target.value)}
-          className="input min-w-[200px]"
+          className="input sm:w-auto sm:min-w-[200px] shrink-0"
         >
           <option value="todos">Todos los buckets</option>
           <option value="al_corriente">Por vencer</option>
@@ -254,7 +282,6 @@ export default function CuentasPorCobrar() {
           filas={clientes}
           cargando={loadingClientes}
           actualizando={fetchingClientes && !loadingClientes}
-          total={clientesData?.data?.suma_saldo || 0}
           onClick={irACliente}
         />
       )}
@@ -391,16 +418,21 @@ export default function CuentasPorCobrar() {
   )
 }
 
-// Cartera agrupada por cliente; cada fila abre la ficha del cliente
-function TablaClientes({ filas, cargando, actualizando, total, onClick }) {
+// Todos los clientes con su resumen (mismas cifras que la ficha); cada fila abre la ficha
+function TablaClientes({ filas, cargando, actualizando, onClick }) {
   const [orden, setOrden] = useState({ k: 'saldo', dir: -1 })
+  // Los vacíos (sin pagos o sin compras) siempre al final
   const ordenadas = [...filas].sort((a, b) => {
-    const x = a[orden.k] ?? -Infinity, y = b[orden.k] ?? -Infinity
+    const x = a[orden.k], y = b[orden.k]
+    if (x === null || x === undefined) return (y === null || y === undefined) ? 0 : 1
+    if (y === null || y === undefined) return -1
     return (typeof x === 'string' ? x.localeCompare(y) : x - y) * orden.dir
   })
+  const conSaldo = filas.filter(r => r.saldo > 0).length
+  const total = filas.reduce((t, r) => t + r.saldo, 0)
   const Th = ({ k, children, align = 'right', leyenda }) => (
     <th
-      onClick={() => setOrden(o => ({ k, dir: o.k === k ? -o.dir : -1 }))}
+      onClick={() => setOrden(o => ({ k, dir: o.k === k ? -o.dir : (align === 'left' ? 1 : -1) }))}
       className={`px-4 py-3 text-${align} text-xs font-semibold text-[var(--text-muted)] uppercase cursor-pointer select-none whitespace-nowrap hover:text-[var(--text-secondary)]`}
     >
       {children}{orden.k === k ? (orden.dir < 0 ? ' ↓' : ' ↑') : ''} {leyenda && <Leyenda k={leyenda} />}
@@ -412,12 +444,12 @@ function TablaClientes({ filas, cargando, actualizando, total, onClick }) {
         <div className="flex items-center gap-2">
           <UserGroupIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <span className="text-sm text-[var(--text-muted)]">
-            {cargando ? 'Cargando…' : `${filas.length.toLocaleString()} clientes con saldo · clic para ver su ficha`}
+            {cargando ? 'Cargando…' : `${filas.length.toLocaleString()} clientes · ${conSaldo.toLocaleString()} con saldo · clic para ver su ficha`}
             {actualizando && ' • actualizando…'}
           </span>
           <Leyenda k="cxc_por_cliente" />
         </div>
-        <span className="text-sm font-semibold">Total: {fmtQ(total)}</span>
+        <span className="text-sm font-semibold">Nos deben: {fmtQ(total)}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -431,15 +463,17 @@ function TablaClientes({ filas, cargando, actualizando, total, onClick }) {
               <Th k="dias_credito" leyenda="dias_credito">Crédito</Th>
               <Th k="dias_pago" leyenda="dias_pago_real">Paga en</Th>
               <Th k="pct_a_tiempo" leyenda="pct_a_tiempo">A tiempo</Th>
+              <Th k="compras" leyenda="compras_cliente">Compras</Th>
+              <Th k="ultima_compra">Última compra</Th>
               <th className="w-8" />
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-default)]">
             {cargando && filas.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Cargando cartera…</td></tr>
+              <tr><td colSpan={11} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Cargando clientes…</td></tr>
             )}
             {!cargando && filas.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">No hay clientes que coincidan.</td></tr>
+              <tr><td colSpan={11} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">No hay clientes que coincidan.</td></tr>
             )}
             {ordenadas.map(r => {
               const lento = r.dias_pago !== null && r.dias_credito !== null && r.dias_pago > r.dias_credito + 5
@@ -447,13 +481,15 @@ function TablaClientes({ filas, cargando, actualizando, total, onClick }) {
                 <tr key={r.cliente_id} onClick={() => onClick(r.cliente_id)} className="hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer group">
                   <td className="px-4 py-3">
                     <p className="font-medium text-[var(--text-primary)] truncate max-w-[280px] group-hover:underline">{r.cliente}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{r.codigo_cliente}{r.sector ? ` · ${r.sector}` : ''} · {r.documentos} doc{r.documentos === 1 ? '' : 's'}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{r.codigo_cliente}{r.sector ? ` · ${r.sector}` : ''}{r.documentos > 0 && ` · ${r.documentos} doc${r.documentos === 1 ? '' : 's'}`}</p>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <p className="font-bold tabular-nums">{fmtQ(r.saldo)}</p>
-                    <p className="text-xs text-[var(--text-muted)] tabular-nums">{r.pct_saldo}% del total</p>
+                    {r.saldo > 0 ? <>
+                      <p className="font-bold tabular-nums">{fmtQ(r.saldo)}</p>
+                      <p className="text-xs text-[var(--text-muted)] tabular-nums">{r.pct_saldo}% del total</p>
+                    </> : <span className="text-sm text-[var(--text-muted)]">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)]">{fmtQ(r.por_vencer)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)]">{r.por_vencer > 0 ? fmtQ(r.por_vencer) : <span className="text-[var(--text-muted)]">—</span>}</td>
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.vencido > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
                     {r.vencido > 0 ? fmtQ(r.vencido) : '—'}
                     {r.documentos_vencidos > 0 && <p className="text-xs font-normal">{r.documentos_vencidos} doc{r.documentos_vencidos === 1 ? '' : 's'}</p>}
@@ -468,6 +504,13 @@ function TablaClientes({ filas, cargando, actualizando, total, onClick }) {
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.pct_a_tiempo === null ? 'text-[var(--text-muted)]' : r.pct_a_tiempo >= 80 ? 'text-[var(--success)]' : r.pct_a_tiempo >= 50 ? 'text-[var(--warning)]' : 'text-[var(--danger)]'}`}>
                     {r.pct_a_tiempo !== null ? `${r.pct_a_tiempo}%` : '—'}
                   </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm">
+                    {r.compras > 0 ? fmtM(r.compras) : <span className="text-[var(--text-muted)]">—</span>}
+                    {r.variacion_compras_pct !== null && (
+                      <p className="text-xs text-[var(--text-muted)]">{r.variacion_compras_pct > 0 ? '+' : ''}{r.variacion_compras_pct.toFixed(1)}% vs año ant.</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.ultima_compra)}</td>
                   <td className="pr-3"><ChevronRightIcon className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]" /></td>
                 </tr>
               )
