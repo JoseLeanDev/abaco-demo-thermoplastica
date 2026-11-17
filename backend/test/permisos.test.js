@@ -8,7 +8,7 @@ function pasa(rol, url, method = 'GET') {
   const [baseUrl, ...resto] = url.replace(/^\/api/, '').split('/').filter(Boolean);
   const req = { user: { rol }, method, baseUrl: `/api/${baseUrl}`, path: `/${resto.join('/')}` };
   let ok = false, status = 200;
-  const res = { status: (s) => { status = s; return { json: () => {} }; } };
+  const res = { json: () => {}, status: (s) => { status = s; return { json: () => {} }; } };
   autorizar(req, res, () => { ok = true; });
   return ok && status === 200;
 }
@@ -55,7 +55,9 @@ test('el middleware bloquea por módulo y deja pasar endpoints compartidos', () 
   assert.ok(!pasa('compras', '/api/analisis/salud'));
   // Márgenes usa /ventas/desglose para su filtro de producto
   assert.ok(pasa('ejecutivo_ventas', '/api/ventas/desglose'));
-  assert.ok(pasa('ejecutivo_ventas', '/api/margenes/vendedores'));
+  // Ejecutivo de Ventas no tiene Márgenes (ningún vendedor salvo el gerente los ve)
+  assert.ok(!pasa('ejecutivo_ventas', '/api/margenes/vendedores'));
+  assert.ok(pasa('gerente_ventas', '/api/margenes/vendedores'));
   assert.ok(!pasa('asistente_ventas', '/api/margenes'));
   // Asistente IA bloqueado para Compras y Gerente de Línea (el agente ve todas las tablas)
   assert.ok(!pasa('compras', '/api/agents/chat-agente', 'POST'));
@@ -77,4 +79,35 @@ test('endpoint sin mapear: solo admin', () => {
   assert.ok(!pasa('direccion', '/api/nuevo-modulo'));
   assert.ok(pasa('admin', '/api/nuevo-modulo'));
   assert.ok(!pasa('finanzas', '/api/contabilidad/libro_diario'));
+});
+
+// Qué store deja el middleware para la petición (database/connection.js lee
+// sinNestloop y limiteMs)
+function storeDe(user, query, method = 'GET') {
+  const { als } = require('../src/services/alcance');
+  const req = { user, method, baseUrl: '/api/ventas', path: '/desglose', query };
+  const res = { json: () => {}, status: () => ({ json: () => {} }) };
+  let store = 'no pasó';
+  autorizar(req, res, () => { store = als.getStore(); });
+  return store;
+}
+
+test('sin nested loops: sin recorte desde el 2º nivel de producto, con recorte con cualquier filtro', () => {
+  const GET = { limiteMs: 35000 };
+  for (const rol of ['finanzas', 'direccion', 'admin']) {
+    assert.deepEqual(storeDe({ rol }, {}), GET, rol);
+    assert.deepEqual(storeDe({ rol }, { categoria: 'Liners' }), GET, rol);
+    assert.deepEqual(storeDe({ rol }, { categoria: 'Liners', subcategoria: 'Induccion' }), { ...GET, sinNestloop: true }, rol);
+    assert.deepEqual(storeDe({ rol }, { categoria: 'Liners', subcategoria: 'Induccion', sublinea: 'X' }), { ...GET, sinNestloop: true }, rol);
+  }
+  const gl = { rol: 'gerente_linea', alcance: { lineas: ['Liners'] } };
+  assert.ok(!storeDe(gl, {}).sinNestloop);
+  assert.equal(storeDe(gl, { categoria: 'Liners' }).sinNestloop, true);
+  assert.deepEqual(storeDe(gl, { categoria: 'Liners' }).lineas, ['Liners']);
+  assert.equal(storeDe(gl, {}).limiteMs, 35000);
+});
+
+test('tope por sentencia solo en lecturas: los POST (agentes, cierre) no lo llevan', () => {
+  assert.equal(storeDe({ rol: 'admin' }, {}, 'POST'), undefined);
+  assert.equal(storeDe({ rol: 'admin' }, { categoria: 'A', subcategoria: 'B' }, 'POST').limiteMs, undefined);
 });

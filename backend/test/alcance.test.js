@@ -67,7 +67,10 @@ test('limpia montos según rol y endpoint, sin tocar textos', () => {
   assert.equal(out.data.margen_pct, null);
   assert.equal(out.data.filas[0].margen_bruto, null);
   assert.equal(out.data.filas[0].unidades, 4);
-  assert.equal(patronPara(asis, '/compras'), null);
+  // Márgenes se ocultan en todas las pantallas ('*'); el costo solo en ventas/dashboard/tesorería
+  const enCompras = patronPara(asis, '/compras');
+  assert.ok(enCompras.test('margen_pct'));
+  assert.ok(!enCompras.test('costo_total'));
 
   const inv = patronPara(alcanceDeUsuario({ rol: 'inventario' }), '/inventario/analitica');
   const o2 = limpiar({ valor: 'Laminados', valor_inventario: 100, stock_actual: 7, costo_promedio: 3 }, inv);

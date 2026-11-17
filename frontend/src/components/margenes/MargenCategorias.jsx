@@ -39,7 +39,7 @@ export default function MargenCategorias({ filtro, onFiltro }) {
   const esHoja = nivel.dim === 'articulo'
   const filtros = useMemo(() => Object.fromEntries(Object.entries(filtro).filter(([, v]) => v)), [filtro])
 
-  const { data, isLoading } = useQuery(
+  const { data, isLoading, isError, refetch, isFetching } = useQuery(
     ['margen-categorias', nivel.dim, desde, hasta, JSON.stringify(filtros)],
     () => endpoints.ventas.desglose({ desde, hasta, ...filtros, dim: nivel.dim, limit: 500 }),
     { staleTime: 60 * 1000 }
@@ -101,6 +101,13 @@ export default function MargenCategorias({ filtro, onFiltro }) {
           <div className="overflow-x-auto p-4 pt-2">
             {isLoading ? (
               <p className="py-6 text-[var(--text-muted)]">Cargando…</p>
+            ) : isError && !data ? (
+              <div className="py-6 text-sm text-[var(--text-muted)] space-y-2">
+                <p>No se pudo cargar el margen por {nivel.singular.toLowerCase()}.</p>
+                <button type="button" onClick={() => refetch()} disabled={isFetching} className="btn-secondary text-sm">
+                  {isFetching ? 'Reintentando…' : 'Reintentar'}
+                </button>
+              </div>
             ) : (
               <table className="w-full">
                 <thead>
