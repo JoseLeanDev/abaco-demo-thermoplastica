@@ -115,6 +115,8 @@ test('conciliación bancaria: solo dirección, finanzas y admin', () => {
     assert.equal(puede(r.key, 'bancos'), esperado, r.key);
     assert.equal(pasa(r.key, '/api/conciliacion-bancaria'), esperado, r.key);
     assert.equal(pasa(r.key, '/api/conciliacion-bancaria/movimientos'), esperado, r.key);
+    // Resumen de bancos que usa la página Tesorería: mismo módulo, aunque el rol vea Tesorería
+    assert.equal(pasa(r.key, '/api/conciliacion-bancaria/resumen'), esperado, r.key);
   }
   // No se confunde con el módulo viejo /conciliador (solo admin)
   assert.deepEqual(modulosDeEndpoint('/conciliacion-bancaria').modulos, ['bancos']);

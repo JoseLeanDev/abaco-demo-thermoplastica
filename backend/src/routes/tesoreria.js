@@ -9,8 +9,9 @@ const { TIPO_EXPR, TIPOS } = require('../services/tipoCompra');
 const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
 
 // GET /api/tesoreria/posicion
-// Vista de working capital / posición neta.
-// Bancos no están disponibles en el ERP TP_A actual — se reportan como N/D.
+// Vista de working capital / posición neta (CxC vs CxP), antigüedad comparada y vencimientos
+// de las próximas semanas. El efectivo en bancos sale de /api/conciliacion-bancaria/resumen
+// (módulo 'bancos'): la página lo pide aparte porque no todos los roles con CxC+CxP lo ven.
 router.get('/posicion', async (req, res) => {
   try {
     // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
@@ -44,6 +45,57 @@ router.get('/posicion', async (req, res) => {
         AND fecha_emision BETWEEN ${P.D} AND ${P.H}
     `);
 
+    // 3. Antigüedad con los mismos tramos para CxC y CxP (para compararlas lado a lado)
+    const agingCxc = await db.getAsync(`
+      SELECT COALESCE(SUM(porvencer), 0) AS por_vencer, COALESCE(SUM(v30), 0) AS v_1_30,
+             COALESCE(SUM(v31a60), 0) AS v_31_60, COALESCE(SUM(v61a90), 0) AS v_61_90,
+             COALESCE(SUM(v91a120) + SUM(v120), 0) AS v_90_mas
+      FROM thermoplastica.fact_cxc_snapshot_diario
+      WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+    `);
+    const agingCxp = await db.getAsync(`
+      SELECT
+        COALESCE(SUM(saldo) FILTER (WHERE fecha_vencimiento >= CURRENT_DATE), 0)                     AS por_vencer,
+        COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 1  AND 30), 0)  AS v_1_30,
+        COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 31 AND 60), 0)  AS v_31_60,
+        COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 61 AND 90), 0)  AS v_61_90,
+        COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) > 90), 0)                AS v_90_mas
+      FROM thermoplastica.fact_cxp_factura
+      WHERE saldo > 0
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+    `);
+    const TRAMOS = [['por_vencer', 'Por vencer'], ['v_1_30', '1-30 días'], ['v_31_60', '31-60 días'],
+                    ['v_61_90', '61-90 días'], ['v_90_mas', '+90 días']];
+
+    // 4. Vencimientos de las próximas 8 semanas (semana 0 = hoy … hoy+6), por fecha de vencimiento
+    const SEMANAS = 8;
+    const vencCxc = await db.allAsync(`
+      SELECT ((fecha_vencimiento - CURRENT_DATE) / 7)::int AS semana, COALESCE(SUM(saldo_total), 0) AS monto
+      FROM thermoplastica.fact_cxc_snapshot_diario
+      WHERE fecha_snapshot = (SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario)
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+        AND fecha_vencimiento >= CURRENT_DATE AND fecha_vencimiento < CURRENT_DATE + ${SEMANAS * 7}
+      GROUP BY 1
+    `);
+    const vencCxp = await db.allAsync(`
+      SELECT ((fecha_vencimiento - CURRENT_DATE) / 7)::int AS semana, COALESCE(SUM(saldo), 0) AS monto
+      FROM thermoplastica.fact_cxp_factura
+      WHERE saldo > 0
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+        AND fecha_vencimiento >= CURRENT_DATE AND fecha_vencimiento < CURRENT_DATE + ${SEMANAS * 7}
+      GROUP BY 1
+    `);
+    const hoy = new Date();
+    const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const porSemana = (filas) => Object.fromEntries(filas.map(f => [parseInt(f.semana), parseFloat(f.monto) || 0]));
+    const sc = porSemana(vencCxc), sp = porSemana(vencCxp);
+    const vencimientos = Array.from({ length: SEMANAS }, (_, i) => {
+      const ini = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i * 7);
+      const fin = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i * 7 + 6);
+      return { semana: i, desde: isoLocal(ini), hasta: isoLocal(fin), cxc: sc[i] || 0, cxp: sp[i] || 0 };
+    });
+
     const cxcTotal = parseFloat(cxc.total) || 0;
     const cxpTotal = parseFloat(cxp.total) || 0;
     const posicionNeta = cxcTotal - cxpTotal;
@@ -55,10 +107,7 @@ router.get('/posicion', async (req, res) => {
       data: {
         periodo: P.ventana(),
         fecha_corte: new Date().toISOString().split('T')[0],
-        bancos: {
-          disponible: false,
-          nota: 'El ERP TP_A no expone saldos bancarios. Solicitar vista de cuentas bancarias al cliente para completar la posición.',
-        },
+        bancos: { fuente: '/api/conciliacion-bancaria/resumen' },
         cxc: {
           total: cxcTotal,
           por_vencer: parseFloat(cxc.por_vencer) || 0,
@@ -77,6 +126,10 @@ router.get('/posicion', async (req, res) => {
         },
         posicion_neta_working_capital: posicionNeta,
         ratio_cobertura_cxc_cxp: cobertura,
+        aging: TRAMOS.map(([k, tramo]) => ({
+          tramo, cxc: parseFloat(agingCxc[k]) || 0, cxp: parseFloat(agingCxp[k]) || 0,
+        })),
+        vencimientos,
       },
     });
   } catch (error) {
@@ -108,6 +161,7 @@ router.get('/cxc', async (req, res) => {
 
     const topDeudores = await db.allAsync(`
       SELECT
+        c.cliente_id,
         c.codigo_cliente                                                  AS codigo,
         c.nombre                                                          AS cliente,
         SUM(f.saldo_total)                                                AS monto,
@@ -119,9 +173,9 @@ router.get('/cxc', async (req, res) => {
         SELECT MAX(fecha_snapshot) FROM thermoplastica.fact_cxc_snapshot_diario
       )
         AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
-      GROUP BY c.codigo_cliente, c.nombre
+      GROUP BY c.cliente_id, c.codigo_cliente, c.nombre
       ORDER BY monto DESC
-      LIMIT 5
+      LIMIT 8
     `);
 
     const promedio = await db.getAsync(`
@@ -151,6 +205,7 @@ router.get('/cxc', async (req, res) => {
           _90_dias:     { monto: parseFloat(distribucion._90_dias)     || 0, porcentaje: pct(distribucion._90_dias) }
         },
         top_deudores: topDeudores.map(d => ({
+          cliente_id: parseInt(d.cliente_id),
           codigo: d.codigo,
           cliente: d.cliente,
           monto: parseFloat(d.monto) || 0,

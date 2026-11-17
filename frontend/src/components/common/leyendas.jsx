@@ -692,7 +692,56 @@ export const LEYENDAS = {
   // ======================= Tesorería =======================
   efectivo_bancos: {
     titulo: 'Efectivo en bancos',
-    texto: <>El ERP actual no expone saldos bancarios, por eso no se muestra.</>,
+    texto: <>
+      Saldo en libros de las cuentas bancarias al corte (fin del período): entradas − salidas de todos los movimientos bancarios registrados en Profit hasta esa fecha, sin anulados. Dólares y euros se pasan a quetzales con el tipo de cambio de referencia.
+      <Nota>Es el saldo según Profit, no el estado de cuenta del banco. La diferencia con el banco son las partidas en tránsito (ver Conciliación bancaria).</Nota>
+    </>,
+  },
+  tipo_cambio_ref: {
+    titulo: 'Tipo de cambio de referencia',
+    texto: <>
+      Mediana de la tasa de los 10 movimientos bancarios más recientes de cada moneda hasta el corte. No se usan las tasas redondas (8.00 por dólar, 10.00 por euro), que en el ERP son un valor puesto a mano, no el cambio del día.
+      <Nota>Se usa una sola tasa por moneda para todo: así los saldos y los flujos de cada mes se pueden sumar y comparar.</Nota>
+    </>,
+  },
+  liquidez_neta: {
+    titulo: 'Liquidez neta',
+    texto: <>Efectivo en bancos + por cobrar − por pagar. Responde: si se cobrara y pagara todo hoy, ¿cuánto quedaría en bancos? Cobertura = (efectivo + CxC) ÷ CxP.</>,
+  },
+  flujo_caja_bancos: {
+    titulo: 'Flujo de caja en bancos',
+    texto: <>
+      Barras: dinero que entró y salió de las cuentas bancarias cada mes, según los movimientos registrados en Profit, en quetzales con el tipo de cambio de referencia. Línea: saldo de todas las cuentas al cierre de cada mes.
+      <Nota>No incluye los traslados entre cuentas propias (compra de dólares o euros, fondeo de la cuenta de planilla): no son entradas ni salidas de la empresa. Tampoco los movimientos anulados.</Nota>
+    </>,
+  },
+  composicion_flujo: {
+    titulo: 'De dónde entra y a dónde sale',
+    texto: <>
+      Entradas y salidas del período por tipo de movimiento en Profit. Cobros = módulo de cobranza; depósitos de caja = efectivo y cheques depositados desde caja; pagos a proveedores = módulo de pagos; impuestos e IGSS = órdenes de pago a SAT o IGSS; otras órdenes de pago = planilla, importaciones y gastos pagados por orden de pago.
+      <Nota>% = parte del total de entradas o de salidas del período.</Nota>
+    </>,
+  },
+  efectivo_cuentas: {
+    titulo: 'Efectivo por cuenta',
+    texto: <>Saldo en libros de cada cuenta al corte, en quetzales con el tipo de cambio de referencia. Al pasar el cursor se ve el saldo en la moneda de la cuenta.</>,
+  },
+  aging_comparado: {
+    titulo: 'Antigüedad: por cobrar vs por pagar',
+    texto: <>
+      Saldos por días desde el vencimiento de cada documento, con los mismos tramos para clientes y proveedores. CxC del último corte del reporte de cartera del ERP; CxP con la fecha de vencimiento real de cada factura. Solo documentos emitidos en el período.
+    </>,
+  },
+  vencimientos_semanas: {
+    titulo: 'Vencimientos de las próximas 8 semanas',
+    texto: <>
+      Barras: saldo de facturas de clientes y de proveedores que vencen cada semana, contando desde hoy (documentos emitidos en el período). Línea: efectivo en bancos hoy + lo que vence por cobrar − lo que vence por pagar, acumulado.
+      <Nota>Supone que todo se cobra y se paga en su fecha de vencimiento; no incluye planilla, impuestos ni lo ya vencido. Para una proyección completa, ver Proyecciones.</Nota>
+    </>,
+  },
+  top_deudores_tesoreria: {
+    titulo: 'Clientes con más saldo por cobrar',
+    texto: <>Clientes con mayor saldo por cobrar en documentos emitidos en el período, con su parte vencida. % = parte del total por cobrar.</>,
   },
   cxc_vencida_pct: {
     titulo: 'Cartera vencida (%)',

@@ -35,6 +35,15 @@ export const useTesoreriaCxP = () => {
   return useQuery(['tesoreria-cxp', params], () => endpoints.tesoreria.cxp(params), { keepPreviousData: true })
 }
 
+// Efectivo y flujo de caja real de los bancos (módulo 'bancos': no todos los roles que ven
+// Tesorería lo tienen, por eso se pide solo si `habilitado`)
+export const useTesoreriaBancos = (habilitado = true) => {
+  const { params } = usePeriodo()
+  return useQuery(['tesoreria-bancos', params], () => endpoints.tesoreria.bancosResumen(params), {
+    keepPreviousData: true, enabled: habilitado,
+  })
+}
+
 export const useTesoreriaProyeccion = (semanas = 13) => {
   return useQuery(['tesoreria-proyeccion', semanas], () => 
     endpoints.tesoreria.proyeccion(semanas)
