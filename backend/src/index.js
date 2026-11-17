@@ -89,6 +89,7 @@ app.use('/api/cierre',                   authenticate, autorizar, require('./rou
 app.use('/api/conciliador',              authenticate, autorizar, require('./routes/conciliador'));
 app.use('/api/scheduler',                authenticate, autorizar, require('./routes/scheduler'));
 app.use('/api/margenes',                 authenticate, autorizar, require('./routes/margenes'));
+app.use('/api/conciliacion-bancaria',    authenticate, autorizar, require('./routes/conciliacionBancaria'));
 
 // -----------------------------------------------------------
 // Rutas administrativas / de mantenimiento

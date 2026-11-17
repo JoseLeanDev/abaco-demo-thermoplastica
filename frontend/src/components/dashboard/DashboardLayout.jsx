@@ -69,6 +69,7 @@ const navigation = [
       { name: 'Cuentas por cobrar', href: '/tesoreria/cuentas-por-cobrar' },
       { name: 'Cuentas por pagar', href: '/tesoreria/cuentas-por-pagar' },
       { name: 'Proyecciones', href: '/tesoreria/proyecciones' },
+      { name: 'Conciliación bancaria', href: '/tesoreria/conciliacion-bancaria' },
     ],
   },
   // { name: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },

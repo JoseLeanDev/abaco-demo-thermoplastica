@@ -108,3 +108,15 @@ test('tope por sentencia solo en lecturas: los POST (agentes, cierre) no lo llev
   assert.equal(storeDe({ rol: 'admin' }, {}, 'POST'), undefined);
   assert.equal(storeDe({ rol: 'admin' }, { categoria: 'A', subcategoria: 'B' }, 'POST'), undefined);
 });
+
+test('conciliación bancaria: solo dirección, finanzas y admin', () => {
+  for (const r of ROLES) {
+    const esperado = ['direccion', 'finanzas', 'admin'].includes(r.key);
+    assert.equal(puede(r.key, 'bancos'), esperado, r.key);
+    assert.equal(pasa(r.key, '/api/conciliacion-bancaria'), esperado, r.key);
+    assert.equal(pasa(r.key, '/api/conciliacion-bancaria/movimientos'), esperado, r.key);
+  }
+  // No se confunde con el módulo viejo /conciliador (solo admin)
+  assert.deepEqual(modulosDeEndpoint('/conciliacion-bancaria').modulos, ['bancos']);
+  assert.ok(!pasa('finanzas', '/api/conciliador/conciliaciones/1/2026/1'));
+});

@@ -29,13 +29,13 @@ import CuentasPorCobrar from './pages/CuentasPorCobrar'
 import ClienteCxc from './pages/ClienteCxc'
 import CuentasPorPagar from './pages/CuentasPorPagar'
 import ProveedorCxp from './pages/ProveedorCxp'
+import ConciliacionBancaria from './pages/ConciliacionBancaria'
 // import CuentasBancarias from './pages/CuentasBancarias'
 import ProyeccionesFinancieras from './pages/ProyeccionesFinancieras'
 import Margenes from './pages/Margenes'
 // Cierre Mensual
 // import CierreDashboard from './pages/CierreDashboard'
 // import CierreWizard from './pages/CierreWizard'
-// import ConciliacionBancaria from './pages/ConciliacionBancaria'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading, user } = useAuth()
@@ -113,10 +113,10 @@ function AppRoutes() {
                 <Route path="/tesoreria/cuentas-por-pagar/proveedor/:id" element={<ProveedorCxp />} />
                 {/* <Route path="/tesoreria/cuentas-bancarias" element={<CuentasBancarias />} /> */}
                 <Route path="/tesoreria/proyecciones" element={<ProyeccionesFinancieras />} />
+                <Route path="/tesoreria/conciliacion-bancaria" element={<ConciliacionBancaria />} />
                 {/* Cierre Mensual */}
                 {/* <Route path="/contabilidad/cierre" element={<CierreDashboard />} /> */}
                 {/* <Route path="/contabilidad/cierre/:anio/:mes" element={<CierreWizard />} /> */}
-                {/* <Route path="/contabilidad/conciliacion/:cuentaId/:anio/:mes" element={<ConciliacionBancaria />} /> */}
               </Routes>
               </RutaPermitida>
             </DashboardLayout>

@@ -6,6 +6,7 @@ const RUTAS = [
   ['/tesoreria/cuentas-por-cobrar', ['cxc']],
   ['/tesoreria/cuentas-por-pagar', ['cxp']],
   ['/tesoreria/proyecciones', ['proyecciones']],
+  ['/tesoreria/conciliacion-bancaria', ['bancos']],
   ['/tesoreria', ['cxc', 'cxp'], { todos: true }],
   ['/analisis/capital-inmovilizado', ['capital']],
   ['/analisis/rotacion-inventario', ['capital']],

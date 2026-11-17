@@ -46,7 +46,9 @@ export const endpoints = {
     cxp: (params = {}) => cfoApi.get('/tesoreria/cxp', { params }),
     cxpDetalle: (params = {}) => cfoApi.get('/tesoreria/cxp/detalle', { params }),
     cxpProveedores: (params = {}) => cfoApi.get('/tesoreria/cxp/proveedores', { params }),
-    cxpProveedor: (id, params = {}) => cfoApi.get(`/tesoreria/cxp/proveedor/${id}`, { params })
+    cxpProveedor: (id, params = {}) => cfoApi.get(`/tesoreria/cxp/proveedor/${id}`, { params }),
+    conciliacion: (params = {}) => cfoApi.get('/conciliacion-bancaria', { params }),
+    conciliacionMovimientos: (params = {}) => cfoApi.get('/conciliacion-bancaria/movimientos', { params })
   },
   compras: {
     resumen: (params = {}) => cfoApi.get('/compras', { params }),

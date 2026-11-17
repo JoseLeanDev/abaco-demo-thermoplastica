@@ -1,368 +1,402 @@
-import React, { useState, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react'
+import { useQuery } from 'react-query'
+import { Link } from 'react-router-dom'
+import {
+  ArrowLeftIcon, BuildingLibraryIcon, ScaleIcon, ClockIcon, ExclamationTriangleIcon,
+  CheckCircleIcon, CalendarDaysIcon, ListBulletIcon, MagnifyingGlassIcon,
+} from '@heroicons/react/24/outline'
+import { endpoints } from '../services/cfoApi'
+import { usePeriodo } from '../context/PeriodoContext'
+import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { Leyenda } from '../components/common/leyendas'
 
-const ConciliacionBancaria = () => {
-  // Estados principales
-  const [banco] = useState('Banco Santander');
-  const [mesAnio] = useState('Marzo 2026');
-  const [estado, setEstado] = useState('pendiente'); // pendiente, en_proceso, completada
-  
-  // Saldos
-  const [saldoContable, setSaldoContable] = useState(125000.00);
-  const [saldoEstadoCuenta, setSaldoEstadoCuenta] = useState('');
-  
-  // Diferencias
-  const [diferencias, setDiferencias] = useState([
-    { id: 1, tipo: 'Cheque en tránsito', fecha: '2026-03-28', monto: 5000.00, descripcion: 'Cheque #1234 no cobrado' },
-    { id: 2, tipo: 'Depósito pendiente', fecha: '2026-03-30', monto: -3500.00, descripcion: 'Depósito en tránsito' },
-  ]);
-  
-  // Modal de agregar diferencia
-  const [mostrarModal, setMostrarModal] = useState(false);
-  const [nuevaDiferencia, setNuevaDiferencia] = useState({
-    tipo: '',
-    fecha: '',
-    monto: '',
-    descripcion: ''
-  });
-  
-  // PDF
-  const [pdfSubido, setPdfSubido] = useState(null);
-  
-  // Cálculo de diferencia total
-  const diferenciaCalculada = useMemo(() => {
-    const saldoEC = parseFloat(saldoEstadoCuenta) || 0;
-    const totalDiferencias = diferencias.reduce((sum, diff) => sum + diff.monto, 0);
-    return saldoContable - saldoEC - totalDiferencias;
-  }, [saldoContable, saldoEstadoCuenta, diferencias]);
-  
-  // Handlers
-  const handleSubirPDF = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type === 'application/pdf') {
-      setPdfSubido(file);
-      // Aquí se procesaría el PDF
-    }
-  };
-  
-  const handleAgregarDiferencia = () => {
-    if (nuevaDiferencia.tipo && nuevaDiferencia.fecha && nuevaDiferencia.monto) {
-      const diferencia = {
-        id: Date.now(),
-        tipo: nuevaDiferencia.tipo,
-        fecha: nuevaDiferencia.fecha,
-        monto: parseFloat(nuevaDiferencia.monto),
-        descripcion: nuevaDiferencia.descripcion
-      };
-      setDiferencias([...diferencias, diferencia]);
-      setNuevaDiferencia({ tipo: '', fecha: '', monto: '', descripcion: '' });
-      setMostrarModal(false);
-    }
-  };
-  
-  const handleEliminarDiferencia = (id) => {
-    setDiferencias(diferencias.filter(d => d.id !== id));
-  };
-  
-  const handleGenerarAsiento = () => {
-    alert('Generando asiento de ajuste...');
-    // Aquí se implementaría la lógica para generar el asiento
-  };
-  
-  const handleCompletarConciliacion = () => {
-    if (Math.abs(diferenciaCalculada) > 0.01) {
-      alert('No se puede completar: existe diferencia pendiente');
-      return;
-    }
-    setEstado('completada');
-    alert('¡Conciliación completada exitosamente!');
-  };
-  
-  // Renderizar estado con color
-  const renderEstado = () => {
-    const estados = {
-      pendiente: { color: 'bg-yellow-100 text-yellow-800', label: 'Pendiente' },
-      en_proceso: { color: 'bg-blue-100 text-blue-800', label: 'En Proceso' },
-      completada: { color: 'bg-green-100 text-green-800', label: 'Completada' }
-    };
-    const config = estados[estado];
-    return (
-      <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.color}`}>
-        {config.label}
-      </span>
-    );
-  };
-  
+// Conciliación bancaria: movimientos de bancos de Profit (vst_ConciliacionBancaria) con su
+// marca de conciliación. Saldos al corte (= fin del período del filtro global), en la
+// moneda de cada cuenta. Backend: routes/conciliacionBancaria.js.
+
+const SIMBOLO = { Q: 'Q', 'US$': 'US$', EU: '€' }
+const fmtMon = (n, moneda = 'Q') => {
+  const v = Number(n) || 0
+  const s = Math.abs(v).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `${v < 0 ? '−' : ''}${SIMBOLO[moneda] || moneda} ${s}`
+}
+const fmtFecha = (d) => {
+  if (!d) return '—'
+  const [y, m, dd] = String(d).slice(0, 10).split('-').map(Number)
+  return new Date(y, m - 1, dd).toLocaleDateString('es-GT', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+const diasEntre = (desde, hasta) => {
+  if (!desde || !hasta) return null
+  return Math.round((new Date(`${String(hasta).slice(0, 10)}T00:00:00`) - new Date(`${String(desde).slice(0, 10)}T00:00:00`)) / 864e5)
+}
+const ESTADO = {
+  CONCILIADO: { label: 'Conciliado', cls: 'bg-emerald-50 text-emerald-700' },
+  ANULADO: { label: 'Anulado', cls: 'bg-gray-100 text-gray-500' },
+  DEPOSITO_EN_TRANSITO: { label: 'Depósito en tránsito', cls: 'bg-amber-50 text-amber-700' },
+  CREDITO_PENDIENTE: { label: 'Crédito pendiente', cls: 'bg-amber-50 text-amber-700' },
+  DEBITO_PENDIENTE: { label: 'Débito pendiente', cls: 'bg-rose-50 text-rose-700' },
+  CHEQUE_EN_CIRCULACION: { label: 'Cheque en circulación', cls: 'bg-rose-50 text-rose-700' },
+}
+const Estado = ({ e }) => {
+  const x = ESTADO[e] || { label: e || '—', cls: 'bg-gray-100 text-gray-600' }
+  return <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${x.cls}`}>{x.label}</span>
+}
+const TRAMOS = ['0-30', '31-60', '61-90', '91-180', '180+']
+const POR_PAGINA = 200
+
+export default function ConciliacionBancaria() {
+  const { params: periodo } = usePeriodo()
+  const { data, isLoading, isError } = useQuery(
+    ['conciliacion-bancaria', periodo], () => endpoints.tesoreria.conciliacion(periodo), { keepPreviousData: true }
+  )
+  const r = data?.data || {}
+  const cuentas = r.cuentas || []
+  const totales = r.totales_moneda || []
+  const pendientes = r.pendientes || []
+  const sospechosas = r.fechas_sospechosas || []
+  const monedas = totales.map(t => t.moneda)
+  const corte = r.corte
+
+  // Movimientos del período (filtrables)
+  const [cuenta, setCuenta] = useState('')
+  const [estado, setEstado] = useState('todos')
+  const [busqueda, setBusqueda] = useState('')
+  const [buscar, setBuscar] = useState('')
+  const [limite, setLimite] = useState(POR_PAGINA)
+  const [verSospechosas, setVerSospechosas] = useState(false)
+  const movRef = useRef(null)
+  useEffect(() => { const t = setTimeout(() => setBuscar(busqueda), 350); return () => clearTimeout(t) }, [busqueda])
+  useEffect(() => { setLimite(POR_PAGINA) }, [cuenta, estado, buscar, periodo])
+  const { data: movData, isFetching: cargandoMov } = useQuery(
+    ['conciliacion-movimientos', periodo, cuenta, estado, buscar, limite],
+    () => endpoints.tesoreria.conciliacionMovimientos({ ...periodo, cuenta, estado, busqueda: buscar, limit: limite }),
+    { keepPreviousData: true }
+  )
+  const movs = movData?.data?.filas || []
+  const totalMovs = movData?.data?.total_filas || 0
+  const verCuenta = (cod) => {
+    setCuenta(cod)
+    movRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // KPI: la cuenta más atrasada en conciliación
+  const atrasada = cuentas.filter(c => c.ultima_conciliacion).sort((a, b) => a.ultima_conciliacion.localeCompare(b.ultima_conciliacion))[0]
+  const antig = (tramo, moneda) => (r.antiguedad || []).find(a => a.tramo === tramo && a.moneda === moneda)
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{banco}</h1>
-              <p className="text-gray-500 mt-1">{mesAnio}</p>
+    <div className="space-y-6 animate-fade-in max-w-7xl">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-4">
+          <Link to="/tesoreria" className="w-10 h-10 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] flex items-center justify-center transition-colors">
+            <ArrowLeftIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          </Link>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#001639] flex items-center justify-center">
+              <BuildingLibraryIcon className="w-5 h-5 text-white" />
             </div>
-            <div className="flex items-center gap-4">
-              {renderEstado()}
-              <label className="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                {pdfSubido ? 'Cambiar PDF' : 'Subir Estado de Cuenta'}
-                <input 
-                  type="file" 
-                  accept=".pdf" 
-                  className="hidden" 
-                  onChange={handleSubirPDF}
-                />
-              </label>
+            <div>
+              <h1 className="text-2xl font-semibold">Conciliación bancaria</h1>
+              <p className="text-sm text-[var(--text-muted)] flex items-center gap-1">
+                {isLoading ? 'Cargando…' : `${cuentas.length} cuentas · saldos al ${fmtFecha(corte)}`}
+                {r.actualizado_en && <> · datos del ERP de {new Date(r.actualizado_en).toLocaleString('es-GT', { timeZone: 'America/Guatemala', dateStyle: 'medium', timeStyle: 'short' })}</>}
+                <Leyenda k="conc_actualizacion" />
+              </p>
+              <PeriodoActivo nota="saldos al cierre del período; movimientos con fecha en el período" className="mt-1" />
             </div>
           </div>
-          {pdfSubido && (
-            <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              PDF cargado: {pdfSubido.name}
-            </p>
+        </div>
+      </div>
+
+      {isError && <div className="card p-5 text-sm text-[var(--danger)]">No se pudo cargar la conciliación bancaria.</div>}
+
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="kpi-card card-hover">
+          <span className="kpi-label flex items-center gap-1">Partidas pendientes al corte <Leyenda k="conc_pendientes" /></span>
+          <p className={`kpi-value ${r.pendientes_total ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>{(r.pendientes_total || 0).toLocaleString('es-GT')}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            {totales.filter(t => t.pendiente_n).map(t => fmtMon(t.diferencia, t.moneda)).join(' · ') || 'Todo conciliado'}
+          </p>
+        </div>
+        <div className="kpi-card card-hover">
+          <span className="kpi-label flex items-center gap-1">Conciliado en el período <Leyenda k="conc_pct" /></span>
+          <p className="kpi-value">{r.periodo?.pct_conciliado != null ? `${r.periodo.pct_conciliado}%` : '—'}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            {(r.periodo?.conciliados || 0).toLocaleString('es-GT')} de {(r.periodo?.movimientos || 0).toLocaleString('es-GT')} movimientos · {(r.periodo?.anulados || 0).toLocaleString('es-GT')} anulados
+          </p>
+        </div>
+        <div className="kpi-card card-hover">
+          <span className="kpi-label flex items-center gap-1">Última conciliación (más atrasada) <Leyenda k="conc_ultima" /></span>
+          <p className="kpi-value">{atrasada ? fmtFecha(atrasada.ultima_conciliacion) : '—'}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            {atrasada ? `${atrasada.banco} ${atrasada.cod_cta} · ${diasEntre(atrasada.ultima_conciliacion, corte)} días antes del corte` : ''}
+          </p>
+        </div>
+        <div className="kpi-card card-hover">
+          <span className="kpi-label flex items-center gap-1">Fechas por revisar en el ERP <Leyenda k="conc_sospechosas" /></span>
+          <p className={`kpi-value ${sospechosas.length ? 'text-[var(--danger)]' : ''}`}>{sospechosas.length}</p>
+          {sospechosas.length > 0 && (
+            <button type="button" onClick={() => setVerSospechosas(v => !v)} className="text-xs text-[var(--accent-blue)] hover:underline mt-1">
+              {verSospechosas ? 'Ocultar lista' : 'Ver movimientos'}
+            </button>
           )}
         </div>
-        
-        {/* Cards de Saldos */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          {/* Saldo Contable */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-500">Saldo Contable</h3>
-              <div className="bg-blue-50 p-2 rounded-lg">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 3.666V14m-3.667 3.333h7.334c.644 0 1.167-.522 1.167-1.167V8.167c0-.644-.523-1.167-1.167-1.167H8.833c-.644 0-1.167.523-1.167 1.167v8.333c0 .645.523 1.167 1.167 1.167z" />
-                </svg>
-              </div>
+      </div>
+
+      {/* Totales por moneda */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {totales.map(t => (
+          <div key={t.moneda} className="card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold">{t.moneda === 'EU' ? 'Euros' : t.moneda === 'US$' ? 'Dólares' : 'Quetzales'}</span>
+              <span className="text-xs text-[var(--text-muted)]">{t.cuentas} {t.cuentas === 1 ? 'cuenta' : 'cuentas'}</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900">
-              ${saldoContable.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Según libros contables</p>
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between"><dt className="text-[var(--text-secondary)] flex items-center gap-1">Saldo en libros <Leyenda k="conc_saldo_libros" /></dt><dd className="tabular-nums font-semibold">{fmtMon(t.saldo_libros, t.moneda)}</dd></div>
+              <div className="flex justify-between"><dt className="text-[var(--text-secondary)] flex items-center gap-1">Según banco (est.) <Leyenda k="conc_saldo_banco" /></dt><dd className="tabular-nums">{fmtMon(t.saldo_banco, t.moneda)}</dd></div>
+              <div className="flex justify-between"><dt className="text-[var(--text-secondary)] flex items-center gap-1">Diferencia <Leyenda k="conc_diferencia" /></dt><dd className={`tabular-nums ${t.diferencia ? 'text-[var(--warning)] font-medium' : 'text-[var(--success)]'}`}>{fmtMon(t.diferencia, t.moneda)}</dd></div>
+            </dl>
           </div>
-          
-          {/* Estado de Cuenta */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-500">Estado de Cuenta</h3>
-              <div className="bg-purple-50 p-2 rounded-lg">
-                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-              </div>
-            </div>
-            <input
-              type="number"
-              value={saldoEstadoCuenta}
-              onChange={(e) => setSaldoEstadoCuenta(e.target.value)}
-              placeholder="0.00"
-              className="w-full text-2xl font-bold text-gray-900 border-b-2 border-gray-200 focus:border-indigo-500 outline-none bg-transparent py-1"
-            />
-            <p className="text-xs text-gray-400 mt-1">Ingrese saldo del banco</p>
+        ))}
+      </div>
+
+      {/* Fechas sospechosas */}
+      {verSospechosas && (
+        <div className="card">
+          <div className="section-header">
+            <ExclamationTriangleIcon className="w-5 h-5 text-[var(--danger)]" />
+            <h2 className="font-semibold">Movimientos con fecha por revisar</h2>
+            <Leyenda k="conc_sospechosas" />
           </div>
-          
-          {/* Diferencia */}
-          <div className={`rounded-lg shadow-sm p-6 ${Math.abs(diferenciaCalculada) < 0.01 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className={`text-sm font-medium ${Math.abs(diferenciaCalculada) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
-                Diferencia
-              </h3>
-              <div className={`p-2 rounded-lg ${Math.abs(diferenciaCalculada) < 0.01 ? 'bg-green-100' : 'bg-red-100'}`}>
-                <svg className={`w-5 h-5 ${Math.abs(diferenciaCalculada) < 0.01 ? 'text-green-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-            </div>
-            <p className={`text-2xl font-bold ${Math.abs(diferenciaCalculada) < 0.01 ? 'text-green-700' : 'text-red-700'}`}>
-              ${Math.abs(diferenciaCalculada).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-            </p>
-            <p className={`text-xs mt-1 ${Math.abs(diferenciaCalculada) < 0.01 ? 'text-green-500' : 'text-red-500'}`}>
-              {Math.abs(diferenciaCalculada) < 0.01 ? 'Conciliado' : diferenciaCalculada > 0 ? 'Falta por justificar' : 'Sobregiro por justificar'}
-            </p>
-          </div>
-        </div>
-        
-        {/* Tabla de Diferencias */}
-        <div className="bg-white rounded-lg shadow-sm mb-6">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Diferencias Identificadas</h2>
-              <button
-                onClick={() => setMostrarModal(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Agregar Diferencia
-              </button>
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto">
+          <div className="p-5 pt-0 overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              <thead>
+                <tr className="text-xs text-[var(--text-muted)] uppercase">
+                  <th className="text-left font-semibold pb-2">Fecha en ERP</th>
+                  <th className="text-left font-semibold pb-2">Registrado</th>
+                  <th className="text-left font-semibold pb-2">Cuenta</th>
+                  <th className="text-left font-semibold pb-2">Documento</th>
+                  <th className="text-left font-semibold pb-2">Estado</th>
+                  <th className="text-right font-semibold pb-2">Monto</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {diferencias.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                      No hay diferencias registradas. Haga clic en "Agregar Diferencia" para comenzar.
-                    </td>
+              <tbody className="divide-y divide-[var(--border-default)]">
+                {sospechosas.map(s => (
+                  <tr key={s.id_movimiento} className="text-sm">
+                    <td className="py-2 pr-2 tabular-nums text-[var(--danger)]">{fmtFecha(s.fecha)}</td>
+                    <td className="py-2 pr-2 tabular-nums text-[var(--text-secondary)]">{fmtFecha(s.fecha_registro)}</td>
+                    <td className="py-2 pr-2">{s.banco} <span className="text-[var(--text-muted)]">{s.cod_cta}</span></td>
+                    <td className="py-2 pr-2"><span className="font-medium">{s.doc_num}</span> <span className="text-xs text-[var(--text-muted)]">{s.tipo_operacion}</span><p className="text-xs text-[var(--text-muted)] truncate max-w-[320px]">{s.descripcion}</p></td>
+                    <td className="py-2 pr-2"><Estado e={s.estado_conciliacion} /></td>
+                    <td className="py-2 text-right tabular-nums">{fmtMon(s.monto_neto, s.moneda)}</td>
                   </tr>
-                ) : (
-                  diferencias.map((diff) => (
-                    <tr key={diff.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{diff.tipo}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{diff.fecha}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${diff.monto >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {diff.monto >= 0 ? '+' : ''}${Math.abs(diff.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">{diff.descripcion}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button
-                          onClick={() => handleEliminarDiferencia(diff.id)}
-                          className="text-red-600 hover:text-red-800 transition-colors"
-                          title="Eliminar"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
-              <tfoot className="bg-gray-50 font-medium">
-                <tr>
-                  <td colSpan="2" className="px-6 py-3 text-right text-gray-700">Total Diferencias:</td>
-                  <td className="px-6 py-3 text-right text-gray-900">
-                    ${diferencias.reduce((sum, d) => sum + d.monto, 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td colSpan="2"></td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>
-        
-        {/* Botones de Acción */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-end">
-          <button
-            onClick={handleGenerarAsiento}
-            disabled={diferencias.length === 0}
-            className="bg-gray-800 hover:bg-gray-900 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Generar Asiento de Ajuste
-          </button>
-          <button
-            onClick={handleCompletarConciliacion}
-            disabled={Math.abs(diferenciaCalculada) > 0.01 || estado === 'completada'}
-            className="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            Completar Conciliación
-          </button>
+      )}
+
+      {/* Por cuenta */}
+      <div className="card">
+        <div className="section-header">
+          <ScaleIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <h2 className="font-semibold">Libros vs banco por cuenta</h2>
+          <span className="text-xs text-[var(--text-muted)]">al {fmtFecha(corte)}</span>
         </div>
-        
-        {/* Modal de Agregar Diferencia */}
-        {mostrarModal && (
-          <div className="fixed inset-0 bg-[#001639] bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-              <div className="p-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Agregar Diferencia</h3>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Diferencia</label>
-                  <select
-                    value={nuevaDiferencia.tipo}
-                    onChange={(e) => setNuevaDiferencia({...nuevaDiferencia, tipo: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="">Seleccione...</option>
-                    <option value="Cheque en tránsito">Cheque en tránsito</option>
-                    <option value="Depósito pendiente">Depósito pendiente</option>
-                    <option value="Cargo no registrado">Cargo no registrado</option>
-                    <option value="Abono no registrado">Abono no registrado</option>
-                    <option value="Error en registro">Error en registro</option>
-                    <option value="Comisión bancaria">Comisión bancaria</option>
-                    <option value="Intereses ganados">Intereses ganados</option>
-                    <option value="Nota de crédito">Nota de crédito</option>
-                    <option value="Nota de débito">Nota de débito</option>
-                    <option value="Otro">Otro</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
-                  <input
-                    type="date"
-                    value={nuevaDiferencia.fecha}
-                    onChange={(e) => setNuevaDiferencia({...nuevaDiferencia, fecha: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Monto</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={nuevaDiferencia.monto}
-                    onChange={(e) => setNuevaDiferencia({...nuevaDiferencia, monto: e.target.value})}
-                    placeholder="Use positivo para sumar, negativo para restar"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Positivo: Aumenta el saldo contable | Negativo: Disminuye el saldo contable</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                  <textarea
-                    value={nuevaDiferencia.descripcion}
-                    onChange={(e) => setNuevaDiferencia({...nuevaDiferencia, descripcion: e.target.value})}
-                    rows="2"
-                    placeholder="Descripción detallada de la diferencia..."
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-              <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
-                <button
-                  onClick={() => setMostrarModal(false)}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleAgregarDiferencia}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  Agregar
-                </button>
-              </div>
-            </div>
+        <div className="p-5 pt-0 overflow-x-auto">
+          <table className="w-full min-w-[960px]">
+            <thead>
+              <tr className="text-xs text-[var(--text-muted)] uppercase">
+                <th className="text-left font-semibold pb-2">Cuenta</th>
+                <th className="text-right font-semibold pb-2"><span className="inline-flex items-center gap-1">Libros <Leyenda k="conc_saldo_libros" /></span></th>
+                <th className="text-right font-semibold pb-2"><span className="inline-flex items-center gap-1">Según banco <Leyenda k="conc_saldo_banco" /></span></th>
+                <th className="text-right font-semibold pb-2"><span className="inline-flex items-center gap-1">Diferencia <Leyenda k="conc_diferencia" /></span></th>
+                <th className="text-right font-semibold pb-2"><span className="inline-flex items-center gap-1">Pendientes <Leyenda k="conc_pendientes" /></span></th>
+                <th className="text-right font-semibold pb-2"><span className="inline-flex items-center gap-1">Última conciliación <Leyenda k="conc_ultima" /></span></th>
+                <th className="text-right font-semibold pb-2"><span className="inline-flex items-center gap-1">Entradas / salidas período <Leyenda k="conc_movimientos" /></span></th>
+                <th className="text-right font-semibold pb-2"><span className="inline-flex items-center gap-1">% concil. <Leyenda k="conc_pct" /></span></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-default)]">
+              {isLoading && <tr><td colSpan={8} className="py-3 text-sm text-[var(--text-muted)]">Cargando…</td></tr>}
+              {cuentas.map(c => {
+                const dias = diasEntre(c.ultima_conciliacion, corte)
+                return (
+                  <tr key={c.cod_cta} onClick={() => verCuenta(c.cod_cta)} className={`text-sm hover:bg-[var(--bg-secondary)] cursor-pointer ${cuenta === c.cod_cta ? 'bg-[var(--bg-secondary)]' : ''}`}>
+                    <td className="py-2 pr-2">
+                      <p className="font-medium">{c.banco}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{c.cod_cta} · {c.num_cta} · {c.moneda}</p>
+                    </td>
+                    <td className="py-2 text-right tabular-nums font-semibold">{fmtMon(c.saldo_libros, c.moneda)}</td>
+                    <td className="py-2 text-right tabular-nums">{fmtMon(c.saldo_banco, c.moneda)}</td>
+                    <td className={`py-2 text-right tabular-nums ${c.diferencia ? 'text-[var(--warning)] font-medium' : 'text-[var(--text-muted)]'}`}>{fmtMon(c.diferencia, c.moneda)}</td>
+                    <td className="py-2 text-right tabular-nums">{c.pendiente_n || <CheckCircleIcon className="w-4 h-4 inline text-[var(--success)]" />}</td>
+                    <td className="py-2 text-right tabular-nums">
+                      {fmtFecha(c.ultima_conciliacion)}
+                      {dias != null && <p className={`text-xs ${dias > 31 ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}>{dias === 0 ? 'al corte' : `${dias} d antes`}</p>}
+                    </td>
+                    <td className="py-2 text-right tabular-nums text-xs">
+                      <p className="text-[var(--success)]">+{fmtMon(c.entradas_periodo, c.moneda)}</p>
+                      <p className="text-[var(--text-secondary)]">−{fmtMon(c.salidas_periodo, c.moneda)}</p>
+                    </td>
+                    <td className="py-2 text-right tabular-nums">
+                      {c.pct_conciliado != null ? `${c.pct_conciliado}%` : '—'}
+                      <p className="text-xs text-[var(--text-muted)]">{c.mov_periodo.toLocaleString('es-GT')} mov.</p>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <p className="mt-3 text-xs text-[var(--text-muted)]">Clic en una cuenta filtra sus movimientos abajo. Montos en la moneda de cada cuenta.</p>
+        </div>
+      </div>
+
+      {/* Antigüedad + pendientes */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="card">
+          <div className="section-header">
+            <ClockIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Antigüedad sin conciliar</h2>
+            <Leyenda k="conc_antiguedad" />
           </div>
-        )}
+          <div className="p-5 pt-0 overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-xs text-[var(--text-muted)] uppercase">
+                  <th className="text-left font-semibold pb-2">Días</th>
+                  {monedas.map(m => <th key={m} className="text-right font-semibold pb-2">{m}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-default)]">
+                {TRAMOS.map(tr => (
+                  <tr key={tr} className="text-sm">
+                    <td className="py-2 pr-2 text-[var(--text-secondary)]">{tr}</td>
+                    {monedas.map(m => {
+                      const a = antig(tr, m)
+                      return (
+                        <td key={m} className="py-2 text-right tabular-nums">
+                          {a ? <>{fmtMon(a.monto, m)}<p className="text-xs text-[var(--text-muted)]">{a.n} {a.n === 1 ? 'partida' : 'partidas'}</p></> : <span className="text-[var(--text-muted)]">—</span>}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="card lg:col-span-2">
+          <div className="section-header">
+            <CalendarDaysIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <h2 className="font-semibold">Partidas en tránsito al {fmtFecha(corte)}</h2>
+            <Leyenda k="conc_pendientes" />
+          </div>
+          <div className="p-5 pt-0 overflow-x-auto">
+            {!isLoading && pendientes.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)] py-4 text-center">Sin partidas pendientes al corte.</p>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs text-[var(--text-muted)] uppercase">
+                    <th className="text-left font-semibold pb-2">Fecha</th>
+                    <th className="text-left font-semibold pb-2">Cuenta</th>
+                    <th className="text-left font-semibold pb-2">Documento</th>
+                    <th className="text-left font-semibold pb-2">Estado</th>
+                    <th className="text-right font-semibold pb-2">Días</th>
+                    <th className="text-right font-semibold pb-2">Monto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-default)]">
+                  {pendientes.map(p => (
+                    <tr key={p.id_movimiento} className="text-sm">
+                      <td className="py-2 pr-2 tabular-nums whitespace-nowrap">
+                        <span className={p.fecha_sospechosa ? 'text-[var(--danger)]' : ''}>{fmtFecha(p.fecha)}</span>
+                        {p.fecha_sospechosa && <ExclamationTriangleIcon className="w-3.5 h-3.5 inline ml-1 text-[var(--danger)]" title="Fecha mal digitada en el ERP" />}
+                      </td>
+                      <td className="py-2 pr-2 whitespace-nowrap">{p.cod_cta} <span className="text-xs text-[var(--text-muted)]">{p.moneda}</span></td>
+                      <td className="py-2 pr-2"><span className="font-medium">{p.doc_num}</span><p className="text-xs text-[var(--text-muted)] truncate max-w-[260px]">{p.descripcion || p.tercero}</p></td>
+                      <td className="py-2 pr-2">
+                        <Estado e={p.conciliado ? 'CONCILIADO' : p.estado_conciliacion} />
+                        {p.conciliado && <p className="text-xs text-[var(--text-muted)]">después del corte ({fmtFecha(p.fecha_conciliacion)})</p>}
+                      </td>
+                      <td className="py-2 text-right tabular-nums">{p.dias.toLocaleString('es-GT')}</td>
+                      <td className={`py-2 text-right tabular-nums ${p.monto_neto < 0 ? 'text-[var(--danger)]' : ''}`}>{fmtMon(p.monto_neto, p.moneda)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Movimientos del período */}
+      <div className="card" ref={movRef}>
+        <div className="section-header">
+          <ListBulletIcon className="w-5 h-5 text-[var(--text-muted)]" />
+          <h2 className="font-semibold">Movimientos del período</h2>
+          <span className="text-xs text-[var(--text-muted)]">{totalMovs.toLocaleString('es-GT')} movimientos{cargandoMov ? ' · actualizando…' : ''}</span>
+        </div>
+        <div className="px-5 flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <MagnifyingGlassIcon className="w-5 h-5 text-[var(--text-muted)] absolute left-4 top-1/2 -translate-y-1/2" />
+            <input type="text" placeholder="Buscar por documento, tercero o descripción…" value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)} className="input w-full pl-12" />
+          </div>
+          <select value={cuenta} onChange={(e) => setCuenta(e.target.value)} className="input sm:w-auto shrink-0">
+            <option value="">Todas las cuentas</option>
+            {cuentas.map(c => <option key={c.cod_cta} value={c.cod_cta}>{c.banco} {c.cod_cta} ({c.moneda})</option>)}
+          </select>
+          <select value={estado} onChange={(e) => setEstado(e.target.value)} className="input sm:w-auto shrink-0">
+            <option value="todos">Todos los estados</option>
+            <option value="conciliado">Conciliados al corte</option>
+            <option value="pendiente">Pendientes al corte</option>
+            <option value="anulado">Anulados</option>
+          </select>
+        </div>
+        <div className="p-5 overflow-x-auto">
+          <table className="w-full min-w-[900px]">
+            <thead>
+              <tr className="text-xs text-[var(--text-muted)] uppercase">
+                <th className="text-left font-semibold pb-2">Fecha</th>
+                <th className="text-left font-semibold pb-2">Cuenta</th>
+                <th className="text-left font-semibold pb-2">Documento</th>
+                <th className="text-left font-semibold pb-2">Tercero / descripción</th>
+                <th className="text-left font-semibold pb-2">Estado</th>
+                <th className="text-right font-semibold pb-2">Conciliado</th>
+                <th className="text-right font-semibold pb-2">Monto</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-default)]">
+              {movs.length === 0 && !cargandoMov && <tr><td colSpan={7} className="py-4 text-sm text-center text-[var(--text-muted)]">Sin movimientos con estos filtros.</td></tr>}
+              {movs.map(m => (
+                <tr key={m.id_movimiento} className={`text-sm ${m.anulado ? 'opacity-60' : ''}`}>
+                  <td className="py-2 pr-2 tabular-nums whitespace-nowrap">{fmtFecha(m.fecha)}</td>
+                  <td className="py-2 pr-2 whitespace-nowrap">{m.cod_cta} <span className="text-xs text-[var(--text-muted)]">{m.moneda}</span></td>
+                  <td className="py-2 pr-2"><span className="font-medium">{m.doc_num || '—'}</span><p className="text-xs text-[var(--text-muted)]">{m.tipo_operacion}</p></td>
+                  <td className="py-2 pr-2"><p className="truncate max-w-[300px]">{m.tercero || m.descripcion || '—'}</p>{m.tercero && m.descripcion && <p className="text-xs text-[var(--text-muted)] truncate max-w-[300px]">{m.descripcion}</p>}</td>
+                  <td className="py-2 pr-2"><Estado e={m.estado_conciliacion} /></td>
+                  <td className="py-2 pr-2 text-right tabular-nums text-[var(--text-secondary)] whitespace-nowrap">{m.conciliado ? fmtFecha(m.fecha_conciliacion) : '—'}</td>
+                  <td className={`py-2 text-right tabular-nums whitespace-nowrap ${m.anulado ? 'line-through' : m.monto_neto < 0 ? 'text-[var(--text-secondary)]' : 'text-[var(--success)]'}`}>
+                    {fmtMon(m.anulado ? (m.entrada || -m.salida) : m.monto_neto, m.moneda)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {movs.length < totalMovs && (
+            <div className="mt-4 text-center">
+              <button type="button" onClick={() => setLimite(l => l + POR_PAGINA)} disabled={cargandoMov} className="btn-secondary disabled:opacity-60">
+                {cargandoMov ? 'Cargando…' : `Ver más (${movs.length.toLocaleString('es-GT')} de ${totalMovs.toLocaleString('es-GT')})`}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  );
-};
-
-export default ConciliacionBancaria;
+  )
+}

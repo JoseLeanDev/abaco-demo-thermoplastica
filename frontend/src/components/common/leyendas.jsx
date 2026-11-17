@@ -1103,6 +1103,60 @@ export const LEYENDAS = {
     titulo: 'Categoría › Subcategoría › Sublínea',
     texto: <>Agrupación del catálogo del ERP: categoría = campo “marca” (Laminados, Liners…), subcategoría = “línea” y sublínea = “sublínea”. Es la misma que se usa en Ventas.</>,
   },
+
+  // ======================= Conciliación bancaria =======================
+  conc_saldo_libros: {
+    titulo: 'Saldo en libros',
+    texto: <>
+      Suma de entradas − salidas (− IDB) de todos los movimientos bancarios de la cuenta registrados en Profit con fecha hasta el corte (fin del período). No incluye anulados.
+      <Nota>En la moneda de la cuenta; no se convierte a quetzales.</Nota>
+    </>,
+  },
+  conc_saldo_banco: {
+    titulo: 'Saldo según banco (estimado)',
+    texto: <>
+      Saldo en libros menos las partidas pendientes al corte: lo que el banco ya reflejó según la marca de conciliación de Profit.
+      <Nota>El ERP no envía el estado de cuenta del banco, así que este saldo no viene del banco: es el saldo en libros de lo ya conciliado.</Nota>
+    </>,
+  },
+  conc_diferencia: {
+    titulo: 'Diferencia (partidas en tránsito)',
+    texto: <>Saldo en libros − saldo según banco = suma de las partidas pendientes al corte. Positiva: depósitos o créditos que el banco aún no refleja. Negativa: cheques, transferencias o débitos pendientes.</>,
+  },
+  conc_pendientes: {
+    titulo: 'Partidas pendientes al corte',
+    texto: <>
+      Movimientos no anulados con fecha hasta el corte que no estaban conciliados al corte: sin conciliar en Profit, o conciliados después del corte.
+      Estado según Profit: depósito en tránsito, crédito pendiente o débito pendiente.
+    </>,
+  },
+  conc_antiguedad: {
+    titulo: 'Antigüedad de las partidas sin conciliar',
+    texto: <>Días entre la fecha del movimiento y el corte. Separado por moneda de la cuenta. Las partidas con fecha mal digitada en el ERP (p. ej. 1922) caen en 180+.</>,
+  },
+  conc_ultima: {
+    titulo: 'Última fecha conciliada',
+    texto: <>
+      Fecha de conciliación más reciente de la cuenta, hasta el corte. En el KPI se muestra la de la cuenta más atrasada.
+      <Nota>Profit marca casi todo como conciliado el mismo día en que se registra; por eso suele coincidir con el último movimiento.</Nota>
+    </>,
+  },
+  conc_pct: {
+    titulo: 'Conciliado en el período',
+    texto: <>Movimientos con fecha en el período (sin anulados) que ya estaban conciliados al corte ÷ total de movimientos del período.</>,
+  },
+  conc_movimientos: {
+    titulo: 'Entradas y salidas del período',
+    texto: <>Entradas = depósitos, cobros, transferencias recibidas, intereses y notas de crédito. Salidas = pagos, cheques, transferencias, notas de débito e IDB. Incluyen traslados entre cuentas propias. Sin anulados.</>,
+  },
+  conc_sospechosas: {
+    titulo: 'Fechas por revisar',
+    texto: <>Movimientos con fecha anterior a 2010, posterior a hoy o que Profit marca “fuera de rango” (p. ej. 1922 en lugar de 2022). Siempre se muestran todos, sin importar el período: conviene corregirlos en el ERP porque alteran saldos y antigüedad.</>,
+  },
+  conc_actualizacion: {
+    titulo: 'Actualización',
+    texto: <>Se trae completa la vista vst_ConciliacionBancaria del ERP todos los días a las 06:00 (hora de Guatemala). Lo conciliado en Profit después de esa hora aparece al día siguiente.</>,
+  },
 }
 
 // <Leyenda k="margen_bruto" />  ·  claro: true para fondos oscuros
