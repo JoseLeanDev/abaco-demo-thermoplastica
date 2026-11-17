@@ -81,8 +81,7 @@ test('endpoint sin mapear: solo admin', () => {
   assert.ok(!pasa('finanzas', '/api/contabilidad/libro_diario'));
 });
 
-// Qué store deja el middleware para la petición (database/connection.js lee
-// sinNestloop y limiteMs)
+// Qué store deja el middleware para la petición (database/connection.js lee limiteMs)
 function storeDe(user, query, method = 'GET') {
   const { als } = require('../src/services/alcance');
   const req = { user, method, baseUrl: '/api/ventas', path: '/desglose', query };
@@ -92,22 +91,20 @@ function storeDe(user, query, method = 'GET') {
   return store;
 }
 
-test('sin nested loops: sin recorte desde el 2º nivel de producto, con recorte con cualquier filtro', () => {
+test('lecturas con tope por sentencia; el filtro de producto ya no fuerza el plan', () => {
   const GET = { limiteMs: 35000 };
   for (const rol of ['finanzas', 'direccion', 'admin']) {
     assert.deepEqual(storeDe({ rol }, {}), GET, rol);
-    assert.deepEqual(storeDe({ rol }, { categoria: 'Liners' }), GET, rol);
-    assert.deepEqual(storeDe({ rol }, { categoria: 'Liners', subcategoria: 'Induccion' }), { ...GET, sinNestloop: true }, rol);
-    assert.deepEqual(storeDe({ rol }, { categoria: 'Liners', subcategoria: 'Induccion', sublinea: 'X' }), { ...GET, sinNestloop: true }, rol);
+    assert.deepEqual(storeDe({ rol }, { categoria: 'Liners', subcategoria: 'Induccion', sublinea: 'X' }), GET, rol);
   }
   const gl = { rol: 'gerente_linea', alcance: { lineas: ['Liners'] } };
-  assert.ok(!storeDe(gl, {}).sinNestloop);
-  assert.equal(storeDe(gl, { categoria: 'Liners' }).sinNestloop, true);
-  assert.deepEqual(storeDe(gl, { categoria: 'Liners' }).lineas, ['Liners']);
-  assert.equal(storeDe(gl, {}).limiteMs, 35000);
+  const s = storeDe(gl, { categoria: 'Liners', subcategoria: 'Induccion' });
+  assert.deepEqual(s.lineas, ['Liners']);
+  assert.equal(s.limiteMs, 35000);
+  assert.equal(s.sinNestloop, undefined);
 });
 
 test('tope por sentencia solo en lecturas: los POST (agentes, cierre) no lo llevan', () => {
   assert.equal(storeDe({ rol: 'admin' }, {}, 'POST'), undefined);
-  assert.equal(storeDe({ rol: 'admin' }, { categoria: 'A', subcategoria: 'B' }, 'POST').limiteMs, undefined);
+  assert.equal(storeDe({ rol: 'admin' }, { categoria: 'A', subcategoria: 'B' }, 'POST'), undefined);
 });

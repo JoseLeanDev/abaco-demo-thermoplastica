@@ -32,34 +32,25 @@ console.log('✅ Conectado a base de datos PostgreSQL (Render)');
 // petición con alcance salen con las tablas sensibles filtradas. pool.query lo
 // usan directo algunos servicios (laminados, CPP).
 //
-// Con recorte y además un filtro de producto (categoría Liners de un Gerente de Línea
-// de Liners), Postgres subestima cuántas filas quedan y elige nested loops que
-// recalculan v_ventas_costeadas por cada artículo: Ventas y Márgenes pasaban de 60 s.
-// En esas peticiones, y sin recorte desde el segundo nivel de filtro de producto
-// (categoría + subcategoría), middleware/permisos.js desactiva los nested loops;
-// sin filtro de producto se dejan, porque ahí ayudan.
-//
-// Además, las lecturas (GET) de la API llevan `limiteMs`: ninguna sentencia corre más
-// que eso. El navegador abandona a los 30 s (y reintenta una vez), pero Postgres
-// seguía con la consulta minutos; con un plan malo cada clic sumaba carga y la base
-// se ponía lenta para todos. Así falla rápido y la pantalla puede avisar.
-function ajustes() {
-  const s = als.getStore();
-  const sets = [];
-  if (s?.sinNestloop) sets.push('SET enable_nestloop = off');
-  if (s?.limiteMs) sets.push(`SET statement_timeout = ${Math.max(1000, parseInt(s.limiteMs, 10) || 0)}`);
-  return sets;
-}
-const recortada = () => ajustes().length > 0;
+// Las lecturas (GET) de la API llevan `limiteMs` (middleware/permisos.js): ninguna
+// sentencia corre más que eso. El navegador abandona a los 30 s (y reintenta una
+// vez), pero Postgres seguía con la consulta minutos; con un plan malo (p. ej. el
+// filtro de producto antes de la migración 028) cada clic sumaba carga y la base se
+// ponía lenta para todos. Así falla rápido y la pantalla puede avisar.
+const limite = () => {
+  const ms = parseInt(als.getStore()?.limiteMs, 10);
+  return ms > 0 ? Math.max(1000, ms) : null;
+};
+const conLimite = () => limite() !== null;
 
 async function consultar(client, sql, params) {
-  const sets = ajustes();
-  if (!sets.length) return client.query(sql, params);
-  await client.query(sets.join('; '));
+  const ms = limite();
+  if (ms === null) return client.query(sql, params);
+  await client.query(`SET statement_timeout = ${ms}`);
   try {
     return await client.query(sql, params);
   } finally {
-    await client.query('RESET enable_nestloop; RESET statement_timeout').catch(() => {});
+    await client.query('RESET statement_timeout').catch(() => {});
   }
 }
 
@@ -67,7 +58,7 @@ const poolQuery = pool.query.bind(pool);
 pool.query = (text, ...rest) => {
   const q = typeof text === 'string' ? reescribir(text) : (text?.text ? { ...text, text: reescribir(text.text) } : text);
   // Con callback (API vieja de pg) se deja como estaba
-  if (!recortada() || typeof rest[rest.length - 1] === 'function') return poolQuery(q, ...rest);
+  if (!conLimite() || typeof rest[rest.length - 1] === 'function') return poolQuery(q, ...rest);
   return pool.connect().then(client =>
     consultar(client, q, rest[0]).finally(() => client.release()));
 };
