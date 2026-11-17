@@ -325,10 +325,11 @@ function AgingComparado({ pos, cxcDetalle, cxpDetalle }) {
       </div>
       {data.every(d => !d.cxc && !d.cxp) ? <Vacio>Sin saldos pendientes de documentos emitidos en el período.</Vacio> : (
         <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={data} margin={{ top: 18, right: 10, bottom: 0, left: 0 }} barGap={4}>
+          <BarChart data={data} margin={{ top: 22, right: 10, bottom: 0, left: 0 }} barGap={4}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
             <XAxis dataKey="tramo" tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
-            <YAxis tickFormatter={ejeQ} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={62} />
+            <YAxis tickFormatter={ejeQ} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={62}
+              domain={[0, (max) => max * 1.15]} allowDecimals={false} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v, name) => [fmtQ(v), name]} cursor={{ fill: 'var(--bg-secondary)' }} />
             <Bar dataKey="cxc" name="Por cobrar" fill={C.cxc} radius={[4, 4, 0, 0]} maxBarSize={34}>
               <LabelList dataKey="cxc" position="top" formatter={(v) => (v ? fmtM(v) : '')} style={{ fontSize: 10, fill: 'var(--text-muted)' }} />
