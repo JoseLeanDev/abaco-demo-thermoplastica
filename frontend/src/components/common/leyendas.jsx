@@ -751,6 +751,18 @@ export const LEYENDAS = {
     titulo: 'Por cobrar (CxC)',
     texto: <>Saldo pendiente de documentos de clientes emitidos en el período, según el último corte del reporte de cartera del ERP.</>,
   },
+  cxc_moneda: {
+    titulo: 'Moneda de los documentos',
+    texto: <>
+      Cada documento de cartera se emite en Profit en quetzales o en dólares. El ERP entrega el saldo en Q
+      (convertido con la tasa de cambio de cada documento) y también el saldo en la moneda original.
+      <L>
+        <li><strong>Todas:</strong> montos en Q; los documentos en dólares suman su equivalente en quetzales.</li>
+        <li><strong>Quetzales / Dólares:</strong> solo los documentos en esa moneda, con montos en esa moneda (US$ tal como se facturaron).</li>
+      </L>
+      <Nota>Las compras del cliente siempre van en Q (ventas sin IVA). Cuentas por Pagar aún no distingue moneda: la vista del ERP todavía no la trae.</Nota>
+    </>,
+  },
   cxp_total: {
     titulo: 'Por pagar (CxP)',
     texto: <>Saldo pendiente de facturas de proveedor emitidas en el período.</>,

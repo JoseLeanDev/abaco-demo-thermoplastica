@@ -19,6 +19,11 @@ import { descargarEstadoCuentaPdf } from '../services/estadoCuentaPdf'
 
 const fmtQ = (n) => `Q${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtQ2 = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+// Monto en la moneda del documento (US$ o Q), con centavos
+const fmtMon2 = (n, m) => (m === 'US$'
+  ? `US$${(Number(n) || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  : fmtQ2(n))
+const fmtUsd = (n) => `US$${Math.round(Number(n) || 0).toLocaleString('es-GT')}`
 const fmtM = (n) => {
   const v = Number(n) || 0
   if (Math.abs(v) >= 1e6) return `Q${(v / 1e6).toFixed(1)}M`
@@ -69,6 +74,9 @@ export default function ClienteCxc() {
   if (isLoading || !vigente) return <Esqueleto />
 
   const { cliente: c, saldo, comportamiento, compras } = d
+  // Saldo por moneda del documento: si todo está en dólares, los KPIs van en US$
+  const usd = (saldo.por_moneda || []).find(m => m.moneda === 'US$')
+  const todoUsd = usd && saldo.por_moneda.length === 1
 
   return (
     <div className={`space-y-6 animate-fade-in max-w-7xl ${isFetching ? 'opacity-80' : ''}`}>
@@ -123,9 +131,13 @@ export default function ClienteCxc() {
 
       {/* KPIs */}
       <div className={`grid grid-cols-2 lg:grid-cols-3 gap-4 ${sinMargen ? 'xl:grid-cols-5' : 'xl:grid-cols-6'}`}>
-        <Kpi titulo="Saldo actual" leyenda="saldo_cliente" valor={fmtQ(saldo.total)}
-          sub={`${saldo.documentos} documento${saldo.documentos === 1 ? '' : 's'} abiertos`} />
-        <Kpi titulo="Vencido" leyenda="dias_vencido" valor={fmtQ(saldo.vencido)}
+        <Kpi titulo="Saldo actual" leyenda="saldo_cliente" valor={todoUsd ? fmtUsd(usd.saldo_original) : fmtQ(saldo.total)}
+          sub={<>
+            {saldo.documentos} documento{saldo.documentos === 1 ? '' : 's'} abiertos
+            {todoUsd && <> · ≈ {fmtQ(saldo.total)}</>}
+            {usd && !todoUsd && <span className="block text-[var(--info)]">incl. {fmtUsd(usd.saldo_original)} en dólares</span>}
+          </>} />
+        <Kpi titulo="Vencido" leyenda="dias_vencido" valor={todoUsd ? fmtUsd(usd.vencido_original) : fmtQ(saldo.vencido)}
           tono={saldo.vencido > 0 ? (saldo.mas_antiguo_dias > 60 ? 'danger' : 'warning') : 'success'}
           sub={saldo.vencido > 0 ? `${saldo.vencidos} docs · el más antiguo ${saldo.mas_antiguo_dias} d` : 'Nada vencido'} />
         <Kpi titulo="Días reales de pago" leyenda="dias_pago_real" valor={fmtDias(comportamiento.actual.dias_pago)}
@@ -258,6 +270,17 @@ function TabEstadoCuenta({ d }) {
   const { saldo, estado_cuenta: docs, pagadas } = d
   const totalValor = docs.reduce((t, x) => t + (x.valor || 0), 0)
   const totalAbonado = docs.reduce((t, x) => t + (x.abonado || 0), 0)
+  // Documentos en dólares: se muestran en US$ (como se facturaron) y el total va por moneda
+  const hayUsd = docs.some(x => x.moneda === 'US$')
+  const enMoneda = (x, k) => (x.moneda === 'US$' ? x[`${k}_original`] : x[k])
+  const totales = (saldo.por_moneda || []).map(m => {
+    const ds = docs.filter(x => (x.moneda || 'Q') === m.moneda)
+    return {
+      ...m,
+      valor: ds.reduce((t, x) => t + (enMoneda(x, 'valor') || 0), 0),
+      abonado: ds.reduce((t, x) => t + (enMoneda(x, 'abonado') || 0), 0),
+    }
+  })
 
   return (
     <div className="space-y-6">
@@ -280,7 +303,10 @@ function TabEstadoCuenta({ d }) {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-[var(--text-muted)] mt-3">Corte del reporte de cartera: {fmtF(saldo.corte)}{saldo.proximo_vencimiento && ` · próximo vencimiento ${fmtF(saldo.proximo_vencimiento)}`}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-3">
+              Corte del reporte de cartera: {fmtF(saldo.corte)}{saldo.proximo_vencimiento && ` · próximo vencimiento ${fmtF(saldo.proximo_vencimiento)}`}
+              {hayUsd && ' · montos en Q: los documentos en dólares se convierten con la tasa de cada documento'}
+            </p>
           </>
         ) : (
           <p className="text-sm text-[var(--text-muted)] py-4">El cliente no tiene saldo pendiente al último corte.</p>
@@ -309,12 +335,18 @@ function TabEstadoCuenta({ d }) {
               )}
               {docs.map(x => (
                 <tr key={`${x.tipo_documento}-${x.documento}`} className="hover:bg-[var(--bg-secondary)]">
-                  <td className={`${td} font-medium`}>{x.tipo_documento} {x.documento}</td>
+                  <td className={`${td} font-medium whitespace-nowrap`}>
+                    {x.tipo_documento} {x.documento}
+                    {x.moneda === 'US$' && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--info-bg)] text-[var(--info)] align-middle">US$</span>}
+                  </td>
                   <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.fecha_emision)}</td>
                   <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.fecha_vencimiento)}</td>
-                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{x.valor !== null ? fmtQ2(x.valor) : '—'}</td>
-                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{x.abonado ? fmtQ2(x.abonado) : '—'}</td>
-                  <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ2(x.saldo)}</td>
+                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{enMoneda(x, 'valor') !== null ? fmtMon2(enMoneda(x, 'valor'), x.moneda) : '—'}</td>
+                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{enMoneda(x, 'abonado') ? fmtMon2(enMoneda(x, 'abonado'), x.moneda) : '—'}</td>
+                  <td className={`${td} text-right tabular-nums font-semibold whitespace-nowrap`}>
+                    {fmtMon2(enMoneda(x, 'saldo'), x.moneda)}
+                    {x.moneda === 'US$' && <p className="text-xs font-normal text-[var(--text-muted)]" title={x.tasa ? `Tasa del documento: ${x.tasa}` : undefined}>≈ {fmtQ2(x.saldo)}</p>}
+                  </td>
                   <td className={`${td} text-center`}><Situacion dias={x.dias_vencido} /></td>
                   <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.ultimo_abono)}</td>
                   <td className={`${td} text-[var(--text-secondary)]`}>{x.vendedor || '—'}</td>
@@ -323,14 +355,40 @@ function TabEstadoCuenta({ d }) {
             </tbody>
             {docs.length > 0 && (
               <tfoot className="border-t-2 border-[var(--border-default)] bg-[var(--bg-secondary)]">
-                <tr>
-                  <td className={`${td} font-semibold`} colSpan={3}>Total</td>
-                  <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ2(totalValor)}</td>
-                  <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ2(totalAbonado)}</td>
-                  <td className={`${td} text-right tabular-nums font-bold`}>{fmtQ2(saldo.total)}</td>
-                  <td className={`${td} text-center text-xs text-[var(--danger)]`}>{saldo.vencido > 0 && `Vencido ${fmtQ(saldo.vencido)}`}</td>
-                  <td colSpan={2} />
-                </tr>
+                {!hayUsd ? (
+                  <tr>
+                    <td className={`${td} font-semibold`} colSpan={3}>Total</td>
+                    <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ2(totalValor)}</td>
+                    <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ2(totalAbonado)}</td>
+                    <td className={`${td} text-right tabular-nums font-bold`}>{fmtQ2(saldo.total)}</td>
+                    <td className={`${td} text-center text-xs text-[var(--danger)]`}>{saldo.vencido > 0 && `Vencido ${fmtQ(saldo.vencido)}`}</td>
+                    <td colSpan={2} />
+                  </tr>
+                ) : (
+                  <>
+                    {totales.map(t => (
+                      <tr key={t.moneda}>
+                        <td className={`${td} font-semibold`} colSpan={3}>Total en {t.moneda === 'US$' ? 'dólares' : 'quetzales'} ({t.documentos} doc{t.documentos === 1 ? '' : 's'})</td>
+                        <td className={`${td} text-right tabular-nums font-semibold`}>{fmtMon2(t.valor, t.moneda)}</td>
+                        <td className={`${td} text-right tabular-nums font-semibold`}>{fmtMon2(t.abonado, t.moneda)}</td>
+                        <td className={`${td} text-right tabular-nums font-bold whitespace-nowrap`}>
+                          {fmtMon2(t.saldo_original, t.moneda)}
+                          {t.moneda === 'US$' && <p className="text-xs font-normal text-[var(--text-muted)]">≈ {fmtQ2(t.saldo_q)}</p>}
+                        </td>
+                        <td className={`${td} text-center text-xs text-[var(--danger)]`}>{t.vencido_original > 0 && `Vencido ${fmtMon2(t.vencido_original, t.moneda)}`}</td>
+                        <td colSpan={2} />
+                      </tr>
+                    ))}
+                    {totales.length > 1 && (
+                      <tr>
+                        <td className={`${td} font-semibold`} colSpan={5}>Total equivalente en quetzales</td>
+                        <td className={`${td} text-right tabular-nums font-bold`}>{fmtQ2(saldo.total)}</td>
+                        <td className={`${td} text-center text-xs text-[var(--danger)]`}>{saldo.vencido > 0 && `Vencido ${fmtQ(saldo.vencido)}`}</td>
+                        <td colSpan={2} />
+                      </tr>
+                    )}
+                  </>
+                )}
               </tfoot>
             )}
           </table>
@@ -370,7 +428,12 @@ function TabEstadoCuenta({ d }) {
                     <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.fecha_emision)}</td>
                     <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.fecha_vencimiento)}</td>
                     <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.fecha_cobro)}</td>
-                    <td className={`${td} text-right tabular-nums`}>{fmtQ2(x.valor)}</td>
+                    <td className={`${td} text-right tabular-nums whitespace-nowrap`}>
+                      {x.moneda === 'US$' && x.valor_original !== null ? <>
+                        {fmtMon2(x.valor_original, 'US$')}
+                        <p className="text-xs text-[var(--text-muted)]">≈ {fmtQ2(x.valor)}</p>
+                      </> : fmtQ2(x.valor)}
+                    </td>
                     <td className={`${td} text-right tabular-nums`}>{x.dias_pago} d</td>
                     <td className={`${td} text-right tabular-nums`}><Atraso dias={x.atraso} /></td>
                   </tr>

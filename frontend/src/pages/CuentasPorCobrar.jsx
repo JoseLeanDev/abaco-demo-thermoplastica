@@ -28,6 +28,15 @@ const fmtM = (n) => {
   if (Math.abs(v) >= 1e3) return `Q${Math.round(v / 1e3)}k`
   return fmtQ(v)
 }
+// Montos en la moneda indicada ('US$' o Q). Con filtro de dólares el backend ya los manda en US$.
+const fmtMon = (n, m) => (m === 'US$'
+  ? `US$${(Number(n) || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  : fmtQ(n))
+const MONEDAS = [
+  { id: '',    label: 'Todas' },
+  { id: 'Q',   label: 'Quetzales' },
+  { id: 'US$', label: 'Dólares' },
+]
 const fmtDate = (d) => {
   if (!d) return '—'
   const s = typeof d === 'string' ? d : String(d)
@@ -57,6 +66,8 @@ const COLUMNAS_CXC_CLIENTES = [
   { label: 'Sector', get: r => r.sector },
   { label: 'Documentos', get: r => r.documentos },
   { label: 'Saldo', get: r => Number(r.saldo).toFixed(2) },
+  { label: 'Saldo en documentos US$ (US$)', get: r => Number(r.saldo_usd || 0).toFixed(2) },
+  { label: 'Saldo en documentos US$ (equivalente Q)', get: r => Number(r.saldo_usd_q || 0).toFixed(2) },
   { label: '% del total', get: r => r.pct_saldo },
   { label: 'Vencido', get: r => Number(r.vencido).toFixed(2) },
   { label: 'Documentos vencidos', get: r => r.documentos_vencidos },
@@ -78,7 +89,10 @@ const COLUMNAS_CXC_DOCS = [
   { label: 'Emisión', get: r => r.fecha_emision && String(r.fecha_emision).slice(0, 10) },
   { label: 'Vencimiento', get: r => r.fecha_vencimiento && String(r.fecha_vencimiento).slice(0, 10) },
   { label: 'Días de atraso', get: r => r.dias_atraso },
-  { label: 'Saldo', get: r => r.saldo_total.toFixed(2) },
+  { label: 'Moneda', get: r => r.moneda },
+  { label: 'Tasa', get: r => r.tasa },
+  { label: 'Saldo en moneda del documento', get: r => r.saldo_original.toFixed(2) },
+  { label: 'Saldo (Q)', get: r => r.saldo_total.toFixed(2) },
   { label: 'Por vencer', get: r => r.porvencer.toFixed(2) },
   { label: 'Vencido', get: r => r.vencido.toFixed(2) },
   { label: '1-30', get: r => r.v30.toFixed(2) },
@@ -96,24 +110,26 @@ export default function CuentasPorCobrar() {
   const [bucket, setBucket]     = useState('todos')
   const [vista, setVista]       = useState('clientes') // 'clientes' | 'documentos'
   const [filtroCli, setFiltroCli] = useState('todos')
+  const [moneda, setMoneda]     = useState('') // '' = todas (en Q) | 'Q' | 'US$'
   const navigate = useNavigate()
   const irACliente = (id) => navigate(`/tesoreria/cuentas-por-cobrar/cliente/${id}`)
 
   const { params: periodo } = usePeriodo()
+  const conMoneda = moneda ? { moneda } : {}
   const { data: cxcData, isLoading: loadingResumen } = useQuery(
-    ['cxc', periodo], () => endpoints.tesoreria.cxc(periodo), { keepPreviousData: true }
+    ['cxc', periodo, moneda], () => endpoints.tesoreria.cxc({ ...periodo, ...conMoneda }), { keepPreviousData: true }
   )
 
   const [orden, setOrden] = useState({ k: 'saldo', dir: 'desc' })
-  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, orden: orden.k, dir: orden.dir, ...periodo }
+  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, orden: orden.k, dir: orden.dir, ...periodo, ...conMoneda }
   const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
-    ['cxc-detalle', busqueda, bucket, orden, periodo],
+    ['cxc-detalle', busqueda, bucket, orden, periodo, moneda],
     () => endpoints.tesoreria.cxcDetalle(detalleParams),
     { keepPreviousData: true, enabled: vista === 'documentos' }
   )
   const { data: clientesData, isLoading: loadingClientes, isFetching: fetchingClientes } = useQuery(
-    ['cxc-clientes', busqueda, periodo],
-    () => endpoints.tesoreria.cxcClientes({ busqueda, ...periodo }),
+    ['cxc-clientes', busqueda, periodo, moneda],
+    () => endpoints.tesoreria.cxcClientes({ busqueda, ...periodo, ...conMoneda }),
     { keepPreviousData: true, enabled: vista === 'clientes' }
   )
   const todosCli = clientesData?.data?.filas || []
@@ -122,11 +138,17 @@ export default function CuentasPorCobrar() {
   const resumen       = cxcData?.data || {}
   const distribucion  = resumen.distribucion_aging || {}
   const totalFacturas = resumen.facturas || 0
+  // Moneda en que vienen los montos del resumen (la del filtro; sin filtro, quetzales)
+  const unidad = resumen.moneda === 'US$' ? 'US$' : 'Q'
+  const f = (n) => fmtMon(n, unidad)
+  const porMoneda = resumen.por_moneda || []
+  const totalQ = porMoneda.reduce((t, m) => t + m.saldo_q, 0)
 
   const ord = { orden, setOrden }
   const filas = detalleData?.data?.filas || []
   const totalFilas   = detalleData?.data?.total_filas || 0
   const sumaFiltrada = detalleData?.data?.suma_saldo || 0
+  const sumaOriginal = detalleData?.data?.suma_saldo_original
 
   // Exporta la vista activa (clientes o documentos) con la búsqueda y el filtro de antigüedad
   const [exportando, setExportando] = useState(false)
@@ -135,10 +157,11 @@ export default function CuentasPorCobrar() {
     try {
       const corte = periodo.hasta || 'hoy'
       if (vista === 'clientes') {
-        await exportarExcel(`cxc_clientes_${corte}.xlsx`, COLUMNAS_CXC_CLIENTES, clientes, { hoja: 'Clientes' })
+        const cols = moneda ? COLUMNAS_CXC_CLIENTES.map(c => ['Saldo', 'Vencido'].includes(c.label) ? { ...c, label: `${c.label} (${moneda})` } : c) : COLUMNAS_CXC_CLIENTES
+        await exportarExcel(`cxc_clientes${moneda ? `_${moneda === 'US$' ? 'usd' : 'q'}` : ''}_${corte}.xlsx`, cols, clientes, { hoja: 'Clientes' })
       } else {
-        const docs = await traerTodo(endpoints.tesoreria.cxcDetalle, { busqueda, bucket, orden: orden.k, dir: orden.dir, ...periodo })
-        await exportarExcel(`cxc_documentos_${corte}.xlsx`, COLUMNAS_CXC_DOCS, docs, { hoja: 'Documentos' })
+        const docs = await traerTodo(endpoints.tesoreria.cxcDetalle, { busqueda, bucket, orden: orden.k, dir: orden.dir, ...periodo, ...conMoneda })
+        await exportarExcel(`cxc_documentos${moneda ? `_${moneda === 'US$' ? 'usd' : 'q'}` : ''}_${corte}.xlsx`, COLUMNAS_CXC_DOCS, docs, { hoja: 'Documentos' })
       }
     } finally {
       setExportando(false)
@@ -148,7 +171,7 @@ export default function CuentasPorCobrar() {
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <Link
             to="/tesoreria"
@@ -169,35 +192,89 @@ export default function CuentasPorCobrar() {
             </div>
           </div>
         </div>
-        <button onClick={exportar} disabled={exportando} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
-          <ArrowDownTrayIcon className="w-4 h-4" />
-          {exportando ? 'Exportando…' : 'Exportar Excel'}
-        </button>
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">Moneda <Leyenda k="cxc_moneda" /></span>
+            <div className="flex rounded-lg border border-[var(--border-default)] overflow-hidden">
+              {MONEDAS.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setMoneda(m.id)}
+                  className={`px-3 py-1.5 text-sm font-medium ${moneda === m.id ? 'bg-[#001639] text-white' : 'hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)]'}`}
+                >{m.label}</button>
+              ))}
+            </div>
+          </div>
+          <button onClick={exportar} disabled={exportando} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            {exportando ? 'Exportando…' : 'Exportar Excel'}
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">Total por Cobrar <Leyenda k="cxc_total" /></span>
-          <p className="kpi-value">{fmtQ(resumen.total_cxc)}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">{totalFacturas.toLocaleString()} documentos</p>
+          <p className="kpi-value">{f(resumen.total_cxc)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            {totalFacturas.toLocaleString()} documentos
+            {unidad === 'US$' && <> · ≈ {fmtQ(resumen.total_q)}</>}
+          </p>
         </div>
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">Al Corriente (por vencer) <Leyenda k="por_vencer" /></span>
-          <p className="kpi-value text-[var(--success)]">{fmtQ(distribucion.al_corriente?.monto)}</p>
+          <p className="kpi-value text-[var(--success)]">{f(distribucion.al_corriente?.monto)}</p>
           <p className="text-xs text-[var(--success)] mt-1">{distribucion.al_corriente?.porcentaje || 0}%</p>
         </div>
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">1-30 días vencido <Leyenda k="dias_vencido" /></span>
-          <p className="kpi-value text-[var(--warning)]">{fmtQ(distribucion._30_dias?.monto)}</p>
+          <p className="kpi-value text-[var(--warning)]">{f(distribucion._30_dias?.monto)}</p>
           <p className="text-xs text-[var(--warning)] mt-1">{distribucion._30_dias?.porcentaje || 0}%</p>
         </div>
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">+60 días (riesgo) <Leyenda k="cxc_riesgo" /></span>
-          <p className="kpi-value text-[var(--danger)]">{fmtQ((distribucion._60_dias?.monto || 0) + (distribucion._90_dias?.monto || 0))}</p>
+          <p className="kpi-value text-[var(--danger)]">{f((distribucion._60_dias?.monto || 0) + (distribucion._90_dias?.monto || 0))}</p>
           <p className="text-xs text-[var(--danger)] mt-1">Atención requerida</p>
         </div>
       </div>
+
+      {/* Desglose por moneda: clic para filtrar */}
+      {!moneda && porMoneda.length > 1 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {porMoneda.map(m => {
+            const usd = m.moneda === 'US$'
+            return (
+              <button
+                key={m.moneda}
+                onClick={() => setMoneda(m.moneda)}
+                className="card card-hover p-4 text-left flex items-start justify-between gap-4"
+                title={`Ver solo documentos en ${usd ? 'dólares' : 'quetzales'}`}
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                    Documentos en {usd ? 'dólares (US$)' : 'quetzales (Q)'}
+                  </p>
+                  <p className="text-xl font-semibold tabular-nums mt-1">{fmtMon(m.saldo_original, m.moneda)}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5 tabular-nums">
+                    {usd && <>≈ {fmtQ(m.saldo_q)} · </>}
+                    {m.documentos.toLocaleString()} documentos · {m.clientes.toLocaleString()} clientes
+                  </p>
+                  {m.vencido_original > 0 && (
+                    <p className="text-xs text-[var(--danger)] mt-0.5 tabular-nums">Vencido {fmtMon(m.vencido_original, m.moneda)}</p>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-2xl font-semibold tabular-nums text-[var(--text-secondary)]">
+                    {totalQ > 0 ? Math.round(m.saldo_q / totalQ * 100) : 0}%
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">del total en Q</p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Aging */}
       <div className="card">
@@ -205,6 +282,7 @@ export default function CuentasPorCobrar() {
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Distribución por Antigüedad</h2>
           <Leyenda k="aging_cxc" />
+          {moneda && <span className="text-xs text-[var(--text-muted)] ml-1">· solo documentos en {moneda === 'US$' ? 'dólares, montos en US$' : 'quetzales'}</span>}
         </div>
         <div className="p-5 pt-0 space-y-4">
           {[
@@ -219,7 +297,7 @@ export default function CuentasPorCobrar() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-[var(--text-secondary)]">{r.label}</span>
                   <span className="text-sm font-semibold tabular-nums">
-                    {fmtQ(val?.monto)} ({val?.porcentaje || 0}%)
+                    {f(val?.monto)} ({val?.porcentaje || 0}%)
                   </span>
                 </div>
                 <div className="h-3 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
@@ -283,6 +361,7 @@ export default function CuentasPorCobrar() {
           cargando={loadingClientes}
           actualizando={fetchingClientes && !loadingClientes}
           onClick={irACliente}
+          moneda={clientesData?.data?.moneda || null}
         />
       )}
 
@@ -296,7 +375,11 @@ export default function CuentasPorCobrar() {
               {isFetching && !loadingDetalle && ' • actualizando…'}
             </span>
           </div>
-          <span className="text-sm font-semibold">Total filtrado: {fmtQ(sumaFiltrada)}</span>
+          <span className="text-sm font-semibold tabular-nums">
+            Total filtrado: {moneda === 'US$' && sumaOriginal !== null && sumaOriginal !== undefined
+              ? <>{fmtMon(sumaOriginal, 'US$')} <span className="font-normal text-[var(--text-muted)]">≈ {fmtQ(sumaFiltrada)}</span></>
+              : fmtQ(sumaFiltrada)}
+          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -355,7 +438,10 @@ export default function CuentasPorCobrar() {
                       <p className="text-sm text-[var(--text-secondary)]">{row.vendedor || '—'}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-sm font-medium">{row.tipo_documento} {row.documento}</p>
+                      <p className="text-sm font-medium whitespace-nowrap">
+                        {row.tipo_documento} {row.documento}
+                        {row.moneda === 'US$' && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--info-bg)] text-[var(--info)] align-middle">US$</span>}
+                      </p>
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-sm text-[var(--text-secondary)] tabular-nums">{fmtDate(row.fecha_emision)}</p>
@@ -387,10 +473,22 @@ export default function CuentasPorCobrar() {
                         <span className="text-xs text-[var(--text-muted)]">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="font-bold tabular-nums">{fmtQ(row.saldo_total)}</span>
-                      {row.vencido > 0 && (
-                        <p className="text-xs text-[var(--danger)] tabular-nums">Vencido {fmtQ(row.vencido)}</p>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {row.moneda === 'US$' ? (
+                        <>
+                          <span className="font-bold tabular-nums">{fmtMon(row.saldo_original, 'US$')}</span>
+                          <p className="text-xs text-[var(--text-muted)] tabular-nums" title={row.tasa ? `Tasa del documento: ${row.tasa}` : undefined}>≈ {fmtQ(row.saldo_total)}</p>
+                          {row.vencido > 0 && (
+                            <p className="text-xs text-[var(--danger)] tabular-nums">Vencido {fmtMon(row.vencido_original, 'US$')}</p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-bold tabular-nums">{fmtQ(row.saldo_total)}</span>
+                          {row.vencido > 0 && (
+                            <p className="text-xs text-[var(--danger)] tabular-nums">Vencido {fmtQ(row.vencido)}</p>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -419,7 +517,10 @@ export default function CuentasPorCobrar() {
 }
 
 // Todos los clientes con su resumen (mismas cifras que la ficha); cada fila abre la ficha
-function TablaClientes({ filas, cargando, actualizando, onClick }) {
+function TablaClientes({ filas, cargando, actualizando, onClick, moneda }) {
+  // Con filtro de dólares, saldo / por vencer / vencido vienen en US$; compras siempre en Q (ventas)
+  const unidad = moneda === 'US$' ? 'US$' : 'Q'
+  const f = (n) => fmtMon(n, unidad)
   const [orden, setOrden] = useState({ k: 'saldo', dir: -1 })
   // Los vacíos (sin pagos o sin compras) siempre al final
   const ordenadas = [...filas].sort((a, b) => {
@@ -449,7 +550,7 @@ function TablaClientes({ filas, cargando, actualizando, onClick }) {
           </span>
           <Leyenda k="cxc_por_cliente" />
         </div>
-        <span className="text-sm font-semibold">Nos deben: {fmtQ(total)}</span>
+        <span className="text-sm font-semibold tabular-nums">Nos deben: {f(total)}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -485,13 +586,18 @@ function TablaClientes({ filas, cargando, actualizando, onClick }) {
                   </td>
                   <td className="px-4 py-3 text-right">
                     {r.saldo > 0 ? <>
-                      <p className="font-bold tabular-nums">{fmtQ(r.saldo)}</p>
+                      <p className="font-bold tabular-nums">{f(r.saldo)}</p>
                       <p className="text-xs text-[var(--text-muted)] tabular-nums">{r.pct_saldo}% del total</p>
+                      {!moneda && r.saldo_usd > 0 && (
+                        <p className="text-xs text-[var(--info)] tabular-nums" title={`≈ ${fmtQ(r.saldo_usd_q)} de este saldo está en documentos en dólares`}>
+                          {r.saldo_usd_q >= r.saldo - 0.01 ? 'todo en' : 'incl.'} {fmtMon(r.saldo_usd, 'US$')}
+                        </p>
+                      )}
                     </> : <span className="text-sm text-[var(--text-muted)]">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)]">{r.por_vencer > 0 ? fmtQ(r.por_vencer) : <span className="text-[var(--text-muted)]">—</span>}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text-secondary)]">{r.por_vencer > 0 ? f(r.por_vencer) : <span className="text-[var(--text-muted)]">—</span>}</td>
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.vencido > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
-                    {r.vencido > 0 ? fmtQ(r.vencido) : '—'}
+                    {r.vencido > 0 ? f(r.vencido) : '—'}
                     {r.documentos_vencidos > 0 && <p className="text-xs font-normal">{r.documentos_vencidos} doc{r.documentos_vencidos === 1 ? '' : 's'}</p>}
                   </td>
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.atraso_max > 60 ? 'text-[var(--danger)] font-semibold' : r.atraso_max > 0 ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}>
