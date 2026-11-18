@@ -15,6 +15,7 @@ import Compras from './pages/Compras'
 import GastosAdministracion from './pages/GastosAdministracion'
 import Ventas from './pages/Ventas'
 import VendedorVentas from './pages/VendedorVentas'
+import ClienteVentas from './pages/ClienteVentas'
 import Inventario from './pages/Inventario'
 // import SAT from './pages/SAT'
 import LogActividades from './pages/LogActividades'
@@ -100,6 +101,7 @@ function AppRoutes() {
                 <Route path="/compras/historial-ventas" element={<HistorialVentas />} />
                 <Route path="/ventas" element={<Ventas />} />
                 <Route path="/ventas/vendedor/:codigo" element={<VendedorVentas />} />
+                <Route path="/ventas/cliente/:codigo" element={<ClienteVentas />} />
                 <Route path="/inventario" element={<Inventario />} />
                 <Route path="/margenes" element={<Margenes />} />
                 {/* <Route path="/sat" element={<SAT />} /> */}

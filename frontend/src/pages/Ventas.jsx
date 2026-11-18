@@ -826,12 +826,12 @@ function TabClientes({ clientes, resumen }) {
                   <td className="py-2 pr-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs text-[var(--text-muted)] tabular-nums w-6">#{i + 1}</span>
-                      <div className="min-w-0">
+                      <Link to={`/ventas/cliente/${encodeURIComponent(c.codigo)}`} title="Ver resumen de ventas del cliente" className="min-w-0 block hover:underline">
                         <p className="font-medium truncate max-w-[280px]">{c.cliente}</p>
                         <p className="text-xs text-[var(--text-muted)]">
                           {c.codigo}{c.forma_pago ? ` · ${c.forma_pago}` : ''}
                         </p>
-                      </div>
+                      </Link>
                     </div>
                   </td>
                   <td className="py-2 text-right tabular-nums">{fmtInt(c.facturas)}</td>
@@ -873,7 +873,9 @@ function TabClientes({ clientes, resumen }) {
                 <tbody className="divide-y divide-[var(--border-default)]">
                   {resumen.perdidos.map(c => (
                     <tr key={c.codigo} className="text-sm">
-                      <td className="py-2 pr-2">{c.cliente}</td>
+                      <td className="py-2 pr-2">
+                        <Link to={`/ventas/cliente/${encodeURIComponent(c.codigo)}`} title="Ver resumen de ventas del cliente" className="hover:underline">{c.cliente}</Link>
+                      </td>
                       <td className="py-2 text-right tabular-nums font-semibold text-[var(--danger)]">{fmtM(c.ventas_prev)}</td>
                       <td className="py-2 text-right tabular-nums col-margen">{c.margen_pct_prev === null ? '—' : `${c.margen_pct_prev.toFixed(1)}%`}</td>
                     </tr>

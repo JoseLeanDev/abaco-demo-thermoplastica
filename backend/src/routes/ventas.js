@@ -757,6 +757,143 @@ router.get('/vendedor/:codigo', async (req, res) => {
   }
 });
 
+// GET /api/ventas/cliente/:codigo   Resumen de ventas de un cliente (acepta filtros de producto)
+// Cuánto compra vs año anterior, su peso en las ventas, historial de 24 meses, qué
+// compra (categorías y artículos, incluidos los que dejó de comprar), con qué
+// frecuencia y quién se lo vende. Las cuentas por cobrar viven en Tesorería.
+router.get('/cliente/:codigo', async (req, res) => {
+  try {
+    const info = await db.getAsync(`
+      SELECT cliente_id, codigo_cliente,
+             REGEXP_REPLACE(nombre, '^[A-Za-z]*[0-9][0-9A-Za-z]*-', '') AS nombre, forma_pago AS sector
+      FROM thermoplastica.dim_cliente WHERE codigo_cliente = $1
+      ORDER BY cliente_id LIMIT 1`, [String(req.params.codigo)]);
+    if (!info) return res.status(404).json({ status: 'error', message: 'Cliente no encontrado' });
+
+    const P = parseWindow(req);
+    const id = parseInt(info.cliente_id);
+    // Mismos filtros de producto + el del cliente, para reutilizar el desglose
+    const reqC = { query: { ...req.query, cliente: info.codigo_cliente } };
+    const V = ventasFiltradas(req, P);
+
+    const pSerie = [id];
+    const fSerie = filtrosProducto(req, pSerie);
+    const deC = 'f.cliente_id = $1';
+    const pPer = [id];
+    const fPer = filtrosProducto(req, pPer);
+
+    const [ranking, categorias, articulos, vendedores, empresa, serie, vida, frecuencia] = await Promise.all([
+      calcularDesglose(req, 'cliente'),
+      calcularDesglose(reqC, 'categoria'),
+      calcularDesglose(reqC, 'articulo'),
+      calcularDesglose(reqC, 'vendedor'),
+      db.getAsync(`SELECT ${M.pct()} AS margen_pct FROM ${V.from} fv`, V.params),
+      // Historial: 24 meses que terminan en el mes de "hasta"
+      db.allAsync(`
+        SELECT TO_CHAR(f.fecha_emision, 'YYYY-MM')   AS periodo,
+               COALESCE(SUM(f.total_sin_iva), 0)     AS ventas,
+               ${M.pct('f')}                         AS margen_pct,
+               COUNT(DISTINCT f.fact_num)            AS facturas,
+               COUNT(DISTINCT f.articulo_id)         AS skus
+        ${JOINS}
+        WHERE f.tipo_doc = 'FACT' AND ${deC}
+          AND f.fecha_emision BETWEEN (DATE_TRUNC('month', ${P.H}) - INTERVAL '23 months')::date AND ${P.H}
+          ${fSerie.length ? 'AND ' + fSerie.join(' AND ') : ''}
+        GROUP BY 1 ORDER BY 1`, pSerie),
+      // Relación completa (sin filtro de período): primera / última compra, tipo de cliente
+      db.getAsync(`
+        SELECT MIN(f.fecha_emision) AS primera_compra, MAX(f.fecha_emision) AS ultima_compra,
+               (SELECT REGEXP_REPLACE(x.tipo_cliente, '^\\s*\\d+\\s*-\\s*', '')
+                  FROM thermoplastica.fact_ventas_linea x
+                 WHERE x.cliente_id = $1 AND x.tipo_doc = 'FACT' AND x.tipo_cliente IS NOT NULL
+                 ORDER BY x.fecha_emision DESC LIMIT 1) AS tipo_cliente
+        FROM thermoplastica.fact_ventas_linea f
+        WHERE f.cliente_id = $1 AND f.tipo_doc = 'FACT'`, [id]),
+      // Días distintos en que compró dentro del período (frecuencia de compra)
+      db.getAsync(`
+        SELECT COUNT(DISTINCT f.fecha_emision) AS dias_compra,
+               MIN(f.fecha_emision) AS primera, MAX(f.fecha_emision) AS ultima
+        ${JOINS}
+        WHERE f.tipo_doc = 'FACT' AND ${deC} AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
+          ${fPer.length ? 'AND ' + fPer.join(' AND ') : ''}`, pPer),
+    ]);
+
+    // Sin ninguna venta visible (o fuera del alcance del usuario): no hay ficha
+    if (!vida?.primera_compra) return res.status(404).json({ status: 'error', message: 'Cliente sin ventas registradas' });
+
+    const conVentas = ranking.items.filter(i => i.ventas > 0);
+    const yo = ranking.items.find(i => i.clave === info.codigo_cliente) || null;
+    const posicion = conVentas.findIndex(i => i.clave === info.codigo_cliente);
+
+    const arts = articulos.items.map(i => ({ ...i, codigo: i.clave, descripcion: i.nombre, categoria: i.extra }));
+    const artActivos = arts.filter(i => i.ventas > 0);
+    const artPerdidos = arts.filter(i => i.perdido);
+    const ventas = yo?.ventas || 0;
+    const top = artActivos[0];
+    const dias = parseInt(frecuencia?.dias_compra) || 0;
+    const tramo = dias > 1 ? (new Date(frecuencia.ultima) - new Date(frecuencia.primera)) / 864e5 : null;
+    const ultima = new Date(vida.ultima_compra);
+
+    res.json({
+      status: 'success',
+      data: {
+        ventana: P.ventana(),
+        cliente: {
+          id, codigo: info.codigo_cliente, nombre: info.nombre, sector: info.sector || null,
+          tipo_cliente: vida.tipo_cliente || null,
+          primera_compra: vida.primera_compra,
+          ultima_compra: vida.ultima_compra,
+          dias_sin_comprar: Math.floor((Date.now() - ultima) / 864e5),
+          vendedor: vendedores.items.find(i => i.ventas > 0)?.nombre || null,
+        },
+        resumen: {
+          ventas,
+          ventas_prev: yo?.ventas_prev || 0,
+          variacion_pct: yo ? yo.variacion_pct : null,
+          facturas: yo?.facturas || 0,
+          skus: yo?.skus || 0,
+          unidades: yo?.unidades || 0,
+          margen: yo?.margen ?? null,
+          margen_pct: yo?.margen_pct ?? null,
+          margen_pct_prev: yo?.margen_pct_prev ?? null,
+          pct_sin_costo: yo?.pct_sin_costo || 0,
+          ticket_promedio: yo?.facturas ? ventas / yo.facturas : null,
+          participacion: yo?.participacion || 0,
+          posicion: posicion >= 0 ? posicion + 1 : null,
+          n_clientes: conVentas.length,
+          dias_compra: dias,
+          // Días promedio entre una compra y la siguiente dentro del período
+          intervalo_compra: tramo !== null ? Math.round(tramo / (dias - 1)) : null,
+          concentracion_top_articulo: ventas > 0 && top ? Math.round(top.ventas / ventas * 1000) / 10 : null,
+          nuevo: yo ? yo.nuevo : false,
+        },
+        empresa: { margen_pct: r1(empresa?.margen_pct) },
+        puente: yo ? {
+          anterior: yo.ventas_prev, precio: yo.efecto_precio, volumen: yo.efecto_volumen,
+          nuevos: yo.efecto_nuevos, perdidos: yo.efecto_perdidos, otros: yo.efecto_otros, actual: yo.ventas,
+        } : null,
+        serie: serie.map(m => ({
+          periodo: m.periodo,
+          ventas: n(m.ventas),
+          margen_pct: r1(m.margen_pct),
+          facturas: parseInt(m.facturas) || 0,
+          skus: parseInt(m.skus) || 0,
+        })),
+        categorias: categorias.items.filter(i => i.ventas > 0),
+        articulos: artActivos,
+        n_articulos_nuevos: artActivos.filter(i => i.nuevo).length,
+        articulos_perdidos: artPerdidos.sort((a, b) => b.ventas_prev - a.ventas_prev).slice(0, 50),
+        n_articulos_perdidos: artPerdidos.length,
+        venta_perdida: artPerdidos.reduce((s, i) => s + i.ventas_prev, 0),
+        vendedores: vendedores.items.filter(i => i.ventas > 0 || i.ventas_prev > 0)
+          .map(i => ({ ...i, vendedor: i.nombre, codigo: i.extra })),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // GET /api/ventas/clientes   Top clientes (acepta filtros de producto)
 router.get('/clientes', async (req, res) => {
   try {

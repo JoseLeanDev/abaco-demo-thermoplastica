@@ -151,6 +151,42 @@ export const LEYENDAS = {
       </L>
     </>,
   },
+  historial_cliente: {
+    titulo: 'Historial de 24 meses',
+    texto: <>
+      Compras sin IVA del cliente por mes (facturas del ERP), en los 24 meses que terminan en el mes final del período (respeta el filtro de producto).
+      Las barras oscuras caen dentro del período elegido. La línea es el margen % de lo que compró ese mes.
+    </>,
+  },
+  senales_cliente: {
+    titulo: 'Señales del cliente',
+    texto: <>
+      Avisos automáticos con los números de la ficha:
+      <L>
+        <li>Cliente nuevo (sin compras en el mismo período del año anterior).</li>
+        <li>Compras ±10% o más vs el año anterior.</li>
+        <li>Margen 5 pts o más arriba/abajo del margen de la empresa.</li>
+        <li>Más de 30 días sin comprar y más de 1.5 veces su frecuencia habitual.</li>
+        <li>Productos que compró el año anterior y este período no.</li>
+        <li>Un solo producto ≥ 50% de lo que compra.</li>
+      </L>
+    </>,
+  },
+  frecuencia_compra: {
+    titulo: 'Frecuencia de compra',
+    texto: <>
+      Días promedio entre una compra y la siguiente dentro del período: (última compra − primera compra) ÷ (días con compra − 1).
+      Varias facturas del mismo día cuentan como una compra.
+    </>,
+  },
+  vendedores_cliente: {
+    titulo: 'Quién le vende',
+    texto: <>Vendedores que le facturaron al cliente en el período o en el mismo período del año anterior, con su parte de lo que compró el cliente.</>,
+  },
+  productos_dejo_comprar: {
+    titulo: 'Productos que dejó de comprar',
+    texto: <>Artículos que el cliente compró en el mismo período del año anterior y en este período no. Ordenados por lo que compró el año anterior.</>,
+  },
   cartera_vendedor: {
     titulo: 'Cartera del vendedor',
     texto: <>

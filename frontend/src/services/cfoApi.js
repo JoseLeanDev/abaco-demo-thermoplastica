@@ -77,6 +77,7 @@ export const endpoints = {
     clientes: (params = {}) => cfoApi.get('/ventas/clientes', { params }),
     vendedores: (params = {}) => cfoApi.get('/ventas/vendedores', { params }),
     vendedor: (codigo, params = {}) => cfoApi.get(`/ventas/vendedor/${encodeURIComponent(codigo)}`, { params }),
+    cliente: (codigo, params = {}) => cfoApi.get(`/ventas/cliente/${encodeURIComponent(codigo)}`, { params }),
     articulos: (params = {}) => cfoApi.get('/ventas/articulos', { params }),
     lineas: (params = {}) => cfoApi.get('/ventas/lineas', { params }),
     serieVendedores: (params = {}) => cfoApi.get('/ventas/serie-vendedores', { params }),
