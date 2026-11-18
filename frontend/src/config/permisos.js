@@ -33,7 +33,8 @@ export function puedeVerRuta(permisos, pathname) {
 
 // Nombre legible del rol (el catálogo completo vive en el backend; esto es solo para mostrar)
 export const NOMBRE_ROL = {
-  direccion: 'Dirección', finanzas: 'Finanzas', gerente_linea: 'Gerente de Línea',
+  direccion: 'Dirección', finanzas: 'Finanzas', gerencia_operaciones: 'Gerencia Operaciones',
+  gerente_linea: 'Gerente de Línea',
   gerente_ventas: 'Gerente Ventas', asistente_ventas: 'Asistente de Ventas',
   ejecutivo_ventas: 'Ejecutivo de Ventas', cobranza: 'Cobranza', cxp: 'CxP',
   compras: 'Compras', inventario: 'Inventario', admin: 'Admin sistema',

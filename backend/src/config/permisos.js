@@ -48,6 +48,11 @@ const ROLES = [
     permisos: { ...todo, insights: { nivel: 'total', alcance: 'todas' }, agentes: P('solo lectura'), usuarios: undefined },
   },
   {
+    // Igual que Finanzas, sin Tesorería › Conciliación bancaria (ni el flujo de caja en bancos)
+    key: 'gerencia_operaciones', nombre: 'Gerencia Operaciones',
+    permisos: { ...todo, insights: { nivel: 'total', alcance: 'todas' }, agentes: P('solo lectura'), usuarios: undefined, bancos: undefined },
+  },
+  {
     key: 'gerente_linea', nombre: 'Gerente de Línea', alcance: ['lineas'],
     // La hoja también le da 👁 en gastos, CxC, CxP, proyecciones, análisis, Asistente IA y
     // Agentes IA, pero esos datos no vienen por línea de producto (la bitácora de agentes

@@ -16,7 +16,7 @@ const { rolesDeUsuario, permisosDeUsuario } = require('../config/permisos');
 
 const als = new AsyncLocalStorage();
 
-const SIN_RECORTE = ['direccion', 'finanzas', 'admin'];
+const SIN_RECORTE = ['direccion', 'finanzas', 'gerencia_operaciones', 'admin'];
 
 // Qué montos oculta cada rol y en qué endpoints (prefijo bajo /api)
 // ('*' = en todos los endpoints). Los vendedores, salvo el gerente, no ven nada de márgenes en
