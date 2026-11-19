@@ -225,7 +225,7 @@ export const LEYENDAS = {
         <li><strong>Ámbar:</strong> bajó entre 1 y 5 puntos.</li>
         <li><strong>Rojo:</strong> bajó más de 5 puntos.</li>
       </L>
-      <Nota>Se excluyen productos cuyo margen del año anterior es mayor a 90% o menor a −10%: suele ser un costo mal cargado en el ERP.</Nota>
+      <Nota>La lista trae todos los productos con ventas en el período. Quedan sin semáforo (pero visibles y en la búsqueda) los que vendieron menos de Q1,000, los que no tienen costo (margen N/D) y los que en el año anterior tuvieron un margen mayor a 90% o menor a −10% (suele ser un costo mal cargado en el ERP; se muestra N/C).</Nota>
     </>,
   },
   semaforo_categoria: {

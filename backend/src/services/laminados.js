@@ -10,6 +10,8 @@ const suma = (rows, campo) => rows.reduce((n, r) => n + Number(r[campo] || 0), 0
 const contar = (rows, campo) => new Set(rows.map((r) => r[campo]).filter((v) => v !== null && v !== undefined && v !== '')).size;
 const { claveAlcance } = require('./alcance');
 const cache = new Map();
+// Venta mínima del período para que un producto lleve semáforo de margen.
+const MIN_SEMAFORO = 1000;
 
 function ultimoMesCerrado(now = new Date()) {
   const partes = Object.fromEntries(new Intl.DateTimeFormat('en', { timeZone: 'America/Guatemala', year: 'numeric', month: '2-digit' })
@@ -82,14 +84,17 @@ function construirReporte(datos, P, { corte, query = {} }) {
       };
     }).sort((a, b) => b.ventas - a.ventas || b.ventas_prev - a.ventas_prev);
   };
-  const productos = items('articulo').filter((r) => r.ventas >= 1000 && r.unidades > 0).map((r) => {
+  // Todos los artículos con venta en el período entran a la lista (y a la
+  // búsqueda); el semáforo solo se pone a los que vendieron Q1,000 o más.
+  const productos = items('articulo').filter((r) => r.ventas > 0).map((r) => {
     const raw = actual.find((v) => v.codigo_articulo === r.clave);
     const delta = r.margen_pct !== null && r.margen_pct_prev !== null ? r.margen_pct - r.margen_pct_prev : null;
+    const conSemaforo = delta !== null && r.ventas >= MIN_SEMAFORO && r.unidades > 0;
     return { id: ids.get(r.clave), sku: r.clave, nombre: r.nombre, categoria: linea, unidad: UNIDADES[linea].unidad, es_cpp: true, corte_cpp: corte,
       subcategoria: trim(raw.categoria), sublinea: trim(raw.sublinea), ventas: r.ventas, margen_q: r.margen,
       precio_actual: r.precio_promedio, costo_actual: r.costo_unitario,
       margen_pct_actual: r.margen_pct, margen_pct_historico: r.margen_pct_prev, delta_puntos: delta,
-      semaforo: delta === null ? null : delta >= -1 ? 'verde' : delta >= -5 ? 'ambar' : 'rojo',
+      semaforo: !conSemaforo ? null : delta >= -1 ? 'verde' : delta >= -5 ? 'ambar' : 'rojo',
       unidades_12m: r.unidades,
       precio_sugerido: r.costo_unitario !== null && r.margen_pct_prev !== null && r.margen_pct_prev < 90 && r.margen_pct_prev > r.margen_pct
         ? Math.min(r.costo_unitario / (1 - r.margen_pct_prev / 100), r.precio_promedio * 1.3) : r.precio_promedio,

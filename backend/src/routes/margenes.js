@@ -54,7 +54,9 @@ router.get('/', async (req, res) => {
     const P = parsePeriodo(req);
     const fp = filtroProducto(req);
     // Producto: margen del período vs el mismo período del año anterior.
-    // Solo artículos con ventas materiales en el período (>= Q1,000).
+    // Entran TODOS los artículos con venta en el período (la lista y el buscador
+    // no dejan ninguno fuera); el semáforo solo se calcula para los que vendieron
+    // Q1,000 o más, tienen costo y un año anterior comparable.
     const rows = await db.allAsync(`
       WITH actual AS (
         SELECT f.articulo_id,
@@ -67,7 +69,7 @@ router.get('/', async (req, res) => {
         -- Excluir "articulo generico" y similares placeholders sin costo real
         WHERE UPPER(a.codigo_articulo) NOT IN ('GENARTICULO','GENARTICULOEXENTO','GENSERV','GENSERVICIO')
         GROUP BY f.articulo_id
-        HAVING SUM(f.total_sin_iva) >= 1000 AND SUM(f.unidades) > 0
+        HAVING SUM(f.total_sin_iva) > 0
       ),
       historico AS (
         SELECT articulo_id,
@@ -100,28 +102,25 @@ router.get('/', async (req, res) => {
       ORDER BY a.ventas DESC
     `, fp.params);
 
-    // Rango razonable para comparación: descartar históricos con márgenes absurdos
-    // que suelen indicar mala data de costo en el ERP (ajustes contables, no cambios reales de precio)
-    const productos = rows
-      .filter(r => {
-        const hist = parseFloat(r.margen_pct_historico);
-        // Si no hay histórico está OK (se marcará como verde). Si hay pero es > 90% o < -10%,
-        // probablemente es un rebalance de costo, no un comparable real.
-        // Sin ninguna línea con costo no hay margen que comparar.
-        if (r.margen_pct_actual === null) return false;
-        return r.margen_pct_historico === null || (hist <= 90 && hist >= -10);
-      })
-      .map(r => {
-      const margenAct = parseFloat(r.margen_pct_actual);
-      const sinHist = r.margen_pct_historico === null;
-      const margenHist = sinHist ? margenAct : parseFloat(r.margen_pct_historico);
-      const delta = Number((margenAct - margenHist).toFixed(2));
-      const costo = parseFloat(r.costo_actual) || 0;
-      const precio = parseFloat(r.precio_actual) || 0;
+    const productos = rows.map(r => {
       const ventasQ = parseFloat(r.ventas_12m) || 0;
+      const precio = parseFloat(r.precio_actual) || 0;
+      // Sin ninguna línea con costo no hay margen: el producto sale igual, con N/D.
+      const sinCosto = r.margen_pct_actual === null;
+      const margenAct = sinCosto ? null : parseFloat(r.margen_pct_actual);
+      const costo = sinCosto ? null : (parseFloat(r.costo_actual) || 0);
+      // Un margen del año anterior > 90% o < -10% suele ser un costo mal cargado en
+      // el ERP (rebalance contable, no un cambio real de precio): no se compara.
+      const histRaw = r.margen_pct_historico === null ? null : parseFloat(r.margen_pct_historico);
+      const histAtipico = histRaw !== null && (histRaw > 90 || histRaw < -10);
+      const sinHist = histRaw === null || histAtipico;
+      const margenHist = sinHist ? margenAct : histRaw;
+      const delta = sinCosto ? null : Number((margenAct - margenHist).toFixed(2));
+      // Semáforo solo para ventas materiales (>= Q1,000) con margen conocido y año anterior comparable.
+      const conSemaforo = !sinCosto && !histAtipico && ventasQ >= 1000 && (parseFloat(r.unidades_12m) || 0) > 0;
       // Precio sugerido: costo / (1 - margen_historico/100), tope de subida 30%
       let precioSugerido = precio;
-      if (margenHist > margenAct && margenHist < 90 && costo > 0) {
+      if (!sinCosto && margenHist > margenAct && margenHist < 90 && costo > 0) {
         precioSugerido = Math.min(costo / (1 - margenHist / 100), precio * 1.3);
       }
       return {
@@ -132,13 +131,14 @@ router.get('/', async (req, res) => {
         subcategoria: r.subcategoria,
         sublinea: r.sublinea,
         ventas: Math.round(ventasQ),
-        margen_q: Math.round(Number(r.margen_q_real)),
+        margen_q: r.margen_q_real === null ? null : Math.round(Number(r.margen_q_real)),
         precio_actual: Number(precio.toFixed(4)),
-        costo_actual:  Number(costo.toFixed(4)),
-        margen_pct_actual:    Number(margenAct.toFixed(2)),
+        costo_actual:  costo === null ? null : Number(costo.toFixed(4)),
+        margen_pct_actual:    sinCosto ? null : Number(margenAct.toFixed(2)),
         margen_pct_historico: sinHist ? null : Number(margenHist.toFixed(2)),
+        historico_atipico: histAtipico || undefined,
         delta_puntos: sinHist ? null : delta,
-        semaforo: semaforo(delta),
+        semaforo: conSemaforo ? semaforo(sinHist ? 0 : delta) : null,
         unidades_12m: Math.round(parseFloat(r.unidades_12m) || 0),
         precio_sugerido: Number(precioSugerido.toFixed(4)),
       };
@@ -153,7 +153,11 @@ router.get('/', async (req, res) => {
         const r = await require('../services/laminados').obtenerReporte({query:{...req.query,categoria}},db.pool);
         corregidos.push(...r.data.productos);
       }
-      const otros = productos.filter((p)=>!lineas.includes(p.categoria));
+      // Se descarta por artículo (no solo por categoría): las líneas CPP "Inyectables"
+      // y "Empaques para alimentos" son marcas ERP con otro nombre ("Envase de vidrio",
+      // "tpFood") y, filtrando por nombre, esos productos salían dos veces.
+      const ids = new Set(corregidos.map((p)=>p.id));
+      const otros = productos.filter((p)=>!lineas.includes(p.categoria) && !ids.has(p.id));
       productos.splice(0,productos.length,...otros,...corregidos);
       productos.sort((a,b)=>b.ventas-a.ventas);
     }

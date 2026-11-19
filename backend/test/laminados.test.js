@@ -113,3 +113,12 @@ test('mes abierto conserva ventas y deja el CPP pendiente sin sustituir costo ER
  close(r.metricas.ventas_totales,1200);close(r.metricas.ventas_con_cpp,300);close(r.metricas.ventas_sin_cpp,900);
  close(r.metricas.margen_mp,100);assert.equal(r.actual[1].fuente_cpp,'fuera_de_corte');
 });
+
+test('márgenes: un producto con menos de Q1,000 aparece en la lista, sin semáforo', () => {
+  const r = reporte([venta(), venta({ codigo_articulo: 'GRANDE', total_sin_iva: 1500, unidades: 50 })]);
+  const chico = r.data.productos.find((p) => p.sku === 'SKU1');
+  assert.ok(chico, 'el producto de Q300 debe estar en la lista');
+  assert.equal(chico.semaforo, null);
+  assert.ok(r.data.productos.find((p) => p.sku === 'GRANDE'));
+  assert.equal(r.data.resumen.total_productos, 2);
+});

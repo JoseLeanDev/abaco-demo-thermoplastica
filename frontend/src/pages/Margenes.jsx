@@ -99,7 +99,7 @@ export default function Margenes() {
               <p className="text-2xl font-bold text-red-500">{resumen.productos_rojo}</p>
               <p className="text-sm text-amber-600">+ {resumen.productos_ambar} en ámbar</p>
             </div>
-            <p className="text-xs text-[var(--text-muted)]">De {resumen.total_productos.toLocaleString('es-GT')} productos · clic para verlos</p>
+            <p className="text-xs text-[var(--text-muted)]">De {(resumen.productos_rojo + resumen.productos_ambar + resumen.productos_verde).toLocaleString('es-GT')} productos con semáforo · clic para verlos</p>
           </div>
           <div className="card p-5">
             <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">Total ventas <Leyenda k="ventas" /></p>

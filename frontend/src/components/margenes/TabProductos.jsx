@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, MagnifyingGlassIcon, TagIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { Seccion, Th, exportarExcel, fmtInt, fmtPrecio, fmtQ, ordenar, td } from '../compras/comun'
 import DetalleProducto from './DetalleProducto'
@@ -10,37 +10,50 @@ export const SEMAFOROS = [
   { id: 'rojo',  label: 'Rojo',  dot: 'bg-red-500' },
   { id: 'ambar', label: 'Ámbar', dot: 'bg-amber-500' },
   { id: 'verde', label: 'Verde', dot: 'bg-emerald-500' },
+  { id: 'sin',   label: 'Sin semáforo', dot: 'bg-gray-300' },
 ]
 
 export function Semaforo({ s }) {
   const c = SEMAFOROS.find(x => x.id === s)
-  return c?.dot ? <span className={`inline-block w-3 h-3 rounded-full ${c.dot}`} title={c.label} /> : null
+  return c?.dot && s ? <span className={`inline-block w-3 h-3 rounded-full ${c.dot}`} title={c.label} /> : null
 }
 
-const MAX_FILAS = 200
+// Filas que se pintan por tanda; "Mostrar más" agrega otra tanda.
+const POR_PAGINA = 200
+
+// Minúsculas y sin tildes, para que "valvula" encuentre "VÁLVULA".
+const normalizar = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 // Todos los productos con ventas en el período (respetan el filtro de producto
-// de la página): búsqueda por nombre o código, semáforo y detalle en panel.
+// de la página). La búsqueda recorre la lista completa, no solo lo que se ve:
+// por código o descripción, con varias palabras en cualquier orden.
 export default function TabProductos({ productos, semaforo, setSemaforo }) {
   const cpp = productos.some(p => p.es_cpp)
   const [busqueda, setBusqueda] = useState('')
   const [orden, setOrden] = useState({ col: 'ventas', dir: 'desc' })
   const [seleccion, setSeleccion] = useState(null)
+  const [visibles, setVisibles] = useState(POR_PAGINA)
+
+  // Texto de búsqueda de cada producto, calculado una sola vez.
+  const indice = useMemo(() => new Map(productos.map(p => [p, normalizar(`${p.sku} ${p.nombre}`)])), [productos])
 
   const conteo = useMemo(() => {
     const c = { '': productos.length }
-    for (const p of productos) c[p.semaforo] = (c[p.semaforo] || 0) + 1
+    for (const p of productos) { const k = p.semaforo || 'sin'; c[k] = (c[k] || 0) + 1 }
     return c
   }, [productos])
 
   const filas = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
+    const terminos = normalizar(busqueda).split(/\s+/).filter(Boolean)
     const out = productos.filter(p =>
-      (!semaforo || p.semaforo === semaforo) &&
-      (!q || p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      (!semaforo || (p.semaforo || 'sin') === semaforo) &&
+      terminos.every(t => indice.get(p).includes(t))
     )
     return ordenar(out, orden)
-  }, [productos, semaforo, busqueda, orden])
+  }, [productos, indice, semaforo, busqueda, orden])
+
+  // Al cambiar la búsqueda, el semáforo, el orden o los datos se vuelve a la primera tanda.
+  useEffect(() => { setVisibles(POR_PAGINA) }, [productos, semaforo, busqueda, orden])
 
   const exportar = () => exportarExcel('margen_por_producto.xlsx', [
     { label: 'Código', get: p => p.sku },
@@ -55,7 +68,7 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
     { label: 'Margen %', get: p => p.margen_pct_actual },
     { label: 'Margen % año anterior', get: p => p.margen_pct_historico ?? '' },
     { label: 'Variación (pts)', get: p => p.delta_puntos ?? '' },
-    { label: 'Semáforo', get: p => p.semaforo },
+    { label: 'Semáforo', get: p => p.semaforo || 'sin semáforo' },
   ], filas)
 
   return (
@@ -64,7 +77,7 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
         icon={TagIcon}
         titulo="Margen por producto"
         leyenda="semaforo_margen"
-        subtitulo={`${fmtInt(filas.length)} de ${fmtInt(productos.length)} productos con ventas ≥ Q1,000 en el período · clic en una fila para ver el detalle`}
+        subtitulo={`${fmtInt(filas.length)} de ${fmtInt(productos.length)} productos con ventas en el período · clic en una fila para ver el detalle`}
         sinPadding
         extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
       >
@@ -122,7 +135,7 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
                   {busqueda ? `Ningún producto coincide con "${busqueda}".` : 'Sin productos en el filtro actual.'}
                 </td></tr>
               )}
-              {filas.slice(0, MAX_FILAS).map(p => (
+              {filas.slice(0, visibles).map(p => (
                 <tr key={p.id} onClick={() => setSeleccion(p)} className="hover:bg-[var(--bg-secondary)] cursor-pointer">
                   <td className={`${td} max-w-[360px]`}>
                     <p className="font-medium nombre-articulo">{p.nombre}</p>
@@ -132,7 +145,9 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
                   <td className={`${td} text-right tabular-nums`}>{fmtPrecio(p.precio_actual)}</td>
                   <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{p.costo_actual === null ? 'N/D' : fmtPrecio(p.costo_actual)}</td>
                   <td className={`${td} text-right tabular-nums font-semibold`}>{fmtPct(p.margen_pct_actual)}</td>
-                  <td className={`${td} text-right tabular-nums text-[var(--text-muted)]`}>{fmtPct(p.margen_pct_historico)}</td>
+                  <td className={`${td} text-right tabular-nums text-[var(--text-muted)]`} title={p.historico_atipico ? 'El margen del año anterior está fuera de rango (suele ser un costo mal cargado en el ERP); no se compara.' : undefined}>
+                    {p.historico_atipico ? 'N/C' : fmtPct(p.margen_pct_historico)}
+                  </td>
                   <td className={`${td} text-right tabular-nums font-medium`}>
                     {p.delta_puntos === null ? <span className="text-[var(--text-muted)]">—</span> : (
                       <span className={p.delta_puntos < -1 ? 'text-red-500' : p.delta_puntos > 1 ? 'text-emerald-600' : 'text-[var(--text-secondary)]'}>
@@ -145,7 +160,13 @@ export default function TabProductos({ productos, semaforo, setSemaforo }) {
               ))}
             </tbody>
           </table>
-          {filas.length > MAX_FILAS && <p className="px-5 py-3 text-xs text-[var(--text-muted)]">Mostrando {MAX_FILAS} de {fmtInt(filas.length)}; usa la búsqueda o los filtros para acotar. El Excel trae todos.</p>}
+          {filas.length > visibles && (
+            <div className="px-5 py-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
+              <span>Mostrando {fmtInt(visibles)} de {fmtInt(filas.length)}. La búsqueda revisa todos; el Excel también los trae todos.</span>
+              <button onClick={() => setVisibles(v => v + POR_PAGINA)} className="btn-secondary py-1 text-xs">Mostrar {fmtInt(Math.min(POR_PAGINA, filas.length - visibles))} más</button>
+              <button onClick={() => setVisibles(filas.length)} className="text-[var(--accent-primary)] hover:underline">Mostrar todos</button>
+            </div>
+          )}
         </div>
       </Seccion>
 
