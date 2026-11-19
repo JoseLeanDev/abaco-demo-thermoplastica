@@ -320,7 +320,7 @@ export const LEYENDAS = {
     titulo: 'Cascada P&L',
     texto: <>
       Ventas sin IVA − costo de ventas (COGS) = margen bruto − gastos operativos = EBITDA estimado.
-      <Nota>COGS se calcula con el mismo criterio que el margen: ventas − margen bruto.</Nota>
+      <Nota>Cada barra mide exactamente su monto: los totales parten de cero y las restas bajan desde el subtotal anterior. Si hay ventas de productos que aún no tienen costo, aparecen como paso gris «Sin costo»: no entran al margen bruto, así que Ventas − COGS − Sin costo = Margen bruto.</Nota>
     </>,
   },
   aging_cxc: {

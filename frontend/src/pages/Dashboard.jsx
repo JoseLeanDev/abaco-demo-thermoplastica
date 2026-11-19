@@ -544,15 +544,29 @@ function PnlWaterfall({ kpis: k }) {
   const gp = Number(k.margen_bruto_real_12m) || 0
   const gastos = Number(k.gastos_operativos_12m) || 0
   const ebitda = Number(k.ebitda_estimado) || 0
+  // Ventas cuyo producto aún no tiene costo: no entran al margen bruto, por eso
+  // Ventas − COGS no da exactamente el margen. Se muestra como paso propio para que cuadre.
+  const sinCosto = ventas - cogs - gp
+  const conSinCosto = Math.abs(sinCosto) >= Math.max(1, Math.abs(ventas) * 0.001)
 
-  // Datos con "start" para simular waterfall usando Bar apilado
-  const data = [
-    { name: 'Ventas',       base: 0,               valor: ventas,  fill: '#001639', tipo: 'total', absoluto: ventas },
-    { name: 'COGS',         base: ventas - cogs,   valor: cogs,    fill: '#ef4444', tipo: 'neg',   absoluto: -cogs },
-    { name: 'Margen bruto', base: 0,               valor: gp,      fill: '#10b981', tipo: 'sub',   absoluto: gp },
-    { name: 'Gastos op.',   base: gp - gastos,     valor: gastos,  fill: '#f59e0b', tipo: 'neg',   absoluto: -gastos },
-    { name: 'EBITDA',       base: 0,               valor: ebitda,  fill: ebitda >= 0 ? '#10b981' : '#ef4444', tipo: 'total', absoluto: ebitda },
+  // Cada barra es un tramo [desde, hasta] dibujado tal cual en el eje (barra flotante):
+  // los totales parten de 0 y las restas bajan desde el subtotal anterior.
+  const pasos = [
+    { name: 'Ventas', resumen: 'Ventas', tipo: 'total', valor: ventas, color: '#001639', cls: '' },
+    { name: 'COGS', resumen: '− COGS', tipo: 'resta', valor: cogs, color: '#ef4444', cls: 'text-[var(--danger)]' },
+    ...(conSinCosto ? [{ name: 'Sin costo', resumen: '− Sin costo', tipo: 'resta', valor: sinCosto, color: '#94a3b8', cls: 'text-[var(--text-muted)]',
+      nota: 'Ventas de productos que aún no tienen costo; no entran al margen bruto.' }] : []),
+    { name: 'Margen bruto', resumen: '= Bruto', tipo: 'total', valor: gp, color: '#10b981', cls: 'text-[var(--success)]' },
+    { name: 'Gastos op.', resumen: '− Gastos', tipo: 'resta', valor: gastos, color: '#f59e0b', cls: 'text-[var(--warning)]' },
+    { name: 'EBITDA', resumen: '= EBITDA', tipo: 'total', valor: ebitda, color: ebitda >= 0 ? '#10b981' : '#ef4444', cls: ebitda >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]' },
   ]
+  let nivel = 0
+  const data = pasos.map((p) => {
+    const desde = p.tipo === 'total' ? 0 : nivel
+    const hasta = p.tipo === 'total' ? p.valor : nivel - p.valor
+    nivel = hasta
+    return { ...p, desde, hasta, rango: [Math.min(desde, hasta), Math.max(desde, hasta)] }
+  })
 
   return (
     <div className="card">
@@ -568,27 +582,35 @@ function PnlWaterfall({ kpis: k }) {
         <ResponsiveContainer width="100%" height={230}>
           <BarChart data={data} margin={{ top: 20, right: 15, bottom: 5, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
-            <YAxis tickFormatter={(v) => `Q${(v/1e6).toFixed(0)}M`} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={55} />
+            <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="var(--text-muted)" interval={0} />
+            <YAxis domain={[(min) => Math.min(0, min), 'auto']} tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={55} />
+            <ReferenceLine y={0} stroke="var(--text-muted)" />
             <Tooltip
-              formatter={(v, name, p) => [fmtQ(Math.abs(p.payload.absoluto || v)), 'Monto']}
-              labelFormatter={(l) => l}
-              contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }}
+              cursor={{ fill: 'var(--bg-secondary)' }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null
+                const p = payload[0].payload
+                return (
+                  <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }} className="px-3 py-2 max-w-[16rem]">
+                    <p className="font-semibold">{p.name}</p>
+                    <p className="tabular-nums">{p.tipo === 'resta' ? '− ' : ''}{fmtQ(p.valor)}</p>
+                    {p.tipo === 'resta' && <p className="text-[var(--text-muted)] tabular-nums">de {fmtM(p.desde)} a {fmtM(p.hasta)}</p>}
+                    {p.nota && <p className="text-[var(--text-muted)] mt-1">{p.nota}</p>}
+                  </div>
+                )
+              }}
             />
-            <Bar dataKey="base" stackId="wf" fill="transparent" />
-            <Bar dataKey="valor" stackId="wf" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="rango" radius={[4, 4, 4, 4]} isAnimationActive={false}>
               {data.map((entry, i) => (
-                <Cell key={i} fill={entry.fill} />
+                <Cell key={i} fill={entry.color} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        <div className="grid grid-cols-5 gap-1 text-[10px] text-center mt-2">
-          <div><p className="text-[var(--text-muted)]">Ventas</p><p className="font-semibold tabular-nums">{fmtM(ventas)}</p></div>
-          <div><p className="text-[var(--text-muted)]">− COGS</p><p className="font-semibold tabular-nums text-[var(--danger)]">{fmtM(cogs)}</p></div>
-          <div><p className="text-[var(--text-muted)]">= Bruto</p><p className="font-semibold tabular-nums text-[var(--success)]">{fmtM(gp)}</p></div>
-          <div><p className="text-[var(--text-muted)]">− Gastos</p><p className="font-semibold tabular-nums text-[var(--warning)]">{fmtM(gastos)}</p></div>
-          <div><p className="text-[var(--text-muted)]">= EBITDA</p><p className={`font-semibold tabular-nums ${ebitda >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{fmtM(ebitda)}</p></div>
+        <div className="grid gap-1 text-[10px] text-center mt-2" style={{ gridTemplateColumns: `repeat(${data.length}, minmax(0, 1fr))` }}>
+          {data.map((p) => (
+            <div key={p.name}><p className="text-[var(--text-muted)]">{p.resumen}</p><p className={`font-semibold tabular-nums ${p.cls}`}>{fmtM(p.valor)}</p></div>
+          ))}
         </div>
       </div>
     </div>

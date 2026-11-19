@@ -490,7 +490,9 @@ export function Puente({ puente }) {
     // Piso del eje: un poco debajo del punto más bajo del recorrido
     const lo = Math.min(...out.map(o => (o.total ? o.valor : o.desde)))
     const hi = Math.max(...out.map(o => o.hasta))
-    const piso = Math.max(0, lo - (hi - lo) * 0.3)
+    // Redondeado hacia abajo a un número redondo, para que coincida con una marca del eje
+    const paso = 10 ** Math.floor(Math.log10(Math.max(hi - lo, 1)))
+    const piso = Math.max(0, Math.floor((lo - (hi - lo) * 0.3) / paso) * paso)
     return out.map(o => {
       const base = o.total ? piso : o.desde
       return {
@@ -507,6 +509,7 @@ export function Puente({ puente }) {
   const piso = datos[0]?.piso || 0
 
   return (
+    <>
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={datos} margin={{ top: 24, right: 10, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
@@ -532,6 +535,12 @@ export function Puente({ puente }) {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+    {piso > 0 && (
+      <p className="text-[11px] text-[var(--text-muted)] mt-1">
+        Ojo: el eje empieza en {fmtM(piso)}, no en cero, para que se vean los cambios. Las barras de los extremos están recortadas: compare sus montos, no su altura.
+      </p>
+    )}
+    </>
   )
 }
 

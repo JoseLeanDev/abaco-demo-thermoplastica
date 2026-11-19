@@ -70,7 +70,7 @@ export default function ProyeccionVentas({ data, isLoading }) {
           <ComposedChart data={serie} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
             <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
-            <YAxis tickFormatter={(v) => `Q${(v / 1e6).toFixed(0)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={55} />
+            <YAxis tickFormatter={fmtM} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={55} />
             <Tooltip
               contentStyle={tooltipStyle}
               labelFormatter={fmtMes}

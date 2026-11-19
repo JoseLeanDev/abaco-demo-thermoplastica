@@ -373,12 +373,12 @@ function TabResumen({
                 <YAxis yAxisId="q" tickFormatter={(v) => `Q${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={70} />
                 {!sinMargen && <YAxis yAxisId="pct" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={45} />}
                 <Tooltip
-                  formatter={(v, k) => k === 'margen_pct' ? `${Number(v).toFixed(1)}%` : fmtQ(v)}
+                  formatter={(v, n, item) => [item.dataKey === 'margen_pct' ? fmtPct(v) : fmtQ(v), n]}
                   labelFormatter={fmtPeriod}
                   contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8 }}
                 />
-                <Bar  yAxisId="q"   dataKey="ventas" fill="#001639" radius={[6,6,0,0]} />
-                {!sinMargen && <Bar  yAxisId="q"   dataKey="margen" fill="#10b981" radius={[6,6,0,0]} />}
+                <Bar  yAxisId="q"   dataKey="ventas" name="Ventas" fill="#001639" radius={[6,6,0,0]} />
+                {!sinMargen && <Bar  yAxisId="q"   dataKey="margen" name="Margen" fill="#10b981" radius={[6,6,0,0]} />}
                 {!sinMargen && <Line yAxisId="pct" dataKey="margen_pct" stroke="#f59e0b" strokeWidth={2} dot={false} name="Margen %" />}
               </ComposedChart>
             </ResponsiveContainer>
@@ -525,6 +525,15 @@ function TabResumen({
 // -------------------------------------------------------------------
 function TabVendedores({ vendedores, serieVend, resumen }) {
   const top5 = vendedores.slice(0, 5)
+  // La dona debe repartir el total de ventas, no solo el de los 5 primeros: el resto va en "Otros"
+  const ventasTop5 = top5.reduce((s, v) => s + (Number(v.ventas) || 0), 0)
+  const pctTop5 = top5.reduce((s, v) => s + (Number(v.porcentaje) || 0), 0)
+  const ventasTotal = pctTop5 > 0 ? ventasTop5 / (pctTop5 / 100) : vendedores.reduce((s, v) => s + (Number(v.ventas) || 0), 0)
+  const ventasOtros = Math.max(0, ventasTotal - ventasTop5)
+  const dona = [
+    ...top5.map((v, i) => ({ name: v.vendedor, value: v.ventas, color: PIE_COLORS[i % PIE_COLORS.length] })),
+    ...(ventasOtros >= Math.max(1, ventasTotal * 0.001) ? [{ name: 'Otros vendedores', value: ventasOtros, color: '#cbd5e1' }] : []),
+  ]
   const topVendedor = vendedores[0]
   const topPct = topVendedor?.porcentaje || 0
   const clientesTotales = vendedores.reduce((s, v) => s + v.clientes, 0)
@@ -601,16 +610,16 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
                   <Pie
-                    data={top5.map(v => ({ name: v.vendedor, value: v.ventas }))}
+                    data={dona}
                     dataKey="value"
                     nameKey="name"
                     innerRadius={40}
                     outerRadius={90}
                     paddingAngle={2}
                   >
-                    {top5.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    {dona.map((d, i) => <Cell key={i} fill={d.color} />)}
                   </Pie>
-                  <Tooltip formatter={(v) => fmtM(v)} contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }} />
+                  <Tooltip formatter={(v, n) => [`${fmtM(v)} (${fmtPct(ventasTotal > 0 ? v / ventasTotal * 100 : 0)})`, n]} contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -626,6 +635,15 @@ function TabVendedores({ vendedores, serieVend, resumen }) {
                   <span className="tabular-nums font-semibold">{fmtPct(v.porcentaje, 2)}</span>
                 </div>
               ))}
+              {dona.length > top5.length && (
+                <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-[#cbd5e1]" />
+                    <span className="truncate">Otros vendedores</span>
+                  </div>
+                  <span className="tabular-nums font-semibold">{fmtPct(ventasTotal > 0 ? ventasOtros / ventasTotal * 100 : 0, 2)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

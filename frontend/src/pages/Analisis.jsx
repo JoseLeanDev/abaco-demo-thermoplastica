@@ -263,7 +263,7 @@ function CapitalInmovilizado({ inventario, ciclo }) {
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={porClase} layout="vertical" margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" horizontal={false} />
-                <XAxis type="number" tickFormatter={(v) => `Q${(v / 1e6).toFixed(0)}M`} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
+                <XAxis type="number" tickFormatter={fmtM} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
                 <YAxis type="category" dataKey="clase" tick={{ fontSize: 12 }} stroke="var(--text-muted)" width={105} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v, k) => [fmtQ(v), ESTADOS.find(e => e.id === k)?.nombre]} />
                 <Legend formatter={(k) => ESTADOS.find(e => e.id === k)?.nombre} wrapperStyle={{ fontSize: 12 }} />
