@@ -62,6 +62,11 @@ export default function PageInsights(props) {
 
 function PageInsightsContenido({ context = 'general', vertical = null, maxInsights = 4, title: customTitle }) {
   const isVertical = !!vertical
+  // Gerente de línea: en Ventas y Márgenes ve el análisis de sus líneas
+  // (agent_source = 'playbook:lineas:<sus marcas>'), no el de toda la empresa
+  const { user } = useAuth()
+  const deLineas = ['ventas', 'margenes'].includes(vertical)
+    && [user?.rol, ...(user?.roles_adicionales || [])].includes('gerente_linea')
 
   // En modo vertical solo importa el histórico; el generador en tiempo real se
   // pide únicamente en modo heredado.
@@ -72,7 +77,7 @@ function PageInsightsContenido({ context = 'general', vertical = null, maxInsigh
   const hasRealInsights = !isVertical && insightsData?.insights?.length > 0
 
   const base = isVertical
-    ? historico.filter(i => i.agentSource === `playbook:${vertical}`)
+    ? historico.filter(i => (deLineas ? (i.agentSource || '').startsWith('playbook:lineas:') : i.agentSource === `playbook:${vertical}`))
     : (hasRealInsights ? insightsData.insights : historico)
 
   const insights = ordenarPorPrioridad(base).slice(0, maxInsights)
@@ -84,7 +89,7 @@ function PageInsightsContenido({ context = 'general', vertical = null, maxInsigh
     analisis: 'Insights de Análisis',
     general: 'Análisis de IA',
   }
-  const title = customTitle || (isVertical ? `Insights de ${V_LABEL[vertical] || vertical}` : (titles[context] || titles.general))
+  const title = customTitle || (deLineas ? 'Insights de tus líneas' : isVertical ? `Insights de ${V_LABEL[vertical] || vertical}` : (titles[context] || titles.general))
 
   // Skeleton delgado mientras carga.
   if (isLoading) {

@@ -125,28 +125,41 @@ function claveAlcance() {
 // y el módulo que hay que tener para verla. "Compras y pagos" le sirve también a CxP.
 const VERTICALES = { cartera: ['cxc'], ventas: ['ventas'], margenes: ['margenes'], compras: ['compras', 'cxp'], salud: ['analisis'] };
 
-const sinAcentos = (s) => `TRANSLATE(LOWER(${s}), 'áéíóúü', 'aeiouu')`;
+// Juego de líneas de un gerente → sufijo de su agent_source ('playbook:lineas:<clave>').
+// El analista diario corre el playbook 'lineas' una vez por juego (scripts/correr-playbooks.js).
+const claveLineas = (lineas) => [...new Set((lineas || []).map(String))].sort((a, b) => a.localeCompare(b, 'es')).join('|');
 
-// Insights que ve el usuario ("su área"; gerente de línea: los que nombran sus líneas).
+// Insights que ve el usuario ("su área"; gerente de línea: el análisis de sus líneas).
 // Devuelve { sql, params } para agregar al WHERE de insights_historico (con ?), o null = todos.
 function filtroInsights(u) {
   const roles = rolesDeUsuario(u);
   if (roles.some(r => SIN_RECORTE.includes(r))) return null;
   const permisos = permisosDeUsuario(u);
-  const verticales = Object.entries(VERTICALES).filter(([, mods]) => mods.some(m => permisos[m])).map(([v]) => v);
-  if (!verticales.length) return { sql: 'FALSE', params: [] };
-
-  const params = verticales.map(v => `playbook:${v}`);
-  let sql = `agent_source IN (${verticales.map(() => '?').join(', ')})`;
   const A = alcanceDeUsuario(u);
+  const verticales = Object.entries(VERTICALES).filter(([, mods]) => mods.some(m => permisos[m])).map(([v]) => v);
+  const conds = [];
+  const params = [];
+
   if (A?.lineas) {
-    // El insight tiene que nombrar alguna de sus líneas en la categoría
-    const ls = A.lineas.map(l => l.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/s$/, ''));
-    if (!ls.length) return { sql: 'FALSE', params: [] };
-    sql += ` AND (${ls.map(() => `${sinAcentos('category')} LIKE ?`).join(' OR ')})`;
-    params.push(...ls.map(l => `%${l}%`));
+    // Gerente de línea: el análisis que el analista diario hace solo con sus líneas.
+    // Los insights de las verticales generales cuentan cifras de toda la empresa y de
+    // otras líneas, así que no se le muestran (aunque nombren alguna de las suyas).
+    if (A.lineas.length && permisos.insights) {
+      conds.push('agent_source = ?');
+      params.push(`playbook:lineas:${claveLineas(A.lineas)}`);
+    }
+    // Las áreas que no son de producto (cartera, salud) solo le llegan por otro rol (p. ej. Cobranza)
+    const vOtros = verticales.filter(v => !['ventas', 'margenes', 'compras'].includes(v));
+    if (vOtros.length) {
+      conds.push(`agent_source IN (${vOtros.map(() => '?').join(', ')})`);
+      params.push(...vOtros.map(v => `playbook:${v}`));
+    }
+  } else if (verticales.length) {
+    conds.push(`agent_source IN (${verticales.map(() => '?').join(', ')})`);
+    params.push(...verticales.map(v => `playbook:${v}`));
   }
-  return { sql, params };
+  if (!conds.length) return { sql: 'FALSE', params: [] };
+  return { sql: conds.length > 1 ? `(${conds.join(' OR ')})` : conds[0], params };
 }
 
 // ---------------------------------------------------------------- respuesta JSON
@@ -189,4 +202,4 @@ function patronPara(A, path) {
   return new RegExp([...que].map(q => PATRONES[q].source).join('|'), 'i');
 }
 
-module.exports = { als, alcanceDeUsuario, reescribirSql, reescribir, claveAlcance, filtroInsights, limpiar, patronPara };
+module.exports = { als, alcanceDeUsuario, reescribirSql, reescribir, claveAlcance, filtroInsights, claveLineas, limpiar, patronPara };

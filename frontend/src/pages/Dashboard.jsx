@@ -90,6 +90,9 @@ export default function Dashboard() {
   const cxcAg = d.cxc_aging || {}
   const cxpAg = d.cxp_aging || {}
   const lineas = d.top_lineas || []
+  // Gerente de línea: sus líneas asignadas (el backend ya recorta las ventas a esas líneas)
+  const esGerenteLinea = [user?.rol, ...(user?.roles_adicionales || [])].includes('gerente_linea')
+  const misLineas = user?.alcance?.lineas || []
   // Última carga completa desde el ERP (la misma hora del topbar), no la hora de la consulta
   const ultima = ultimaCarga?.data?.ultima
   const actualizado = ultima
@@ -134,6 +137,11 @@ export default function Dashboard() {
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">{d.empresa}</h1>
           <p className="text-sm text-[var(--text-muted)]">Panel de {NOMBRE_ROL[user?.rol] || user?.rol} · Actualizado {actualizado}</p>
         </div>
+      )}
+
+      {/* ============ 1b. FACTURACIÓN DE SUS LÍNEAS (gerente de línea, sin el hero ejecutivo) ============ */}
+      {esGerenteLinea && !puede('analisis') && puede('ventas') && (
+        <FacturacionLineasCard kpis={k} lineas={misLineas} />
       )}
 
       {/* ============ 2. INSIGHTS DE IA (carrusel, debajo del hero) ============ */}
@@ -261,7 +269,7 @@ export default function Dashboard() {
       {puede('analisis') && <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 text-xs text-[var(--text-muted)] leading-relaxed">
         <p>
           <SparklesIcon className="w-4 h-4 inline mr-1 -mt-0.5" />
-          <strong>Notas metodológicas.</strong> Ventas y márgenes al nivel línea × factura. Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras; las otras líneas conservan el costo del ERP.
+          <strong>Notas metodológicas.</strong> Ventas y márgenes al nivel línea × factura. Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras; Liners usa el costo promedio actual del artículo en inventario; las otras líneas conservan el costo del ERP.
           Compras y gastos operativos separados por <code>es_gasto_operativo</code>. Flujos (ventas, compras, gastos, márgenes) = período del filtro vs mismo período del año anterior.
           Las ventas sin CPP se excluyen del margen y permanecen visibles. En las líneas que mantienen el método ERP, se conserva su estimación de margen. Ventas sin costo disponible: {fmtPct(k.pct_ventas_sin_costo)}.
           CxC = snapshot vivo por buckets (por vencer / 1-30 / 31-60 / 61-90 / 90+); CxC y CxP incluyen solo documentos emitidos en el período.
@@ -400,6 +408,57 @@ function DeltaBadge({ value, suffix, size = 'sm', unit = '%', leyenda }) {
       {suffix && <span className="text-white/40 ml-1 font-normal">{suffix}</span>}
       {leyenda && <Leyenda k={leyenda} claro className="ml-1" />}
     </p>
+  )
+}
+
+// ============================================================
+// 1b. FACTURACIÓN DE SUS LÍNEAS — gerente de línea
+// Misma cifra que Ventas (sin IVA, facturas FACT del período) con el recorte a sus líneas
+// que el backend aplica a toda la petición.
+// ============================================================
+function FacturacionLineasCard({ kpis: k, lineas }) {
+  const { etiqueta } = usePeriodo()
+  const delta = k.delta_ventas_pct
+  const hayDelta = delta !== null && delta !== undefined && !isNaN(delta)
+  const positivo = Number(delta) >= 0
+  const DeltaIcon = positivo ? ArrowUpRightIcon : ArrowDownRightIcon
+  return (
+    <div className="card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1">
+            Facturación de tus líneas <Leyenda k="facturacion_lineas" />
+          </p>
+          <p className="text-3xl sm:text-4xl font-bold tabular-nums mt-1">{fmtQ(k.ventas_12m)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{etiqueta} · sin IVA</p>
+          {lineas.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {lineas.map((l) => (
+                <span key={l} className="px-2 py-0.5 rounded-md text-[11px] bg-[var(--bg-secondary)] border border-[var(--border-default)] text-[var(--text-secondary)]">{l}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1.5 text-right">
+          {hayDelta && (
+            <p className={`text-sm font-semibold tabular-nums flex items-center gap-0.5 ${positivo ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+              <DeltaIcon className="w-4 h-4" />
+              {positivo ? '+' : ''}{Number(delta).toFixed(1)}%
+              <span className="text-[11px] font-normal text-[var(--text-muted)] ml-1 flex items-center gap-1">vs año ant. <Leyenda k="vs_anio_anterior" /></span>
+            </p>
+          )}
+          <p className="text-[11px] text-[var(--text-muted)]">
+            Año anterior: <span className="font-semibold text-[var(--text-secondary)] tabular-nums">{fmtQ(k.ventas_12m_previo)}</span>
+          </p>
+          <p className="text-[11px] text-[var(--text-muted)] tabular-nums">
+            {(Number(k.facturas_12m) || 0).toLocaleString('es-GT')} facturas · {(Number(k.clientes_activos_12m) || 0).toLocaleString('es-GT')} clientes
+          </p>
+          <Link to="/ventas" className="text-xs text-[var(--accent-blue)] flex items-center gap-1 hover:underline mt-1">
+            Ver ventas <ArrowRightIcon className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+    </div>
   )
 }
 

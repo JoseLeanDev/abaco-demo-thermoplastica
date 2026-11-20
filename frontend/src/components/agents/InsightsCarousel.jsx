@@ -27,8 +27,10 @@ const VERT = {
   margenes: { label: 'Márgenes', dot: 'bg-violet-400',  text: 'text-violet-300' },
   compras:  { label: 'Compras',  dot: 'bg-amber-400',   text: 'text-amber-300' },
   salud:    { label: 'Análisis', dot: 'bg-rose-400', text: 'text-rose-300' },
+  // Análisis de un gerente de línea (agent_source = 'playbook:lineas:<sus marcas>')
+  lineas:   { label: 'Tus líneas', dot: 'bg-teal-400', text: 'text-teal-300' },
 }
-const ORDEN = ['cartera', 'ventas', 'margenes', 'compras', 'salud']
+const ORDEN = ['lineas', 'cartera', 'ventas', 'margenes', 'compras', 'salud']
 
 const TYPE_CFG = {
   gasto:       { icon: ArrowTrendingDownIcon, color: 'text-rose-300',    bg: 'bg-rose-500/15' },
@@ -55,11 +57,15 @@ export default function InsightsCarousel() {
 }
 
 function InsightsCarouselContenido() {
+  const { user } = useAuth()
+  // El análisis por línea es para el gerente de esas líneas; en el inicio de los demás
+  // roles (que ven todos los insights) se queda en la página de Insights
+  const esGerenteLinea = [user?.rol, ...(user?.roles_adicionales || [])].includes('gerente_linea')
   const scroller = useRef(null)
   const { data, isLoading } = useInsightsHistorico({ limit: 100, days: 60, fuente: 'playbook' })
 
   const insights = (data?.data?.insights || [])
-    .filter(i => slugDe(i.agentSource))
+    .filter(i => slugDe(i.agentSource) && (esGerenteLinea || slugDe(i.agentSource) !== 'lineas'))
     .sort((a, b) => {
       const va = ORDEN.indexOf(slugDe(a.agentSource))
       const vb = ORDEN.indexOf(slugDe(b.agentSource))

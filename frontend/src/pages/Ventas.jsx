@@ -271,7 +271,7 @@ export default function Ventas() {
       )}
 
       <p className="text-xs text-[var(--text-muted)] italic col-margen">
-        {r.metodologia ? <>Margen sobre costo de compras: ventas sin IVA menos {r.metodologia.unidad === 'millar' ? 'millares' : 'kilos'} vendidos por CPP. Compras hasta {r.metodologia.corte_cpp}; ventas hasta {r.metodologia.hasta_efectivo}. Las ventas sin CPP se excluyen del margen. Mes abierto: ventas visibles y CPP pendiente. <Leyenda k="margen_mp" /></> : <>Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras de meses cerrados. Las otras líneas conservan el costo del ERP. Las ventas sin CPP quedan fuera del margen.</>}
+        {r.metodologia ? <>Margen sobre costo de compras: ventas sin IVA menos {r.metodologia.unidad === 'millar' ? 'millares' : 'kilos'} vendidos por CPP. Compras hasta {r.metodologia.corte_cpp}; ventas hasta {r.metodologia.hasta_efectivo}. Las ventas sin CPP se excluyen del margen. Mes abierto: ventas visibles y CPP pendiente. <Leyenda k="margen_mp" /></> : <>Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras de meses cerrados. Liners usa el costo promedio actual del artículo en inventario. Las otras líneas conservan el costo del ERP. Las ventas sin CPP quedan fuera del margen.</>}
       </p>
     </div>
   )
