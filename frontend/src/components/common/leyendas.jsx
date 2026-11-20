@@ -29,6 +29,7 @@ export const LEYENDAS = {
     titulo: 'Margen bruto',
     texto: <>
       Laminados usa CPP de materia prima en kilos. Empaques, Tapas y válvulas e Inyectables usan el costo ponderado de las compras del mismo producto, en millares.
+      Liners usa unidades × costo promedio actual del artículo en inventario (no el costo guardado en cada factura).
       Las otras líneas conservan unidades × costo promedio facturado del ERP.
       <Nota>El total suma los márgenes de ambos métodos. Las ventas sin CPP se excluyen del numerador y denominador; no se les estima utilidad.</Nota>
     </>,

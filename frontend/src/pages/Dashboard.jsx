@@ -269,7 +269,7 @@ export default function Dashboard() {
       {puede('analisis') && <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 text-xs text-[var(--text-muted)] leading-relaxed">
         <p>
           <SparklesIcon className="w-4 h-4 inline mr-1 -mt-0.5" />
-          <strong>Notas metodológicas.</strong> Ventas y márgenes al nivel línea × factura. Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras; las otras líneas conservan el costo del ERP.
+          <strong>Notas metodológicas.</strong> Ventas y márgenes al nivel línea × factura. Laminados, Empaques, Tapas y válvulas e Inyectables usan CPP de compras; Liners usa el costo promedio actual del artículo en inventario; las otras líneas conservan el costo del ERP.
           Compras y gastos operativos separados por <code>es_gasto_operativo</code>. Flujos (ventas, compras, gastos, márgenes) = período del filtro vs mismo período del año anterior.
           Las ventas sin CPP se excluyen del margen y permanecen visibles. En las líneas que mantienen el método ERP, se conserva su estimación de margen. Ventas sin costo disponible: {fmtPct(k.pct_ventas_sin_costo)}.
           CxC = snapshot vivo por buckets (por vencer / 1-30 / 31-60 / 61-90 / 90+); CxC y CxP incluyen solo documentos emitidos en el período.

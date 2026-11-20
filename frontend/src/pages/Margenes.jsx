@@ -62,7 +62,7 @@ export default function Margenes() {
       <FiltroProducto value={producto} onChange={setProducto} />
       {cpp && <p className="text-xs text-[var(--text-muted)]">{nombreMargen} · cantidades en {cpp.unidad === 'millar' ? 'millares' : 'kilos'} · compras hasta {cpp.corte_cpp} · ventas hasta {cpp.hasta_efectivo}. Las ventas sin CPP no entran al margen. <Leyenda k="margen_mp" /></p>}
 
-      {!cpp && <p className="text-xs text-[var(--text-muted)]">Laminados, Empaques, Tapas y válvulas e Inyectables usan costos de compras. Las otras líneas conservan su cálculo ERP actual. Las ventas sin CPP quedan fuera del margen y permanecen visibles.</p>}
+      {!cpp && <p className="text-xs text-[var(--text-muted)]">Laminados, Empaques, Tapas y válvulas e Inyectables usan costos de compras. Liners usa el costo promedio actual del artículo en inventario. Las otras líneas conservan su cálculo ERP actual. Las ventas sin CPP quedan fuera del margen y permanecen visibles.</p>}
 
       {error && <div className="card p-6 text-red-500">Error cargando datos: {error.message}</div>}
 
