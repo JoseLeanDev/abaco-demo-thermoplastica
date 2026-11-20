@@ -88,7 +88,11 @@ test('insights por área', () => {
   assert.deepEqual(filtroInsights({ rol: 'cobranza' }).params, ['playbook:cartera']);
   assert.deepEqual(filtroInsights({ rol: 'cxp' }).params, ['playbook:compras']);
   assert.equal(filtroInsights({ rol: 'inventario' }).sql, 'FALSE');
+  // Gerente de línea: solo el análisis de su juego de líneas (sin importar el orden), no las verticales generales
   const gl = filtroInsights({ rol: 'gerente_linea', alcance: { lineas: ['Liners', 'Flexografía'] } });
-  assert.ok(gl.params.includes('%liner%'));
-  assert.ok(gl.params.includes('%flexografia%'));
+  assert.deepEqual(gl.params, ['playbook:lineas:Flexografía|Liners']);
+  assert.equal(gl.sql, 'agent_source = ?');
+  assert.equal(filtroInsights({ rol: 'gerente_linea', alcance: { lineas: [] } }).sql, 'FALSE');
+  const glCob = filtroInsights({ rol: 'gerente_linea', roles_adicionales: ['cobranza'], alcance: { lineas: ['Liners'] } });
+  assert.deepEqual(glCob.params, ['playbook:lineas:Liners', 'playbook:cartera']);
 });

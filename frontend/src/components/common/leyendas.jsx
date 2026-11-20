@@ -335,6 +335,14 @@ export const LEYENDAS = {
     titulo: 'Facturación mensual',
     texto: <>Barras: ventas sin IVA de cada mes y del mismo mes del año anterior. Línea: margen % del mes. La línea punteada es el promedio mensual del período.</>,
   },
+  facturacion_lineas: {
+    titulo: 'Facturación de tus líneas',
+    texto: <>
+      Suma sin IVA de las líneas de factura (tipo FACT) emitidas en el período elegido arriba, solo de los productos de tus líneas (marca del ERP).
+      Es la misma cifra que muestra Ventas para ti en el mismo período. Las notas de crédito casi no se registran en el ERP, así que no se restan.
+      <Nota>Debajo: la misma suma en el mismo rango de fechas un año antes, cuántas facturas distintas y cuántos clientes distintos la componen.</Nota>
+    </>,
+  },
   facturacion_yoy_sin_margen: {
     titulo: 'Facturación mensual',
     texto: <>Barras: ventas sin IVA de cada mes y del mismo mes del año anterior. La línea punteada es el promedio mensual del período.</>,

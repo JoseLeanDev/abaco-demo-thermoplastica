@@ -15,7 +15,10 @@
  *
  * Flags:
  *   --dry-run           corre el análisis e imprime los insights, NO escribe.
- *   --playbook=<slug>   corre solo esa vertical (cartera|ventas|margenes|compras).
+ *   --playbook=<slug>   corre solo esa vertical (cartera|ventas|margenes|compras|salud|lineas).
+ *
+ * El playbook 'lineas' se repite por cada juego de líneas asignado a un gerente de
+ * línea activo (ver expandirLineas).
  *   --list              lista los playbooks activos y sale.
  */
 require('dotenv').config();
@@ -24,6 +27,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const analista = require('../src/services/agenteAnalista');
 const dbAgente = require('../src/services/dbAgente');
+const { claveLineas } = require('../src/services/alcance');
 
 const EMPRESA_ID = parseInt(process.env.DEFAULT_EMPRESA_ID || '1', 10);
 const AGENT_VERSION = 'playbook-1.1-cpp';
@@ -67,9 +71,62 @@ async function cargarPlaybooks() {
   return rows;
 }
 
+/**
+ * Playbook 'lineas' (2026-11-19): el análisis para los gerentes de línea. Es una plantilla:
+ * corre una vez por cada juego distinto de líneas (marcas) asignado a un gerente de línea
+ * activo, con {{lineas}} reemplazado por esas marcas. Cada corrida lleva su propio
+ * agent_source ('playbook:lineas:<marcas ordenadas, separadas por |>'), que es lo que
+ * filtra services/alcance.js (filtroInsights): solo lo ven ese gerente y los roles sin recorte.
+ * Vive en código y no en analisis_playbooks porque no es una vertical que corra sola.
+ */
+const PLAYBOOK_LINEAS = {
+  slug: 'lineas', nombre: 'Tus líneas', vertical: 'lineas', max_insights: 4,
+  prompt: `Este análisis es para el GERENTE de estas categorías de producto (columna marca de v_ventas): {{lineas}}.
+Él solo puede ver sus categorías, así que:
+- TODA consulta a v_ventas lleva el filtro marca IN ({{lineas_sql}}). Sin excepción.
+- NO menciones cifras de otras categorías ni totales de la empresa, ni porcentajes "sobre el total de la empresa". Si comparas, compara dentro de sus categorías (entre sus subcategorías, sus clientes, sus productos) o contra su propio periodo anterior.
+- No hables de cartera (CxC), cuentas por pagar ni bancos: no son de su área.
+- En categoria de cada insight pon la categoría (marca) a la que se refiere, o varias separadas por " / ".
+- Escribe para el gerente, sin tecnicismos: no nombres vistas, tablas ni columnas (nada de "v_ventas" o "v_inventario_salud").
+
+Cubre estos ángulos y quédate con los de mayor impacto:
+- Ventas de sus categorías en el último mes cerrado vs el mes anterior y vs el mismo mes del año pasado, y en lo que va del año vs el mismo periodo del año pasado. ¿Crecen o caen?
+- Qué subcategorías (columna linea) o productos de sus categorías crecen o caen más: nómbralos con su variación en Q y %.
+- Clientes grandes de sus categorías que están comprando MENOS que antes (riesgo de fuga) y clientes nuevos o que crecen.
+- Margen comercial de sus categorías (con analitica.margen_comercial) y su tendencia en meses cerrados; productos o clientes de alto volumen y bajo margen, o con margen negativo.
+- Si aporta, inventario lento de sus productos: v_inventario_salud con codigo_articulo IN (SELECT codigo_articulo FROM v_ventas WHERE marca IN ({{lineas_sql}})).`,
+};
+
+async function expandirLineas(pb) {
+  const { rows } = await admin.query(
+    `SELECT DISTINCT alcance->'lineas' AS lineas
+       FROM usuarios
+      WHERE activo = TRUE
+        AND (rol = 'gerente_linea' OR 'gerente_linea' = ANY(roles_adicionales))
+        AND jsonb_typeof(alcance->'lineas') = 'array'
+        AND jsonb_array_length(alcance->'lineas') > 0`
+  );
+  const juegos = new Map();
+  for (const r of rows) {
+    const lineas = [...new Set(r.lineas.map(String))].sort((a, b) => a.localeCompare(b, 'es'));
+    juegos.set(claveLineas(lineas), lineas);
+  }
+  const lit = (v) => `'${v.replace(/'/g, "''")}'`;
+  return [...juegos.entries()].map(([clave, lineas]) => ({
+    ...pb,
+    nombre: `${pb.nombre}: ${lineas.join(', ')}`,
+    prompt: pb.prompt
+      .replace(/\{\{lineas_sql\}\}/g, lineas.map(lit).join(', '))
+      .replace(/\{\{lineas\}\}/g, lineas.join(', ')),
+    source: `playbook:lineas:${clave}`,
+    idBase: `lineas:${clave}`,
+    categoriaDefault: lineas.join(' / '),
+  }));
+}
+
 /** Reemplaza los insights vigentes de un playbook por los nuevos, en una transacción. */
 async function guardarInsights(playbook, insights, fecha) {
-  const source = `playbook:${playbook.slug}`;
+  const source = playbook.source || `playbook:${playbook.slug}`;
   const desde = new Date(); desde.setDate(desde.getDate() - 30);
   const periodoDesde = desde.toISOString().slice(0, 10);
   const periodoHasta = fecha;
@@ -88,7 +145,7 @@ async function guardarInsights(playbook, insights, fecha) {
     let i = 0;
     for (const ins of insights) {
       i++;
-      const insightId = `pb:${playbook.slug}:${fecha}:${i}`;
+      const insightId = `pb:${playbook.idBase || playbook.slug}:${fecha}:${i}`;
       const descripcion = ins.recomendacion
         ? `${ins.descripcion}\n\n💡 ${ins.recomendacion}`
         : ins.descripcion;
@@ -106,7 +163,7 @@ async function guardarInsights(playbook, insights, fecha) {
            status='active', updated_at=NOW()`,
         [
           insightId, EMPRESA_ID, ins.tipo, ins.severidad, ins.titulo, descripcion,
-          Number(ins.impacto_gtq) || 0, ins.categoria || playbook.nombre,
+          Number(ins.impacto_gtq) || 0, ins.categoria || playbook.categoriaDefault || playbook.nombre,
           ins.recomendacion || null, ins.recomendacion ? 'Recomendación' : null,
           ins.variacion_pct != null ? Number(ins.variacion_pct) : null,
           periodoDesde, periodoHasta, source, AGENT_VERSION
@@ -170,6 +227,7 @@ async function main() {
 
   await asegurarEsquema();
   const playbooks = await cargarPlaybooks();
+  if (!filtroPlaybook || filtroPlaybook === 'lineas') playbooks.push(...await expandirLineas(PLAYBOOK_LINEAS));
 
   if (SOLO_LISTAR) {
     log(`${playbooks.length} playbooks activos:`);

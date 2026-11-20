@@ -4,6 +4,7 @@ import { useInsightsHistorico } from '../hooks/useCfoData'
 import { endpoints } from '../services/cfoApi'
 import InsightCard from '../components/agents/InsightCard'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
+import { useAuth } from '../context/AuthContext'
 
 /**
  * InsightsIA — Página dedicada al analista diario (playbooks).
@@ -23,28 +24,52 @@ const VERTICALES = [
   { slug: 'salud',    titulo: 'Análisis',        desc: 'Ciclo de caja, capital inmovilizado y capital de trabajo' },
 ]
 
+// Análisis por línea: uno por cada juego de líneas de un gerente de línea
+// (agent_source = 'playbook:lineas:Laminados|Flexografía…'). El gerente solo recibe el suyo.
+const esDeLineas = (src) => (src || '').startsWith('playbook:lineas:')
+const lineasDeSource = (src) => src.slice('playbook:lineas:'.length).split('|')
+
 function slugDeSource(agentSource) {
   // 'playbook:cartera' -> 'cartera'
   return (agentSource || '').startsWith('playbook:') ? agentSource.split(':')[1] : null
 }
 
 export default function InsightsIA() {
+  const { user } = useAuth()
+  const esGerenteLinea = [user?.rol, ...(user?.roles_adicionales || [])].includes('gerente_linea')
   const { data, isLoading, error, refetch, isFetching } = useInsightsHistorico({ limit: 200, usarPeriodo: true, fuente: 'playbook' })
 
   const insights = data?.data?.insights || []
 
   // Solo los del analista por playbook, agrupados por vertical.
-  const { porVertical, ultimaCorrida, total } = useMemo(() => {
+  const { porVertical, porLineas, ultimaCorrida, total } = useMemo(() => {
     const delAnalista = insights.filter(i => slugDeSource(i.agentSource))
     const grupos = {}
+    const lineas = {}
     let ultima = null
     for (const ins of delAnalista) {
-      const slug = slugDeSource(ins.agentSource)
-      ;(grupos[slug] = grupos[slug] || []).push(ins)
+      if (esDeLineas(ins.agentSource)) (lineas[ins.agentSource] = lineas[ins.agentSource] || []).push(ins)
+      else {
+        const slug = slugDeSource(ins.agentSource)
+        ;(grupos[slug] = grupos[slug] || []).push(ins)
+      }
       if (ins.createdAt && (!ultima || new Date(ins.createdAt) > new Date(ultima))) ultima = ins.createdAt
     }
-    return { porVertical: grupos, ultimaCorrida: ultima, total: delAnalista.length }
+    return { porVertical: grupos, porLineas: lineas, ultimaCorrida: ultima, total: delAnalista.length }
   }, [insights])
+
+  // Secciones a mostrar: primero el análisis por línea (si hay), luego las verticales
+  const secciones = [
+    ...Object.entries(porLineas).map(([src, items]) => ({
+      key: src,
+      titulo: `Tus líneas: ${lineasDeSource(src).join(', ')}`,
+      desc: 'Ventas, clientes y márgenes solo de estas líneas',
+      items,
+    })),
+    ...VERTICALES.filter(v => (porVertical[v.slug] || []).length).map(v => ({ key: v.slug, ...v, items: porVertical[v.slug] })),
+  ]
+  // Al gerente de línea no se le listan las verticales generales: no son suyas
+  const verticalesVacias = esGerenteLinea ? [] : VERTICALES.filter(v => !(porVertical[v.slug] || []).length)
 
   const handleDismiss = async (insight) => {
     try {
@@ -108,10 +133,10 @@ export default function InsightsIA() {
       {/* Grupos por vertical */}
       {!isLoading && total > 0 && (
         <div className="space-y-8">
-          {VERTICALES.filter(v => (porVertical[v.slug] || []).length).map(v => {
-            const items = porVertical[v.slug] || []
+          {secciones.map(v => {
+            const items = v.items
             return (
-              <section key={v.slug}>
+              <section key={v.key}>
                 <div className="flex items-baseline justify-between border-b border-slate-200 pb-2 mb-4">
                   <div>
                     <h2 className="text-base font-semibold text-slate-900">{v.titulo}</h2>
@@ -129,10 +154,10 @@ export default function InsightsIA() {
           })}
 
           {/* Verticales sin insights en esta corrida (informativo) */}
-          {VERTICALES.some(v => !(porVertical[v.slug] || []).length) && (
+          {verticalesVacias.length > 0 && (
             <p className="text-xs text-slate-400 pt-2">
               Sin hallazgos nuevos en:{' '}
-              {VERTICALES.filter(v => !(porVertical[v.slug] || []).length).map(v => v.titulo).join(', ')}.
+              {verticalesVacias.map(v => v.titulo).join(', ')}.
             </p>
           )}
         </div>
