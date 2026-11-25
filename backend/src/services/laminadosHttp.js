@@ -129,7 +129,8 @@ function adaptarVentas(r, ruta, q) {
   if (ruta === '/clientes') return { ...base, n_clientes: base.n_items, n_clientes_prev: base.n_items_prev,
     n_nuevos: items.filter((i) => i.nuevo).length, venta_nuevos: sum(items.filter((i) => i.nuevo), 'ventas'),
     n_perdidos: items.filter((i) => i.perdido).length,
-    clientes: items.filter((i) => i.ventas > 0).slice(0, limit(q, 15, 500)).map((i) => ({ ...i, codigo: i.clave, cliente: i.nombre, forma_pago: i.extra, porcentaje: i.participacion })) };
+    clientes: items.filter((i) => i.ventas > 0).slice(0, limit(q, 15, 500)).map((i) => ({ ...i, codigo: i.clave, cliente: i.nombre, forma_pago: i.extra, porcentaje: i.participacion })),
+    perdidos: perdidos.map((i) => ({ ...i, codigo: i.clave, cliente: i.nombre })) };
   if (ruta === '/lineas') return { ...base, lineas: items.filter((i) => i.ventas > 0).map((i) => ({ ...i, linea: i.nombre, costo: i.costo, porcentaje: i.participacion })) };
   return base;
 }
