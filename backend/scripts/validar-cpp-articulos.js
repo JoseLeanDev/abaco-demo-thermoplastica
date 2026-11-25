@@ -6,6 +6,8 @@ const {pool}=require('../database/connection');
 const {crearCalculador,LINEAS,resumir}=require('../src/services/cpp');
 const {obtenerReporte}=require('../src/services/laminados');
 const M=require('../src/services/margen');
+// La marca del artículo en el ERP no siempre se llama como la línea comercial (ver ALIAS_ERP en ingesta/articulos_snapshot.py).
+const MARCAS_ERP={'Empaques para alimentos':['Empaques para alimentos','tpFood'],'Inyectables':['Inyectables','Envase de vidrio']};
 const close=(a,b)=>{if(a===null||b===null)assert.equal(a,b);else assert.ok(Math.abs(Number(a)-Number(b))<1e-6,`${a} != ${b}`);};
 (async()=>{try{
  const p=(await pool.query(`SELECT i.*,p.corte::text AS corte FROM thermoplastica.cpp_articulos_publicacion p
@@ -26,7 +28,7 @@ const close=(a,b)=>{if(a===null||b===null)assert.equal(a,b);else assert.ok(Math.
   // El catálogo permite los mismos filtros en las rutas generales y en la IA.
   const agrupado=(await pool.query(`SELECT SUM(f.total_sin_iva) AS ventas,${M.margen('f')} AS margen
    FROM thermoplastica.v_ventas_costeadas f JOIN thermoplastica.dim_articulo a USING(articulo_id)
-   WHERE btrim(a.marca)=$1 AND f.tipo_doc='FACT' AND f.fecha_emision BETWEEN $2 AND $3`,[linea,desde,p.corte])).rows[0];
+   WHERE btrim(a.marca)=ANY($1::text[]) AND f.tipo_doc='FACT' AND f.fecha_emision BETWEEN $2 AND $3`,[MARCAS_ERP[linea]||[linea],desde,p.corte])).rows[0];
   close(agrupado.ventas,raw.ventas_totales);close(agrupado.margen,raw.margen_mp);
   resultados[linea]={...s,unidad:r.meta.unidad,ventas_sin_cpp:raw.ventas_sin_cpp,cobertura:raw.cobertura_ventas_pct};
  }

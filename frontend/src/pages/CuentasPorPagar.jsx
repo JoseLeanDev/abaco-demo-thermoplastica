@@ -33,6 +33,29 @@ const fmtDate = (d) => {
   if (!d) return '—'
   return String(d).slice(0, 10)
 }
+// Montos en la moneda indicada (Q, US$ o EU). Con filtro de moneda el backend ya los manda en esa moneda.
+const SIMBOLO = { Q: 'Q', 'US$': 'US$', EU: '€' }
+const fmtMon = (n, m) => (m && m !== 'Q'
+  ? `${SIMBOLO[m] || m}${(Number(n) || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  : fmtQ(n))
+const fmtMonM = (n, m) => {
+  if (!m || m === 'Q') return fmtM(n)
+  const v = Number(n) || 0, sym = SIMBOLO[m] || m
+  if (Math.abs(v) >= 1e6) return `${sym}${(v / 1e6).toFixed(2)}M`
+  if (Math.abs(v) >= 1e3) return `${sym}${(v / 1e3).toFixed(1)}k`
+  return fmtMon(v, m)
+}
+const NOMBRE_MONEDA = { Q: 'quetzales (Q)', 'US$': 'dólares (US$)', EU: 'euros (€)' }
+const MONEDAS = [
+  { id: '',    label: 'Todas' },
+  { id: 'Q',   label: 'Quetzales' },
+  { id: 'US$', label: 'Dólares' },
+  { id: 'EU',  label: 'Euros' },
+]
+// Etiqueta de moneda extranjera junto al documento o proveedor
+const ChipMoneda = ({ m }) => (m && m !== 'Q'
+  ? <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--info-bg)] text-[var(--info)] align-middle">{m === 'mixta' ? 'Q + ext.' : m === 'EU' ? '€' : m}</span>
+  : null)
 
 // Nombre del proveedor que abre su ficha
 const NombreProveedor = ({ id, nombre, className = 'max-w-[240px]' }) => (
@@ -69,6 +92,8 @@ const COLUMNAS_CXP_PROVEEDORES = [
   { label: 'NIT', get: r => r.nit },
   { label: 'Facturas abiertas', get: r => r.documentos },
   { label: 'Le debemos', get: r => r.saldo.toFixed(2) },
+  { label: 'De eso en US$ (en dólares)', get: r => r.saldo_usd.toFixed(2) },
+  { label: 'De eso en € (en euros)', get: r => r.saldo_eu.toFixed(2) },
   { label: '% del total', get: r => r.pct_saldo },
   { label: 'Vencido', get: r => r.vencido.toFixed(2) },
   { label: 'Facturas vencidas', get: r => r.documentos_vencidos },
@@ -92,6 +117,10 @@ const COLUMNAS_CXP = [
   { label: 'Días de atraso', get: r => r.dias_atraso },
   { label: 'Valor', get: r => r.valor.toFixed(2) },
   { label: 'Saldo', get: r => r.saldo.toFixed(2) },
+  { label: 'Moneda', get: r => r.moneda },
+  { label: 'Tasa', get: r => r.tasa },
+  { label: 'Valor en moneda de la factura', get: r => r.valor_original !== null ? r.valor_original.toFixed(2) : '' },
+  { label: 'Saldo en moneda de la factura', get: r => r.saldo_original !== null ? r.saldo_original.toFixed(2) : '' },
   { label: 'Forma de pago', get: r => r.forma_pago },
   { label: 'Estado', get: r => r.estado },
   { label: 'Último pago', get: r => r.fecha_ultimo_pago && String(r.fecha_ultimo_pago).slice(0, 10) },
@@ -103,6 +132,7 @@ export default function CuentasPorPagar() {
   const [proveedorSel, setProveedor] = useState('')
   const [vista, setVista]           = useState('proveedores') // 'proveedores' | 'documentos'
   const [filtroProv, setFiltroProv] = useState('todos')
+  const [moneda, setMoneda]         = useState('') // '' = todas (en Q) | 'Q' | 'US$' | 'EU'
   const tablaRef = useRef(null)
   const navigate = useNavigate()
   const irAProveedor = (id) => navigate(`/tesoreria/cuentas-por-pagar/proveedor/${id}`)
@@ -112,21 +142,22 @@ export default function CuentasPorPagar() {
   }
 
   const { params: periodo } = usePeriodo()
+  const conMoneda = moneda ? { moneda } : {}
   const { data: cxpData, isLoading: loadingResumen } = useQuery(
-    ['cxp', periodo], () => endpoints.tesoreria.cxp(periodo), { keepPreviousData: true }
+    ['cxp', periodo, moneda], () => endpoints.tesoreria.cxp({ ...periodo, ...conMoneda }), { keepPreviousData: true }
   )
 
   const [orden, setOrden] = useState({ k: 'saldo', dir: 'desc' })
   const ord = { orden, setOrden }
-  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, proveedor: proveedorSel, orden: orden.k, dir: orden.dir, ...periodo }
+  const detalleParams = { limit: 500, offset: 0, busqueda, bucket, proveedor: proveedorSel, orden: orden.k, dir: orden.dir, ...periodo, ...conMoneda }
   const { data: detalleData, isLoading: loadingDetalle, isFetching } = useQuery(
-    ['cxp-detalle', busqueda, bucket, proveedorSel, orden, periodo],
+    ['cxp-detalle', busqueda, bucket, proveedorSel, orden, periodo, moneda],
     () => endpoints.tesoreria.cxpDetalle(detalleParams),
     { keepPreviousData: true, enabled: vista === 'documentos' }
   )
   const { data: provData, isLoading: loadingProv, isFetching: fetchingProv } = useQuery(
-    ['cxp-proveedores', busqueda, periodo],
-    () => endpoints.tesoreria.cxpProveedores({ busqueda, ...periodo }),
+    ['cxp-proveedores', busqueda, periodo, moneda],
+    () => endpoints.tesoreria.cxpProveedores({ busqueda, ...periodo, ...conMoneda }),
     { keepPreviousData: true, enabled: vista === 'proveedores' }
   )
   const todosProv = provData?.data?.filas || []
@@ -137,10 +168,20 @@ export default function CuentasPorPagar() {
   const topProv       = resumen.top_proveedores || []
   const proximos      = resumen.proximos_pagos || []
   const totalFacturas = resumen.facturas || 0
+  // Moneda en que vienen los montos del resumen (la del filtro; sin filtro, quetzales)
+  const unidad = resumen.moneda || 'Q'
+  const f = (n) => fmtMon(n, unidad)
+  const fM = (n) => fmtMonM(n, unidad)
+  const porMoneda = resumen.por_moneda || []
+  const totalQ = porMoneda.reduce((t, m) => t + m.saldo_q, 0)
+  // Euros solo si hay facturas abiertas en euros (o ya está elegido)
+  const monedasBtn = MONEDAS.filter(m => m.id !== 'EU' || moneda === 'EU' || porMoneda.some(x => x.moneda === 'EU'))
 
   const filas = detalleData?.data?.filas || []
   const totalFilas   = detalleData?.data?.total_filas || 0
   const sumaFiltrada = detalleData?.data?.suma_saldo || 0
+  const sumaOriginal = detalleData?.data?.suma_saldo_original
+  const sufijo = moneda ? `_${{ Q: 'q', 'US$': 'usd', EU: 'eur' }[moneda]}` : ''
 
   // Exporta la vista activa: proveedores (con su filtro) o documentos (búsqueda, antigüedad y proveedor)
   const [exportando, setExportando] = useState(false)
@@ -149,10 +190,14 @@ export default function CuentasPorPagar() {
     try {
       const corte = periodo.hasta || 'hoy'
       if (vista === 'proveedores') {
-        await exportarExcel(`cxp_proveedores_${corte}.xlsx`, COLUMNAS_CXP_PROVEEDORES, proveedores, { hoja: 'Proveedores' })
+        const cols = moneda
+          ? COLUMNAS_CXP_PROVEEDORES.filter(c => !c.label.startsWith('De eso'))
+              .map(c => ['Le debemos', 'Vencido', 'Compras del período (sin IVA)', 'Compras año anterior (sin IVA)'].includes(c.label) ? { ...c, label: `${c.label} (${moneda})` } : c)
+          : COLUMNAS_CXP_PROVEEDORES
+        await exportarExcel(`cxp_proveedores${sufijo}_${corte}.xlsx`, cols, proveedores, { hoja: 'Proveedores' })
       } else {
-        const docs = await traerTodo(endpoints.tesoreria.cxpDetalle, { busqueda, bucket, proveedor: proveedorSel, orden: orden.k, dir: orden.dir, ...periodo })
-        await exportarExcel(`cxp_documentos_${corte}.xlsx`, COLUMNAS_CXP, docs, { hoja: 'Por pagar' })
+        const docs = await traerTodo(endpoints.tesoreria.cxpDetalle, { busqueda, bucket, proveedor: proveedorSel, orden: orden.k, dir: orden.dir, ...periodo, ...conMoneda })
+        await exportarExcel(`cxp_documentos${sufijo}_${corte}.xlsx`, COLUMNAS_CXP, docs, { hoja: 'Por pagar' })
       }
     } finally {
       setExportando(false)
@@ -186,38 +231,89 @@ export default function CuentasPorPagar() {
           </div>
         </div>
 
-        <button onClick={exportar} disabled={exportando} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
-          <ArrowDownTrayIcon className="w-4 h-4" />
-          {exportando ? 'Exportando…' : 'Exportar Excel'}
-        </button>
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">Moneda <Leyenda k="cxp_moneda" /></span>
+            <div className="flex rounded-lg border border-[var(--border-default)] overflow-hidden">
+              {monedasBtn.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setMoneda(m.id)}
+                  className={`px-3 py-1.5 text-sm font-medium ${moneda === m.id ? 'bg-[#001639] text-white' : 'hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)]'}`}
+                >{m.label}</button>
+              ))}
+            </div>
+          </div>
+          <button onClick={exportar} disabled={exportando} className="btn-secondary flex items-center gap-2 disabled:opacity-60">
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            {exportando ? 'Exportando…' : 'Exportar Excel'}
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">Total por Pagar <Leyenda k="cxp_total" /></span>
-          <p className="kpi-value">{fmtQ(resumen.total_cxp)}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">{totalFacturas.toLocaleString()} facturas · {resumen.proveedores || 0} proveedores</p>
+          <p className="kpi-value">{f(resumen.total_cxp)}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            {totalFacturas.toLocaleString()} facturas · {resumen.proveedores || 0} proveedores
+            {unidad !== 'Q' && <> · ≈ {fmtQ(resumen.total_q)}</>}
+          </p>
         </div>
 
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">Por Vencer <Leyenda k="por_vencer" /></span>
-          <p className="kpi-value text-[var(--success)]">{fmtQ(distribucion.por_vencer?.monto)}</p>
+          <p className="kpi-value text-[var(--success)]">{f(distribucion.por_vencer?.monto)}</p>
           <p className="text-xs text-[var(--success)] mt-1">{distribucion.por_vencer?.porcentaje || 0}%</p>
         </div>
 
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">1-30 días vencido <Leyenda k="dias_vencido" /></span>
-          <p className="kpi-value text-[var(--warning)]">{fmtQ(distribucion.v_1_30?.monto)}</p>
+          <p className="kpi-value text-[var(--warning)]">{f(distribucion.v_1_30?.monto)}</p>
           <p className="text-xs text-[var(--warning)] mt-1">{distribucion.v_1_30?.porcentaje || 0}%</p>
         </div>
 
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">+60 días (riesgo) <Leyenda k="cxc_riesgo" /></span>
-          <p className="kpi-value text-[var(--danger)]">{fmtQ((distribucion.v_61_90?.monto || 0) + (distribucion.v_90_mas?.monto || 0))}</p>
+          <p className="kpi-value text-[var(--danger)]">{f((distribucion.v_61_90?.monto || 0) + (distribucion.v_90_mas?.monto || 0))}</p>
           <p className="text-xs text-[var(--danger)] mt-1">Atención requerida</p>
         </div>
       </div>
+
+      {/* Desglose por moneda: clic para filtrar */}
+      {!moneda && porMoneda.length > 1 && (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${porMoneda.length > 2 ? 'lg:grid-cols-3' : ''} gap-4`}>
+          {porMoneda.map(m => (
+            <button
+              key={m.moneda}
+              onClick={() => setMoneda(m.moneda)}
+              className="card card-hover p-4 text-left flex items-start justify-between gap-4"
+              title={`Ver solo facturas en ${NOMBRE_MONEDA[m.moneda] || m.moneda}`}
+            >
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  Facturas en {NOMBRE_MONEDA[m.moneda] || m.moneda}
+                </p>
+                <p className="text-xl font-semibold tabular-nums mt-1">{fmtMon(m.saldo_original, m.moneda)}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5 tabular-nums">
+                  {m.moneda !== 'Q' && <>≈ {fmtQ(m.saldo_q)} · </>}
+                  {m.documentos.toLocaleString()} facturas · {m.proveedores.toLocaleString()} proveedores
+                </p>
+                {m.vencido_original > 0 && (
+                  <p className="text-xs text-[var(--danger)] mt-0.5 tabular-nums">Vencido {fmtMon(m.vencido_original, m.moneda)}</p>
+                )}
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-2xl font-semibold tabular-nums text-[var(--text-secondary)]">
+                  {totalQ > 0 ? Math.round(m.saldo_q / totalQ * 100) : 0}%
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">del total en Q</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Aging */}
       <div className="card">
@@ -225,6 +321,7 @@ export default function CuentasPorPagar() {
           <ChartBarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           <h2 className="font-semibold">Distribución por Antigüedad (vs fecha de vencimiento real)</h2>
           <Leyenda k="aging_cxp" />
+          {moneda && <span className="text-xs text-[var(--text-muted)] ml-1">· solo facturas en {NOMBRE_MONEDA[moneda]}{moneda !== 'Q' ? `, montos en ${moneda === 'EU' ? '€' : moneda}` : ''}</span>}
         </div>
         <div className="p-5 pt-0 space-y-4">
           {[
@@ -240,7 +337,7 @@ export default function CuentasPorPagar() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-[var(--text-secondary)]">{r.label}</span>
                   <span className="text-sm font-semibold tabular-nums">
-                    {fmtQ(val?.monto)} ({val?.porcentaje || 0}%)
+                    {f(val?.monto)} ({val?.porcentaje || 0}%)
                   </span>
                 </div>
                 <div className="h-3 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
@@ -290,6 +387,7 @@ export default function CuentasPorPagar() {
                       <NombreProveedor id={p.proveedor_id} nombre={p.proveedor} />
                       <p className="text-xs text-[var(--text-muted)]">
                         {p.codigo}
+                        {!moneda && <ChipMoneda m={p.moneda} />}
                         {p.facturas_vencidas > 0 && (
                           <span className="ml-1 text-[var(--danger)]">· {p.facturas_vencidas} vencidas</span>
                         )}
@@ -299,7 +397,7 @@ export default function CuentasPorPagar() {
                     <td className="py-2 text-right tabular-nums text-[var(--text-secondary)]">
                       {p.dias_credito > 0 ? `${p.dias_credito}d` : '—'}
                     </td>
-                    <td className="py-2 text-right tabular-nums font-semibold">{fmtM(p.monto)}</td>
+                    <td className="py-2 text-right tabular-nums font-semibold">{fM(p.monto)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -349,12 +447,17 @@ export default function CuentasPorPagar() {
                       <td className="py-2 pr-2 tabular-nums text-[var(--text-secondary)]">{fmtDate(p.fecha_vencimiento)}</td>
                       <td className="py-2 pr-2">
                         <NombreProveedor id={p.proveedor_id} nombre={p.proveedor} className="max-w-[220px]" />
-                        <p className="text-xs text-[var(--text-muted)]">#{p.numero_interno}</p>
+                        <p className="text-xs text-[var(--text-muted)]">#{p.numero_interno}{!moneda && <ChipMoneda m={p.moneda} />}</p>
                       </td>
                       <td className={`py-2 text-right tabular-nums font-semibold ${
                         p.dias_restantes <= 7 ? 'text-[var(--danger)]' : p.dias_restantes <= 15 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'
                       }`}>{p.dias_restantes}d</td>
-                      <td className="py-2 text-right tabular-nums font-semibold">{fmtM(p.monto)}</td>
+                      <td className="py-2 text-right tabular-nums font-semibold">
+                        {fM(p.monto)}
+                        {!moneda && p.moneda !== 'Q' && p.monto_original !== null && (
+                          <p className="text-xs font-normal text-[var(--text-muted)]">{fmtMonM(p.monto_original, p.moneda)}</p>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -414,6 +517,7 @@ export default function CuentasPorPagar() {
           cargando={loadingProv}
           actualizando={fetchingProv && !loadingProv}
           onClick={irAProveedor}
+          moneda={provData?.data?.moneda || null}
         />
       )}
 
@@ -436,7 +540,11 @@ export default function CuentasPorPagar() {
               </button>
             )}
           </div>
-          <span className="text-sm font-semibold">Total filtrado: {fmtQ(sumaFiltrada)}</span>
+          <span className="text-sm font-semibold">
+            Total filtrado: {moneda && moneda !== 'Q' && sumaOriginal !== null && sumaOriginal !== undefined
+              ? <>{fmtMon(sumaOriginal, moneda)} <span className="font-normal text-[var(--text-muted)]">≈ {fmtQ(sumaFiltrada)}</span></>
+              : fmtQ(sumaFiltrada)}
+          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -488,7 +596,7 @@ export default function CuentasPorPagar() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-sm font-medium">#{row.numero_interno}</p>
+                      <p className="text-sm font-medium">#{row.numero_interno}<ChipMoneda m={row.moneda} /></p>
                       {row.factura_proveedor && (
                         <p className="text-xs text-[var(--text-muted)]">Prov: {row.factura_proveedor}</p>
                       )}
@@ -518,10 +626,18 @@ export default function CuentasPorPagar() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="font-bold tabular-nums">{fmtQ(row.saldo)}</span>
-                      {row.valor && row.valor !== row.saldo && (
-                        <p className="text-xs text-[var(--text-muted)] tabular-nums">Valor: {fmtM(row.valor)}</p>
-                      )}
+                      {row.moneda !== 'Q' && row.saldo_original !== null ? <>
+                        <span className="font-bold tabular-nums">{fmtMon(row.saldo_original, row.moneda)}</span>
+                        <p className="text-xs text-[var(--text-muted)] tabular-nums">≈ {fmtQ(row.saldo)}{row.tasa ? ` · tasa ${row.tasa.toFixed(4)}` : ''}</p>
+                        {row.valor_original !== null && Math.abs(row.valor_original - row.saldo_original) >= 0.01 && (
+                          <p className="text-xs text-[var(--text-muted)] tabular-nums">Valor: {fmtMonM(row.valor_original, row.moneda)}</p>
+                        )}
+                      </> : <>
+                        <span className="font-bold tabular-nums">{fmtQ(row.saldo)}</span>
+                        {row.valor && row.valor !== row.saldo && (
+                          <p className="text-xs text-[var(--text-muted)] tabular-nums">Valor: {fmtM(row.valor)}</p>
+                        )}
+                      </>}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-flex items-center gap-1.5 ${badge.color}`}>
@@ -543,6 +659,7 @@ export default function CuentasPorPagar() {
         <div className="text-xs text-[var(--text-muted)] leading-relaxed">
           <p>
             Fuente: <code>vstAnalisisCxP</code> del ERP. La fecha de vencimiento es la real acordada con cada proveedor.
+            Cada factura está en quetzales, dólares o euros; sin filtro de moneda los montos se suman en Q con la tasa de cada factura.
             La columna <em>Crédito</em> muestra días según ficha del proveedor · días efectivamente otorgados en la factura;
             las desviaciones {'>'} 5 días se marcan en color. Sincronización diaria via n8n.
           </p>
@@ -553,7 +670,9 @@ export default function CuentasPorPagar() {
 }
 
 // Todos los proveedores con su resumen (mismas cifras que la ficha); cada fila abre la ficha
-function TablaProveedores({ filas, cargando, actualizando, onClick }) {
+function TablaProveedores({ filas, cargando, actualizando, onClick, moneda }) {
+  const fmt = (n) => fmtMon(n, moneda)
+  const fmtC = (n) => fmtMonM(n, moneda)
   const [orden, setOrden] = useState({ k: 'saldo', dir: -1 })
   // Los vacíos (sin pagos o sin compras) siempre al final
   const ordenadas = [...filas].sort((a, b) => {
@@ -583,7 +702,7 @@ function TablaProveedores({ filas, cargando, actualizando, onClick }) {
           </span>
           <Leyenda k="cxp_por_proveedor" />
         </div>
-        <span className="text-sm font-semibold">Le debemos: {fmtQ(total)}</span>
+        <span className="text-sm font-semibold">Le debemos: {fmt(total)}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -621,12 +740,14 @@ function TablaProveedores({ filas, cargando, actualizando, onClick }) {
                   </td>
                   <td className="px-4 py-3 text-right">
                     {r.saldo > 0 ? <>
-                      <p className="font-bold tabular-nums">{fmtQ(r.saldo)}</p>
+                      <p className="font-bold tabular-nums">{fmt(r.saldo)}</p>
+                      {!moneda && r.saldo_usd > 0 && <p className="text-xs text-[var(--info)] tabular-nums">incluye {fmtMonM(r.saldo_usd, 'US$')}</p>}
+                      {!moneda && r.saldo_eu > 0 && <p className="text-xs text-[var(--info)] tabular-nums">incluye {fmtMonM(r.saldo_eu, 'EU')}</p>}
                       <p className="text-xs text-[var(--text-muted)] tabular-nums">{r.pct_saldo}% del total</p>
                     </> : <span className="text-sm text-[var(--text-muted)]">—</span>}
                   </td>
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.vencido > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
-                    {r.vencido > 0 ? fmtQ(r.vencido) : '—'}
+                    {r.vencido > 0 ? fmt(r.vencido) : '—'}
                     {r.documentos_vencidos > 0 && <p className="text-xs font-normal">{r.documentos_vencidos} factura{r.documentos_vencidos === 1 ? '' : 's'}</p>}
                   </td>
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.atraso_max > 60 ? 'text-[var(--danger)] font-semibold' : r.atraso_max > 0 ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}>
@@ -640,7 +761,7 @@ function TablaProveedores({ filas, cargando, actualizando, onClick }) {
                     {r.pct_a_tiempo !== null ? `${r.pct_a_tiempo}%` : '—'}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-sm">
-                    {r.compras > 0 ? fmtM(r.compras) : <span className="text-[var(--text-muted)]">—</span>}
+                    {r.compras > 0 ? fmtC(r.compras) : <span className="text-[var(--text-muted)]">—</span>}
                     {r.variacion_compras_pct !== null && (
                       <p className="text-xs text-[var(--text-muted)]">{r.variacion_compras_pct > 0 ? '+' : ''}{r.variacion_compras_pct.toFixed(1)}% vs año ant.</p>
                     )}

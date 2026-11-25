@@ -28,6 +28,10 @@ const fmtMes = (s) => {
   const [y, m] = s.split('-').map(Number)
   return new Date(y, m - 1, 1).toLocaleDateString('es-GT', { month: 'short', year: '2-digit' })
 }
+// Monto en la moneda de la factura (Q, US$ o EU)
+const SIMBOLO = { Q: 'Q', 'US$': 'US$', EU: '€' }
+const fmtMon2 = (n, m) => `${SIMBOLO[m] || m || 'Q'}${(Number(n) || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const extranjeras = (saldo) => (saldo?.por_moneda || []).filter(m => m.moneda !== 'Q' && m.saldo_original > 0)
 const fmtDias = (n) => (n === null || n === undefined ? '—' : `${Math.round(n)} d`)
 const fmtPct = (n) => (n === null || n === undefined ? '—' : `${Number(n).toFixed(0)}%`)
 const fmtPrecio = (n) => (n === null || n === undefined ? '—' : `Q${Number(n).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: n < 10 ? 4 : 2 })}`)
@@ -116,7 +120,10 @@ export default function ProveedorCxp() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <Kpi titulo="Le debemos" leyenda="saldo_proveedor" valor={fmtQ(saldo.total)}
-          sub={`${saldo.documentos} factura${saldo.documentos === 1 ? '' : 's'} abiertas`} />
+          sub={<>
+            {saldo.documentos} factura{saldo.documentos === 1 ? '' : 's'} abiertas
+            {extranjeras(saldo).map(m => <span key={m.moneda} className="block text-[var(--info)]">{fmtMon2(m.saldo_original, m.moneda)} en {m.moneda === 'EU' ? 'euros' : 'dólares'}</span>)}
+          </>} />
         <Kpi titulo="Vencido" leyenda="atraso_pago_prov" valor={fmtQ(saldo.vencido)}
           tono={saldo.vencido > 0 ? (saldo.mas_antiguo_dias > 60 ? 'danger' : 'warning') : 'success'}
           sub={saldo.vencido > 0 ? `${saldo.vencidos} facturas · la más antigua ${saldo.mas_antiguo_dias} d` : 'Nada vencido'} />
@@ -252,6 +259,7 @@ function TabEstadoCuenta({ d }) {
   const totalValor = docs.reduce((t, x) => t + (x.valor || 0), 0)
   const totalAbonado = docs.reduce((t, x) => t + (x.abonado || 0), 0)
   const hayDepurado = docs.some(x => x.depurado > 0)
+  const hayExtranjera = docs.some(x => x.moneda && x.moneda !== 'Q')
 
   return (
     <div className="space-y-6">
@@ -282,6 +290,18 @@ function TabEstadoCuenta({ d }) {
       </Seccion>
 
       <Seccion titulo={`Facturas por pagar (${docs.length})`} leyenda="estado_cuenta_cxp" sinPadding>
+        {hayExtranjera && (
+          <div className="px-5 pb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--text-muted)]">
+            {(saldo.por_moneda || []).map(m => (
+              <span key={m.moneda} className="tabular-nums">
+                En {m.moneda === 'Q' ? 'quetzales' : m.moneda === 'EU' ? 'euros' : 'dólares'}: <strong className="text-[var(--text-primary)]">{fmtMon2(m.saldo_original, m.moneda)}</strong>
+                {m.moneda !== 'Q' && <> ≈ {fmtQ2(m.saldo_q)}</>} · {m.documentos} factura{m.documentos === 1 ? '' : 's'}
+                {m.vencido_original > 0 && <span className="text-[var(--danger)]"> · vencido {fmtMon2(m.vencido_original, m.moneda)}</span>}
+              </span>
+            ))}
+            <span>Valor, abonado y saldo en Q; debajo, el monto en la moneda de la factura.</span>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-[var(--bg-secondary)] border-y border-[var(--border-default)]">
@@ -304,14 +324,26 @@ function TabEstadoCuenta({ d }) {
               )}
               {docs.map(x => (
                 <tr key={x.documento} className="hover:bg-[var(--bg-secondary)]">
-                  <td className={`${td} font-medium`}>{x.documento}</td>
+                  <td className={`${td} font-medium`}>
+                    {x.documento}
+                    {x.moneda && x.moneda !== 'Q' && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--info-bg)] text-[var(--info)] align-middle">{x.moneda === 'EU' ? '€' : x.moneda}</span>}
+                  </td>
                   <td className={`${td} text-[var(--text-secondary)]`}>{x.factura_proveedor || '—'}</td>
                   <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.fecha_emision)}</td>
                   <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.fecha_vencimiento)}</td>
-                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{x.valor !== null ? fmtQ2(x.valor) : '—'}</td>
-                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{x.abonado >= 0.01 ? fmtQ2(x.abonado) : '—'}</td>
+                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>
+                    {x.valor !== null ? fmtQ2(x.valor) : '—'}
+                    {x.moneda !== 'Q' && x.valor_original !== null && <p className="text-xs text-[var(--info)]">{fmtMon2(x.valor_original, x.moneda)}</p>}
+                  </td>
+                  <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>
+                    {x.abonado >= 0.01 ? fmtQ2(x.abonado) : '—'}
+                    {x.moneda !== 'Q' && x.abonado >= 0.01 && x.abonado_original >= 0.01 &&<p className="text-xs text-[var(--info)]">{fmtMon2(x.abonado_original, x.moneda)}</p>}
+                  </td>
                   {hayDepurado && <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{x.depurado ? fmtQ2(x.depurado) : '—'}</td>}
-                  <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ2(x.saldo)}</td>
+                  <td className={`${td} text-right tabular-nums font-semibold`}>
+                    {fmtQ2(x.saldo)}
+                    {x.moneda !== 'Q' && x.saldo_original !== null && <p className="text-xs font-normal text-[var(--info)]">{fmtMon2(x.saldo_original, x.moneda)}</p>}
+                  </td>
                   <td className={`${td} text-center`}><Situacion dias={x.dias_vencido} /></td>
                   <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{fmtF(x.ultimo_pago)}</td>
                 </tr>

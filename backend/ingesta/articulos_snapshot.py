@@ -7,7 +7,10 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 LINEAS = ('Empaques para alimentos', 'Tapas y Valvulas', 'Inyectables')
-LINEAS_ERP = (*LINEAS, 'tpFood')
+# Nombre de la línea en el ERP → línea comercial del CPP. Profit renombró Inyectables a
+# 'Envase de vidrio' (~2026-11-09, mismos 31 artículos); tpFood siempre fue Empaques para alimentos.
+ALIAS_ERP = {'tpFood': 'Empaques para alimentos', 'Envase de vidrio': 'Inyectables'}
+LINEAS_ERP = (*LINEAS, *ALIAS_ERP)
 COMUNES = '''fact_num,saldo,co_sucu,Sucursal AS sucursal,fec_emis,
   CodigoArticulo AS codigo_articulo,Articulo AS articulo,Unidades AS unidades,
   UnidadesDev AS unidades_dev,TotalSinIva AS total_sin_iva,TotalSinIvaDev AS total_sin_iva_dev,
@@ -34,12 +37,11 @@ def extraer(mssql):
       [Tipo Cliente] AS tipo_cliente_desc,TipoCliente AS tipo_cliente
       FROM dbo.vstFacturas_Devoluciones
       WHERE fec_emis >= %s AND fec_emis < DATEADD(day,1,%s)
-      AND LTRIM(RTRIM(Linea)) IN (%s,%s,%s,%s)''', (desde_ventas, hasta, *LINEAS_ERP))
+      AND LTRIM(RTRIM(Linea)) IN (''' + ','.join(['%s'] * len(LINEAS_ERP)) + ')', (desde_ventas, hasta, *LINEAS_ERP))
     ventas = cur.fetchall()
     for r in ventas:
         r['linea_erp_original'] = str(r['linea'] or '').strip()
-        if r['linea_erp_original'] == 'tpFood':
-            r['linea'] = 'Empaques para alimentos'
+        r['linea'] = ALIAS_ERP.get(r['linea_erp_original'], r['linea_erp_original'])
     if any(not any(str(r['linea'] or '').strip() == l for r in ventas) for l in LINEAS):
         raise RuntimeError('Falta una línea comercial en la extracción: no publicar carga parcial.')
     codigos = sorted({str(r['codigo_articulo'] or '').strip() for r in ventas})

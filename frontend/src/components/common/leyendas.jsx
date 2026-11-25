@@ -805,7 +805,23 @@ export const LEYENDAS = {
         <li><strong>Todas:</strong> montos en Q; los documentos en dólares suman su equivalente en quetzales.</li>
         <li><strong>Quetzales / Dólares:</strong> solo los documentos en esa moneda, con montos en esa moneda (US$ tal como se facturaron).</li>
       </L>
-      <Nota>Las compras del cliente siempre van en Q (ventas sin IVA). Cuentas por Pagar aún no distingue moneda: la vista del ERP todavía no la trae.</Nota>
+      <Nota>Las compras del cliente siempre van en Q (ventas sin IVA).</Nota>
+    </>,
+  },
+  cxp_moneda: {
+    titulo: 'Moneda de las facturas de proveedor',
+    texto: <>
+      Cada factura de proveedor se registra en Profit en quetzales, dólares o euros. El ERP entrega el saldo en Q
+      (convertido con la tasa de cambio de cada factura) y también el saldo en la moneda original.
+      <L>
+        <li><strong>Todas:</strong> montos en Q; las facturas en dólares o euros suman su equivalente en quetzales.</li>
+        <li><strong>Quetzales / Dólares / Euros:</strong> solo las facturas en esa moneda, con montos en esa moneda (tal como se facturaron).</li>
+      </L>
+      <Nota>
+        El saldo en moneda original lleva la misma depuración que el saldo en Q (importaciones pagadas fuera del
+        documento): si la depuración bajó el saldo en Q a cero, también queda en cero en dólares. Con filtro de
+        moneda, las compras del proveedor son las de esa moneda, sin IVA y en esa moneda.
+      </Nota>
     </>,
   },
   cxp_total: {

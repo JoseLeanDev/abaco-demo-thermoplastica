@@ -941,6 +941,44 @@ router.get('/cxc/cliente/:id', async (req, res) => {
   }
 });
 
+// Moneda de las facturas de CxP (migraciones 030 y 033). vstAnalisisCxP publica la moneda desde
+// 2026-11-24: 'Q', 'US$' o 'EU'. saldo y valor siguen en Q (convertidos con la tasa del documento)
+// y saldo ya viene depurado (cxp_depuracion); saldo_moneda_original_neto es el saldo en la moneda
+// de la factura con la misma depuración. ?moneda=Q | US$ | EU filtra y devuelve montos en esa
+// moneda; sin filtro todo va en Q con el desglose por moneda.
+const MONEDAS_CXP = { Q: 'Q', GTQ: 'Q', 'US$': 'US$', USD: 'US$', EU: 'EU', EUR: 'EU', '€': 'EU' };
+// Factor Q → moneda de la factura. Proporción del propio documento; si falta, 1 / tasa.
+const FX_CXP = (a) => `COALESCE(${a}.saldo_moneda_original_neto / NULLIF(${a}.saldo, 0), 1 / NULLIF(${a}.tasa, 0), 1)`;
+const FX_CXP_VALOR = (a) => `COALESCE(${a}.valor_moneda_original / NULLIF(${a}.valor, 0), 1 / NULLIF(${a}.tasa, 0), 1)`;
+function parseMonedaCxp(req) {
+  const m = MONEDAS_CXP[String(req.query.moneda || '').trim().toUpperCase()] || null;
+  return {
+    codigo: m,
+    // Valores de una lista cerrada: seguros para interpolar
+    filtro: (a) => (m ? `AND ${a}.moneda = '${m}'` : ''),
+    monto: (expr, a) => (m ? `(${expr}) * ${FX_CXP(a)}` : `(${expr})`),
+  };
+}
+const SQL_POR_MONEDA_CXP = (a, where) => `
+  SELECT COALESCE(${a}.moneda, 'Q') AS moneda, COUNT(*) AS documentos,
+    COALESCE(SUM(${a}.saldo), 0) AS saldo_q,
+    COALESCE(SUM(${a}.saldo * ${FX_CXP(a)}), 0) AS saldo_original,
+    COALESCE(SUM(${a}.saldo) FILTER (WHERE ${a}.fecha_vencimiento < CURRENT_DATE), 0) AS vencido_q,
+    COALESCE(SUM(${a}.saldo * ${FX_CXP(a)}) FILTER (WHERE ${a}.fecha_vencimiento < CURRENT_DATE), 0) AS vencido_original,
+    COUNT(DISTINCT ${a}.proveedor_id) AS proveedores
+  FROM thermoplastica.fact_cxp_factura ${a}
+  WHERE ${a}.saldo > 0 AND ${where}
+  GROUP BY 1 ORDER BY 3 DESC`;
+const porMonedaCxp = (filas) => filas.map(r => ({
+  moneda: r.moneda,
+  documentos: parseInt(r.documentos) || 0,
+  proveedores: parseInt(r.proveedores) || 0,
+  saldo_q: r2(r.saldo_q),
+  saldo_original: r2(r.saldo_original),
+  vencido_q: r2(r.vencido_q),
+  vencido_original: r2(r.vencido_original),
+}));
+
 // GET /api/tesoreria/cxp
 // Fuente real: thermoplastica.fact_cxp_factura (vista vstAnalisisCxP del ERP).
 // Aging por fecha_vencimiento REAL (no estimada). Buckets alineados con CxC.
@@ -948,32 +986,38 @@ router.get('/cxp', async (req, res) => {
   try {
     // Saldos pendientes de documentos EMITIDOS dentro del período del filtro global.
     const P = parsePeriodo(req);
+    const MON = parseMonedaCxp(req);
     const dias = parseInt(req.query.proximos_dias) || 30;
+    const S = MON.monto('x.saldo', 'x');
 
     const resumen = await db.getAsync(`
       SELECT
-        COALESCE(SUM(saldo), 0)                                              AS total,
+        COALESCE(SUM(${S}), 0)                                               AS total,
+        COALESCE(SUM(x.saldo), 0)                                            AS total_q,
         COUNT(*)                                                             AS facturas,
         COUNT(DISTINCT proveedor_id)                                         AS proveedores,
         AVG(GREATEST((CURRENT_DATE - fecha_vencimiento)::int, 0))            AS promedio_dias,
         AVG(dias_credito_ficha) FILTER (WHERE dias_credito_ficha > 0)        AS dias_credito_promedio
-      FROM thermoplastica.fact_cxp_factura
+      FROM thermoplastica.fact_cxp_factura x
       WHERE saldo > 0
-        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H} ${MON.filtro('x')}
     `);
 
     // Aging real por fecha_vencimiento (buckets iguales a los de CxC)
     const aging = await db.getAsync(`
       SELECT
-        COALESCE(SUM(saldo) FILTER (WHERE fecha_vencimiento >= CURRENT_DATE), 0)                                 AS por_vencer,
-        COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 1  AND 30), 0)              AS v_1_30,
-        COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 31 AND 60), 0)              AS v_31_60,
-        COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 61 AND 90), 0)              AS v_61_90,
-        COALESCE(SUM(saldo) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) > 90), 0)                            AS v_90_mas
-      FROM thermoplastica.fact_cxp_factura
+        COALESCE(SUM(${S}) FILTER (WHERE fecha_vencimiento >= CURRENT_DATE), 0)                                 AS por_vencer,
+        COALESCE(SUM(${S}) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 1  AND 30), 0)              AS v_1_30,
+        COALESCE(SUM(${S}) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 31 AND 60), 0)              AS v_31_60,
+        COALESCE(SUM(${S}) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) BETWEEN 61 AND 90), 0)              AS v_61_90,
+        COALESCE(SUM(${S}) FILTER (WHERE (CURRENT_DATE - fecha_vencimiento) > 90), 0)                            AS v_90_mas
+      FROM thermoplastica.fact_cxp_factura x
       WHERE saldo > 0
-        AND fecha_emision BETWEEN ${P.D} AND ${P.H}
+        AND fecha_emision BETWEEN ${P.D} AND ${P.H} ${MON.filtro('x')}
     `);
+
+    // Desglose por moneda (siempre todas las monedas, mismo período)
+    const monedas = await db.allAsync(SQL_POR_MONEDA_CXP('m', `m.fecha_emision BETWEEN ${P.D} AND ${P.H}`));
 
     // Próximos pagos por fecha_vencimiento real en los próximos N días
     const proximos = await db.allAsync(`
@@ -985,13 +1029,15 @@ router.get('/cxp', async (req, res) => {
         f.factura_proveedor,
         f.fecha_emision,
         f.fecha_vencimiento,
-        f.saldo                        AS monto,
+        ${MON.monto('f.saldo', 'f')}   AS monto,
+        COALESCE(f.moneda, 'Q')        AS moneda,
+        f.saldo_moneda_original_neto   AS monto_original,
         f.dias_credito_ficha,
         (f.fecha_vencimiento - CURRENT_DATE)::int AS dias_restantes
       FROM thermoplastica.fact_cxp_factura f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE f.saldo > 0
-        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H} ${MON.filtro('f')}
         AND f.fecha_vencimiento <= CURRENT_DATE + (? || ' days')::interval
         AND f.fecha_vencimiento >= CURRENT_DATE
       ORDER BY f.fecha_vencimiento ASC
@@ -1005,13 +1051,15 @@ router.get('/cxp', async (req, res) => {
         p.nombre                              AS proveedor,
         p.codigo_proveedor                    AS codigo,
         COUNT(*)                              AS facturas,
-        COALESCE(SUM(f.saldo), 0)             AS monto,
+        COALESCE(SUM(${MON.monto('f.saldo', 'f')}), 0) AS monto,
+        -- Moneda de sus facturas abiertas (una sola, o 'mixta')
+        CASE WHEN COUNT(DISTINCT COALESCE(f.moneda, 'Q')) > 1 THEN 'mixta' ELSE MAX(COALESCE(f.moneda, 'Q')) END AS moneda,
         AVG(f.dias_credito_ficha) FILTER (WHERE f.dias_credito_ficha > 0) AS dias_credito,
         COUNT(*) FILTER (WHERE f.fecha_vencimiento < CURRENT_DATE) AS facturas_vencidas
       FROM thermoplastica.fact_cxp_factura f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE f.saldo > 0
-        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H}
+        AND f.fecha_emision BETWEEN ${P.D} AND ${P.H} ${MON.filtro('f')}
       GROUP BY p.proveedor_id, p.nombre, p.codigo_proveedor
       ORDER BY monto DESC
       LIMIT 10
@@ -1025,7 +1073,10 @@ router.get('/cxp', async (req, res) => {
       timestamp: new Date().toISOString(),
       data: {
         periodo: P.ventana(),
-        total_cxp: total,
+        moneda: MON.codigo,                       // moneda de los montos: 'US$', 'EU' o 'Q' (null = todas, en Q)
+        total_cxp: r2(total),
+        total_q: r2(resumen.total_q),
+        por_moneda: porMonedaCxp(monedas),
         facturas: parseInt(resumen.facturas) || 0,
         proveedores: parseInt(resumen.proveedores) || 0,
         promedio_dias_pago: Math.round(parseFloat(resumen.promedio_dias) || 0),
@@ -1045,7 +1096,9 @@ router.get('/cxp', async (req, res) => {
           factura_proveedor: p.factura_proveedor,
           fecha_emision: p.fecha_emision,
           fecha_vencimiento: p.fecha_vencimiento,
-          monto: parseFloat(p.monto) || 0,
+          monto: r2(p.monto),
+          moneda: p.moneda,
+          monto_original: num(p.monto_original),
           dias_credito_ficha: parseInt(p.dias_credito_ficha) || 0,
           dias_restantes: parseInt(p.dias_restantes) || 0,
         })),
@@ -1054,7 +1107,8 @@ router.get('/cxp', async (req, res) => {
           proveedor: p.proveedor,
           codigo: p.codigo,
           facturas: parseInt(p.facturas) || 0,
-          monto: parseFloat(p.monto) || 0,
+          monto: r2(p.monto),
+          moneda: p.moneda,
           dias_credito: Math.round(parseFloat(p.dias_credito) || 0),
           facturas_vencidas: parseInt(p.facturas_vencidas) || 0,
         })),
@@ -1079,8 +1133,10 @@ router.get('/cxp/detalle', async (req, res) => {
     const busqueda = (req.query.busqueda || '').trim();
     const bucket   = req.query.bucket || 'todos';
     const codigoProv = (req.query.proveedor || '').trim();
+    const MON = parseMonedaCxp(req);
 
     const where = ['f.saldo > 0', `f.fecha_emision BETWEEN ${P.D} AND ${P.H}`];
+    if (MON.codigo) where.push(`f.moneda = '${MON.codigo}'`);
     const params = [];
 
     if (busqueda) {
@@ -1118,6 +1174,10 @@ router.get('/cxp/detalle', async (req, res) => {
         GREATEST((CURRENT_DATE - f.fecha_vencimiento)::int, 0) AS dias_atraso,
         f.valor,
         f.saldo,
+        COALESCE(f.moneda, 'Q')                   AS moneda,
+        f.tasa,
+        f.valor_moneda_original,
+        f.saldo_moneda_original_neto              AS saldo_original,
         f.forma_pago,
         f.estado,
         f.fecha_ultimo_pago
@@ -1134,7 +1194,8 @@ router.get('/cxp/detalle', async (req, res) => {
     `, params);
 
     const totalRow = await db.getAsync(`
-      SELECT COUNT(*) AS total, COALESCE(SUM(f.saldo), 0) AS suma_saldo
+      SELECT COUNT(*) AS total, COALESCE(SUM(f.saldo), 0) AS suma_saldo,
+        SUM(f.saldo * ${FX_CXP('f')}) AS suma_saldo_original
       FROM thermoplastica.fact_cxp_factura f
       JOIN thermoplastica.dim_proveedor p ON p.proveedor_id = f.proveedor_id
       WHERE ${whereSql}
@@ -1145,8 +1206,11 @@ router.get('/cxp/detalle', async (req, res) => {
       timestamp: new Date().toISOString(),
       data: {
         periodo: P.ventana(),
+        moneda: MON.codigo,
         total_filas: parseInt(totalRow.total) || 0,
         suma_saldo: parseFloat(totalRow.suma_saldo) || 0,
+        // Solo tiene sentido con filtro de moneda (si no, mezcla Q, US$ y EU)
+        suma_saldo_original: MON.codigo ? r2(totalRow.suma_saldo_original) : null,
         filas: rows.map(r => ({
           id: parseInt(r.id),
           proveedor_id: parseInt(r.proveedor_id),
@@ -1164,6 +1228,10 @@ router.get('/cxp/detalle', async (req, res) => {
           dias_atraso: parseInt(r.dias_atraso) || 0,
           valor: parseFloat(r.valor) || 0,
           saldo: parseFloat(r.saldo) || 0,
+          moneda: r.moneda,
+          tasa: num(r.tasa),
+          valor_original: num(r.valor_moneda_original),
+          saldo_original: num(r.saldo_original),
           forma_pago: r.forma_pago,
           estado: r.estado,
           fecha_ultimo_pago: r.fecha_ultimo_pago,
@@ -1183,6 +1251,7 @@ router.get('/cxp/detalle', async (req, res) => {
 router.get('/cxp/proveedores', async (req, res) => {
   try {
     const P = parsePeriodo(req);
+    const MON = parseMonedaCxp(req);
     const busqueda = (req.query.busqueda || '').trim();
     const params = [];
     let filtroBusqueda = '';
@@ -1196,12 +1265,15 @@ router.get('/cxp/proveedores', async (req, res) => {
 
     const rows = await db.allAsync(`
       WITH s AS (
-        SELECT proveedor_id, SUM(saldo) AS saldo,
-          COALESCE(SUM(saldo) FILTER (WHERE fecha_vencimiento < CURRENT_DATE), 0) AS vencido,
+        SELECT proveedor_id, SUM(${MON.monto('x.saldo', 'x')}) AS saldo,
+          COALESCE(SUM(${MON.monto('x.saldo', 'x')}) FILTER (WHERE fecha_vencimiento < CURRENT_DATE), 0) AS vencido,
           COUNT(*) AS documentos, COUNT(*) FILTER (WHERE fecha_vencimiento < CURRENT_DATE) AS documentos_vencidos,
-          MAX(CURRENT_DATE - fecha_vencimiento) FILTER (WHERE fecha_vencimiento < CURRENT_DATE) AS atraso_max
-        FROM thermoplastica.fact_cxp_factura
-        WHERE saldo > 0
+          MAX(CURRENT_DATE - fecha_vencimiento) FILTER (WHERE fecha_vencimiento < CURRENT_DATE) AS atraso_max,
+          -- Saldo en moneda extranjera (en su moneda) para marcarlo en la lista sin filtro
+          SUM(saldo_moneda_original_neto) FILTER (WHERE moneda = 'US$') AS saldo_usd,
+          SUM(saldo_moneda_original_neto) FILTER (WHERE moneda = 'EU')  AS saldo_eu
+        FROM thermoplastica.fact_cxp_factura x
+        WHERE saldo > 0 ${MON.filtro('x')}
         GROUP BY proveedor_id
       ), pago AS (
         SELECT proveedor_id, COUNT(*) AS pagadas,
@@ -1217,23 +1289,28 @@ router.get('/cxp/proveedores', async (req, res) => {
         WHERE dias_credito_ficha IS NOT NULL
         ORDER BY proveedor_id, fecha_emision DESC
       ), comp AS (
+        -- Con filtro de moneda: solo compras en esa moneda y en esa moneda
         SELECT proveedor_id,
-          SUM(total_sin_iva) FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}) AS compras,
-          SUM(total_sin_iva) FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}) AS compras_prev,
+          SUM(${MON.codigo ? 'total_sin_iva_moneda_original' : 'total_sin_iva'}) FILTER (WHERE fecha_emision BETWEEN ${P.D} AND ${P.H}) AS compras,
+          SUM(${MON.codigo ? 'total_sin_iva_moneda_original' : 'total_sin_iva'}) FILTER (WHERE fecha_emision BETWEEN ${P.prevD} AND ${P.prevH}) AS compras_prev,
           ${fecha('MAX(fecha_emision)')} AS ultima_compra
-        FROM thermoplastica.fact_compras_linea
+        FROM thermoplastica.fact_compras_linea c
+        WHERE TRUE ${MON.filtro('c')}
         GROUP BY proveedor_id
       )
       SELECT p.proveedor_id, p.codigo_proveedor, ${NOMBRE_LIMPIO('p.nombre')} AS proveedor, p.rif,
         s.saldo, s.vencido, s.documentos, s.documentos_vencidos, s.atraso_max,
         pago.pagadas, pago.dias_pago, pago.atraso_pago, pago.pct_a_tiempo,
-        ficha.dias_credito_ficha, comp.compras, comp.compras_prev, comp.ultima_compra
+        ficha.dias_credito_ficha, comp.compras, comp.compras_prev, comp.ultima_compra,
+        s.saldo_usd, s.saldo_eu
       FROM thermoplastica.dim_proveedor p
       LEFT JOIN s     ON s.proveedor_id     = p.proveedor_id
       LEFT JOIN pago  ON pago.proveedor_id  = p.proveedor_id
       LEFT JOIN ficha ON ficha.proveedor_id = p.proveedor_id
       LEFT JOIN comp  ON comp.proveedor_id  = p.proveedor_id
       WHERE TRUE ${filtroBusqueda}
+        ${MON.codigo ? `AND EXISTS (SELECT 1 FROM thermoplastica.fact_cxp_factura z
+             WHERE z.proveedor_id = p.proveedor_id AND z.moneda = '${MON.codigo}')` : ''}
       ORDER BY COALESCE(s.saldo, 0) DESC, COALESCE(comp.compras, 0) DESC`, params);
 
     const total = rows.reduce((t, r) => t + (Number(r.saldo) || 0), 0);
@@ -1242,6 +1319,7 @@ router.get('/cxp/proveedores', async (req, res) => {
       timestamp: new Date().toISOString(),
       data: {
         periodo: P.ventana(),
+        moneda: MON.codigo,
         total_proveedores: rows.length,
         suma_saldo: total,
         filas: rows.map(r => {
@@ -1267,6 +1345,8 @@ router.get('/cxp/proveedores', async (req, res) => {
             compras_prev: prev,
             variacion_compras_pct: prev > 0 ? redondo((compras - prev) / prev * 100) : null,
             ultima_compra: r.ultima_compra,
+            saldo_usd: num(r.saldo_usd) || 0,
+            saldo_eu: num(r.saldo_eu) || 0,
           };
         }),
       },
@@ -1355,7 +1435,9 @@ router.get('/cxp/proveedor/:id', async (req, res) => {
           ${fecha('f.fecha_emision')} AS fecha_emision, ${fecha('f.fecha_vencimiento')} AS fecha_vencimiento,
           (CURRENT_DATE - f.fecha_vencimiento)::int AS dias_vencido,
           f.valor, f.saldo, f.saldo_erp, f.saldo_depurado, ${fecha('f.fecha_ultimo_pago')} AS ultimo_pago,
-          s.nombre AS sucursal
+          s.nombre AS sucursal,
+          COALESCE(f.moneda, 'Q') AS moneda, f.tasa, f.valor_moneda_original,
+          f.saldo_moneda_original AS saldo_erp_original, f.saldo_moneda_original_neto AS saldo_original
         FROM thermoplastica.fact_cxp_factura f
         LEFT JOIN thermoplastica.dim_sucursal s ON s.sucursal_id = f.sucursal_id
         WHERE f.proveedor_id = $1 AND f.saldo > 0
@@ -1484,6 +1566,16 @@ router.get('/cxp/proveedor/:id', async (req, res) => {
       },
       mas_antiguo_dias: vencidos.reduce((m, d) => Math.max(m, d.dias_vencido), 0),
       proximo_vencimiento: docs.find(d => d.dias_vencido <= 0)?.fecha_vencimiento || null,
+      // Desglose por moneda de la factura: saldo en Q (equivalente) y en la moneda original
+      por_moneda: Object.values(docs.reduce((acc, d) => {
+        const m = d.moneda || 'Q';
+        const a = acc[m] || (acc[m] = { moneda: m, documentos: 0, saldo_q: 0, saldo_original: 0, vencido_q: 0, vencido_original: 0 });
+        const orig = d.saldo_original !== null ? Number(d.saldo_original) : sal(d);
+        a.documentos += 1; a.saldo_q += sal(d); a.saldo_original += orig;
+        if (d.dias_vencido > 0) { a.vencido_q += sal(d); a.vencido_original += orig; }
+        return acc;
+      }, {})).map(a => ({ ...a, saldo_q: r2(a.saldo_q), saldo_original: r2(a.saldo_original), vencido_q: r2(a.vencido_q), vencido_original: r2(a.vencido_original) }))
+        .sort((a, b) => b.saldo_q - a.saldo_q),
     };
 
     const pAct = comportamiento(pagAct);
@@ -1570,6 +1662,13 @@ router.get('/cxp/proveedor/:id', async (req, res) => {
           saldo: num(d.saldo) || 0,
           ultimo_pago: d.ultimo_pago,
           sucursal: d.sucursal,
+          // Moneda de la factura y montos en esa moneda (en Q coinciden con los de arriba)
+          moneda: d.moneda,
+          tasa: num(d.tasa),
+          valor_original: num(d.valor_moneda_original),
+          abonado_original: d.valor_moneda_original !== null && d.saldo_erp_original !== null
+            ? r2(Math.max(0, Number(d.valor_moneda_original) - Number(d.saldo_erp_original))) : null,
+          saldo_original: num(d.saldo_original),
         })),
         pagos: { actual: pAct, anterior: pPrev },
         pagadas: histPagadas.map(r => ({

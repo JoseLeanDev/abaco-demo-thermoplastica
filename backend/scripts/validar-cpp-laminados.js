@@ -23,7 +23,9 @@ const close=(a,b)=>assert.ok(Math.abs(Number(a)-Number(b))<0.000001,`${a} != ${b
       SELECT 1 FROM thermoplastica.cpp_laminados_clave k WHERE
       (k.fact_num,k.tipo_doc,k.sucursal_id,k.articulo_id)=(f.fact_num,f.tipo_doc,f.sucursal_id,f.articulo_id))
       AND NOT EXISTS(SELECT 1 FROM thermoplastica.cpp_articulos_clave k WHERE
-      (k.fact_num,k.tipo_doc,k.sucursal_id,k.articulo_id)=(f.fact_num,f.tipo_doc,f.sucursal_id,f.articulo_id)))
+      (k.fact_num,k.tipo_doc,k.sucursal_id,k.articulo_id)=(f.fact_num,f.tipo_doc,f.sucursal_id,f.articulo_id))
+      -- Liners se costea a propósito con el costo promedio actual (migración 032): no coincide con la factura
+      AND NOT EXISTS(SELECT 1 FROM thermoplastica.dim_articulo d WHERE d.articulo_id=f.articulo_id AND btrim(d.marca)='Liners'))
     EXCEPT (SELECT to_jsonb(v)-'es_cpp'-'ventas_base_margen' FROM thermoplastica.v_ventas_costeadas v WHERE NOT es_cpp)
   ) x`)).rows[0];
   assert.equal(Number(otros.n),0);
