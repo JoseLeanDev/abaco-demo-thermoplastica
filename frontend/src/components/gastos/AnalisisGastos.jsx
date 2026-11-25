@@ -28,6 +28,7 @@ import PageInsights from '../agents/PageInsights'
 import {
   Cargando, Delta, Kpi, Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, fmtMes, fmtQ, ordenar, td, th, tooltipStyle,
 } from '../compras/comun'
+import { dec2 } from '../analisis/formato'
 
 /**
  * Análisis de gastos operativos: lo usan la página de Gastos Operativos (todos los
@@ -246,7 +247,7 @@ function KPIs({ d, general }) {
         <Kpi
           titulo="Del gasto operativo"
           leyenda="pct_operativo_admin"
-          valor={d.pct_del_operativo === null ? '—' : `${d.pct_del_operativo}%`}
+          valor={d.pct_del_operativo === null ? '—' : `${dec2(d.pct_del_operativo)}%`}
           sub={`de ${fmtM(d.gasto_operativo_total)} de gasto operativo total`}
         />
       )}
@@ -271,21 +272,21 @@ function Hallazgos({ d, rubro, proveedor, general, onConcepto }) {
   const items = []
   if (general && d.centros[0] && d.gasto > 0) {
     const c = d.centros[0]
-    items.push(<><strong>{c.centro}</strong> concentra el {c.participacion}% del gasto operativo ({fmtM(c.mensual)}/mes).</>)
+    items.push(<><strong>{c.centro}</strong> concentra el {dec2(c.participacion)}% del gasto operativo ({fmtM(c.mensual)}/mes).</>)
   }
   if (general && d.pct_ventas !== null && d.pct_ventas_prev !== null) {
     const sube = d.pct_ventas > d.pct_ventas_prev
     items.push(<>
-      El gasto operativo equivale al <strong>{d.pct_ventas}% de las ventas</strong>
+      El gasto operativo equivale al <strong>{dec2(d.pct_ventas)}% de las ventas</strong>
       {Math.abs(d.pct_ventas - d.pct_ventas_prev) >= 0.3
-        ? <> ({sube ? 'sube' : 'baja'} desde {d.pct_ventas_prev}% el año anterior: el gasto creció {d.variacion_pct > 0 ? '+' : ''}{d.variacion_pct}% y las ventas {varTxt(d.ventas, d.ventas_prev)}).</>
+        ? <> ({sube ? 'sube' : 'baja'} desde {dec2(d.pct_ventas_prev)}% el año anterior: el gasto creció {d.variacion_pct > 0 ? '+' : ''}{dec2(d.variacion_pct)}% y las ventas {varTxt(d.ventas, d.ventas_prev)}).</>
         : <> (igual que el año anterior).</>}
     </>)
   }
   const top = d.rubros[0]
   if (top && !rubro && d.gasto > 0) {
     const cs = d.conceptos.filter(c => c.rubro === top.rubro).slice(0, 2).map(c => c.concepto)
-    items.push(<><strong>{top.label}</strong> es el rubro más grande: {top.participacion}% del gasto ({fmtM(top.mensual)}/mes), sobre todo {cs.join(' y ')}.</>)
+    items.push(<><strong>{top.label}</strong> es el rubro más grande: {dec2(top.participacion)}% del gasto ({fmtM(top.mensual)}/mes), sobre todo {cs.join(' y ')}.</>)
   }
   const suben = d.conceptos
     .filter(c => c.variacion >= 25000 && c.variacion_pct !== null && c.variacion_pct >= 20)
@@ -298,7 +299,7 @@ function Hallazgos({ d, rubro, proveedor, general, onConcepto }) {
         <span key={c.codigo}>
           {i > 0 && (i === suben.length - 1 ? ' y ' : ', ')}
           <button onClick={() => onConcepto(c.codigo)} className="font-semibold underline decoration-dotted hover:text-[#001639]">{c.concepto}</button>
-          {' '}(+{fmtM(c.variacion)}, {c.variacion_pct > 0 ? '+' : ''}{c.variacion_pct}%)
+          {' '}(+{fmtM(c.variacion)}, {c.variacion_pct > 0 ? '+' : ''}{dec2(c.variacion_pct)}%)
         </span>
       ))}.
     </>)
@@ -330,7 +331,7 @@ function Hallazgos({ d, rubro, proveedor, general, onConcepto }) {
 const varTxt = (v, vp) => {
   if (!vp) return 'sin comparación'
   const p = Math.round((v - vp) / vp * 1000) / 10
-  return `${p > 0 ? '+' : ''}${p}%`
+  return `${p > 0 ? '+' : ''}${dec2(p)}%`
 }
 
 // Centros de costo: barra apilada por rubro + conceptos principales
@@ -350,7 +351,7 @@ function Centros({ d, onCentro }) {
                   <Link to={PAGINAS_CENTRO[c.centro]} className="hidden sm:inline text-xs text-[var(--accent-blue)] hover:underline mr-1">ver detalle →</Link>
                 )}
                 <span className="font-semibold tabular-nums">{fmtM(c.gasto)}</span>
-                <span className="text-xs text-[var(--text-muted)] tabular-nums w-11 text-right">{c.participacion}%</span>
+                <span className="text-xs text-[var(--text-muted)] tabular-nums w-11 text-right">{dec2(c.participacion)}%</span>
                 {c.gasto_prev === 0
                   ? <span className="text-xs text-[var(--text-muted)] w-14 text-right">nuevo</span>
                   : <Delta v={c.variacion_pct} invertir className="text-xs w-14 text-right" />}
@@ -402,7 +403,7 @@ function Rubros({ d, rubro, setRubro }) {
                 </span>
                 <span className="flex items-baseline gap-2 whitespace-nowrap">
                   <span className="font-semibold tabular-nums">{fmtM(r.gasto)}</span>
-                  <span className="text-xs text-[var(--text-muted)] tabular-nums w-11 text-right">{r.participacion}%</span>
+                  <span className="text-xs text-[var(--text-muted)] tabular-nums w-11 text-right">{dec2(r.participacion)}%</span>
                   <Delta v={r.variacion_pct} invertir className="text-xs w-14 text-right" />
                 </span>
               </div>
@@ -430,7 +431,7 @@ function Dona({ rubros }) {
           <Pie data={data} dataKey="gasto" nameKey="label" innerRadius="55%" outerRadius="85%" paddingAngle={1} stroke="none">
             {data.map(r => <Cell key={r.rubro} fill={COLORES[r.rubro]} />)}
           </Pie>
-          <Tooltip contentStyle={tooltipStyle} formatter={(v, n, p) => [`${fmtQ(v)} (${p.payload.participacion}%)`, n]} />
+          <Tooltip contentStyle={tooltipStyle} formatter={(v, n, p) => [`${fmtQ(v)} (${dec2(p.payload.participacion)}%)`, n]} />
         </PieChart>
       </ResponsiveContainer>
       <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center text-xs text-[var(--text-secondary)]">
@@ -502,7 +503,7 @@ function GastoVsVentas({ d }) {
           <Tooltip
             contentStyle={tooltipStyle}
             labelFormatter={fmtMes}
-            formatter={(v, n) => [n.includes('%') ? (v === null ? '—' : `${v}%`) : fmtQ(v), n]}
+            formatter={(v, n) => [n.includes('%') ? (v === null ? '—' : `${dec2(v)}%`) : fmtQ(v), n]}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar yAxisId="q" dataKey="ventas" name="Ventas" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
@@ -575,7 +576,7 @@ function Conceptos({ d, mostrarCentros, onConcepto }) {
                   <p className="text-xs text-[var(--text-muted)] pl-3.5">Cuenta {c.cuenta} · {c.rubro_label}</p>
                 </td>
                 <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ(c.gasto)}</td>
-                <td className={`${td} text-right tabular-nums`}>{c.participacion}%</td>
+                <td className={`${td} text-right tabular-nums`}>{dec2(c.participacion)}%</td>
                 <td className={`${td} text-right`}>
                   {c.nuevo ? <span className="text-xs text-[var(--text-muted)]">nuevo</span> : <Delta v={c.variacion_pct} invertir />}
                 </td>
@@ -585,7 +586,7 @@ function Conceptos({ d, mostrarCentros, onConcepto }) {
                 <td className={`${td} max-w-[240px]`}>
                   <p className="truncate" title={c.proveedor_principal || ''}>{c.proveedor_principal || '—'}</p>
                   {c.proveedores > 1 && (
-                    <p className="text-xs text-[var(--text-muted)]">{c.pct_proveedor_principal}% · {c.proveedores} proveedores</p>
+                    <p className="text-xs text-[var(--text-muted)]">{dec2(c.pct_proveedor_principal)}% · {c.proveedores} proveedores</p>
                   )}
                 </td>
               </tr>
@@ -652,7 +653,7 @@ function Recurrentes({ d, onConcepto }) {
                     <td className={td}>
                       {r.estable
                         ? <span className="badge-neutral">Fijo</span>
-                        : <span className="badge-warning" title="Variación típica entre meses">Variable ±{r.variacion_mensual_pct}%</span>}
+                        : <span className="badge-warning" title="Variación típica entre meses">Variable ±{dec2(r.variacion_mensual_pct)}%</span>}
                     </td>
                   </tr>
                 ))}
@@ -697,7 +698,7 @@ function Proveedores({ items, onProveedor }) {
                   <p className="text-xs text-[var(--text-muted)]">{p.codigo}{p.generico ? ' · sin proveedor identificado (caja chica)' : ''}</p>
                 </td>
                 <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ(p.gasto)}</td>
-                <td className={`${td} text-right tabular-nums`}>{p.participacion}%</td>
+                <td className={`${td} text-right tabular-nums`}>{dec2(p.participacion)}%</td>
                 <td className={`${td} text-right`}>{p.gasto_prev === 0 ? <span className="text-xs text-[var(--text-muted)]">nuevo</span> : <Delta v={p.variacion_pct} invertir />}</td>
                 <td className={`${td} text-right tabular-nums`}>{fmtInt(p.facturas)}</td>
                 <td className={`${td} max-w-[320px]`}><p className="truncate text-[var(--text-secondary)]" title={p.conceptos}>{p.conceptos}</p></td>
@@ -880,7 +881,7 @@ function PanelConcepto({ cuenta, filtros, mostrarCentros, onClose }) {
                     <div key={c.centro} className="text-sm">
                       <div className="flex justify-between gap-3">
                         <span className="truncate">{c.centro}</span>
-                        <span className="whitespace-nowrap tabular-nums"><strong>{fmtQ(c.gasto)}</strong> <span className="text-xs text-[var(--text-muted)]">{c.participacion}%</span></span>
+                        <span className="whitespace-nowrap tabular-nums"><strong>{fmtQ(c.gasto)}</strong> <span className="text-xs text-[var(--text-muted)]">{dec2(c.participacion)}%</span></span>
                       </div>
                       <div className="h-1.5 mt-1 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
                         <div className="h-full bg-[#3b82f6] rounded-full" style={{ width: `${c.participacion}%` }} />
@@ -899,7 +900,7 @@ function PanelConcepto({ cuenta, filtros, mostrarCentros, onClose }) {
                     <div key={p.codigo} className="text-sm">
                       <div className="flex justify-between gap-3">
                         <span className="truncate">{p.nombre}</span>
-                        <span className="whitespace-nowrap tabular-nums"><strong>{fmtQ(p.gasto)}</strong> <span className="text-xs text-[var(--text-muted)]">{p.participacion}%</span></span>
+                        <span className="whitespace-nowrap tabular-nums"><strong>{fmtQ(p.gasto)}</strong> <span className="text-xs text-[var(--text-muted)]">{dec2(p.participacion)}%</span></span>
                       </div>
                       <p className="text-xs text-[var(--text-muted)]">{p.facturas} facturas en {p.meses} {p.meses === 1 ? 'mes' : 'meses'} · última {fmtFecha(p.ultima)}</p>
                       <div className="h-1.5 mt-1 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">

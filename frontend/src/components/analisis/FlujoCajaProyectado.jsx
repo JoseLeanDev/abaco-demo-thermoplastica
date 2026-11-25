@@ -6,6 +6,7 @@ import {
 import { fmtM, fmtQ, fmtFechaCorta, tooltipStyle } from './formato'
 import { Dato, CardCargando } from './ProyeccionVentas'
 import { Leyenda } from '../common/leyendas'
+import { dec2 } from './formato'
 
 const CERTEZA = {
   alta:  'badge-success',
@@ -108,7 +109,7 @@ export default function FlujoCajaProyectado({ data, isLoading, acciones }) {
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtQ(p.flujo_acumulado)}</td>
                     <td className="px-3 py-2 text-right">
-                      <span className={`${CERTEZA[p.certeza]} text-[10px]`} title={`${p.pct_documentado}% del movimiento ya existe como factura`}>
+                      <span className={`${CERTEZA[p.certeza]} text-[10px]`} title={`${dec2(p.pct_documentado)}% del movimiento ya existe como factura`}>
                         {p.certeza}
                       </span>
                     </td>

@@ -4,6 +4,7 @@ import { ArrowDownTrayIcon, ArrowTrendingDownIcon, ExclamationTriangleIcon } fro
 import { Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, ordenar, td } from '../compras/comun'
 import { ESTADO, agrupar, excesoDe, fmtDias, fmtNum } from './datos'
 import { BarraPct, colorDias } from './TabResumen'
+import { dec2 } from '../analisis/formato'
 
 // Exceso (capital a liberar) y quiebres (ventas en riesgo).
 export default function TabAccion({ filas, tot, dias, objetivo }) {
@@ -68,7 +69,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
                 <span className="w-40 truncate text-[var(--text-secondary)]" title={g.nombre}>{g.nombre}</span>
                 <div className="flex-1"><BarraPct pct={g.exceso / maxCat * 100} color="#f59e0b" /></div>
                 <span className="w-16 text-right tabular-nums font-semibold">{fmtM(g.exceso)}</span>
-                <span className="w-12 text-right tabular-nums text-[var(--text-muted)]">{g.pct_exceso}%</span>
+                <span className="w-12 text-right tabular-nums text-[var(--text-muted)]">{dec2(g.pct_exceso)}%</span>
               </div>
             ))}
           </div>

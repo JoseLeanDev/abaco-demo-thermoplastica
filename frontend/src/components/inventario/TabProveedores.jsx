@@ -3,6 +3,7 @@ import { ArrowDownTrayIcon, BuildingOfficeIcon } from '@heroicons/react/24/outli
 import { Seccion, Th, exportarExcel, fmtInt, fmtM, ordenar, td } from '../compras/comun'
 import { agrupar, fmtDias } from './datos'
 import { BarraPct, colorDias } from './TabResumen'
+import { dec2 } from '../analisis/formato'
 
 // Inventario por proveedor principal: con quién está el capital y qué tan rápido rota.
 export default function TabProveedores({ filas, tot, dias, objetivo, setProveedor, setTab }) {
@@ -38,7 +39,7 @@ export default function TabProveedores({ filas, tot, dias, objetivo, setProveedo
       icon={BuildingOfficeIcon}
       titulo="Inventario por proveedor"
       leyenda="inv_proveedor"
-      subtitulo={`${conc.n80} proveedores concentran el 80% del stock · top 5 = ${conc.top5}%${sinProv ? ` · ${fmtM(sinProv.valor)} en artículos sin compras registradas` : ''}. Clic para filtrar la página.`}
+      subtitulo={`${conc.n80} proveedores concentran el 80% del stock · top 5 = ${dec2(conc.top5)}%${sinProv ? ` · ${fmtM(sinProv.valor)} en artículos sin compras registradas` : ''}. Clic para filtrar la página.`}
       sinPadding
       extra={<button onClick={exportar} className="btn-secondary py-1.5 text-xs flex items-center gap-1"><ArrowDownTrayIcon className="w-4 h-4" /> Excel</button>}
     >
@@ -69,11 +70,11 @@ export default function TabProveedores({ filas, tot, dias, objetivo, setProveedo
                 </td>
                 <td className={`${td} text-right tabular-nums`}>
                   <p className="font-semibold">{fmtM(g.valor)}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{g.pct}%</p>
+                  <p className="text-xs text-[var(--text-muted)]">{dec2(g.pct)}%</p>
                 </td>
                 <td className={`${td} text-right tabular-nums`}>{fmtInt(g.skus)}</td>
                 <td className={`${td} text-right tabular-nums font-medium ${colorDias(g.dias_inventario)}`}>{fmtDias(g.dias_inventario)}</td>
-                <td className={`${td} text-right tabular-nums ${g.pct_quieto >= 50 ? 'text-[var(--warning)] font-semibold' : ''}`}>{g.valor > 0 ? `${g.pct_quieto}%` : '—'}</td>
+                <td className={`${td} text-right tabular-nums ${g.pct_quieto >= 50 ? 'text-[var(--warning)] font-semibold' : ''}`}>{g.valor > 0 ? `${dec2(g.pct_quieto)}%` : '—'}</td>
                 <td className={`${td} text-right tabular-nums`}>{g.exceso > 0 ? fmtM(g.exceso) : '—'}</td>
                 <td className={`${td} text-right tabular-nums ${g.quiebres > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>{g.quiebres || '—'}</td>
               </tr>

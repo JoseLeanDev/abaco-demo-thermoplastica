@@ -6,6 +6,7 @@ import { endpoints } from '../../services/cfoApi'
 import { cambiarNivel } from '../ventas/FiltroProducto'
 import { nivelSiguiente } from './TabResumen'
 import { Cargando, Delta, Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, fmtPrecio, fmtQ, ordenar, td, tooltipStyle } from './comun'
+import { dec2 } from '../analisis/formato'
 
 export default function TabCategorias({ filtros, clave, producto, setProducto }) {
   const nivel = nivelSiguiente(producto)
@@ -107,7 +108,7 @@ export default function TabCategorias({ filtros, clave, producto, setProducto })
                     {esArticulo && <p className="text-xs text-[var(--text-muted)]">{i.clave}{i.extra ? ` · ${i.extra}` : ''}</p>}
                   </td>
                   <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ(i.gasto)}</td>
-                  <td className={`${td} text-right tabular-nums`}>{i.participacion}%</td>
+                  <td className={`${td} text-right tabular-nums`}>{dec2(i.participacion)}%</td>
                   <td className={`${td} text-right`}>{i.nuevo ? <span className="text-xs text-[var(--text-muted)]">nuevo</span> : <Delta v={i.variacion_pct} />}</td>
                   {esArticulo ? (
                     <>

@@ -78,7 +78,7 @@ function construirReporte(datos, P, { corte, query = {} }) {
         costo: x.costo_mp, costo_unitario: x.costo_unitario,
         margen: x.margen_mp, margen_pct: x.margen_mp_pct, margen_pct_prev: y.margen_mp_pct,
         pct_sin_costo: x.pct_sin_costo, ventas_con_cpp: x.ventas_con_cpp, ventas_sin_cpp: x.ventas_sin_cpp,
-        participacion: a.ventas_totales > 0 ? x.ventas_totales / a.ventas_totales * 100 : 0,
+        participacion: a.ventas_totales > 0 ? Math.round(x.ventas_totales / a.ventas_totales * 1000) / 10 : 0,
         ultima_venta: rr.length ? rr.map((r) => r.fec_emis.slice(0, 10)).sort().at(-1) : null,
         nuevo: x.ventas_totales > 0 && y.ventas_totales === 0, perdido: x.ventas_totales === 0 && y.ventas_totales > 0,
       };

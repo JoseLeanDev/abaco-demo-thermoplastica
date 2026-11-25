@@ -11,6 +11,7 @@ import { endpoints } from '../../services/cfoApi'
 import PageInsights from '../agents/PageInsights'
 import { NIVELES_PRODUCTO, cambiarNivel } from '../ventas/FiltroProducto'
 import { Cargando, Delta, Seccion, TIPO, TIPOS, fmtM, fmtMes, fmtQ, tooltipStyle } from './comun'
+import { dec2 } from '../analisis/formato'
 
 // Siguiente nivel de la jerarquía de producto según el filtro activo
 export function nivelSiguiente(producto) {
@@ -92,7 +93,7 @@ export default function TabResumen({ filtros, clave, r, cargando, setTab, tipo, 
                     </span>
                     <span className="flex items-baseline gap-2 whitespace-nowrap">
                       <span className="font-semibold tabular-nums">{fmtM(t.gasto)}</span>
-                      <span className="text-xs text-[var(--text-muted)] tabular-nums w-12 text-right">{t.participacion}%</span>
+                      <span className="text-xs text-[var(--text-muted)] tabular-nums w-12 text-right">{dec2(t.participacion)}%</span>
                       <Delta v={t.variacion_pct} className="text-xs w-14 text-right" />
                     </span>
                   </div>
@@ -169,7 +170,7 @@ function ListaBarras({ items, onClick, vacio }) {
               </span>
               <span className="flex items-baseline gap-2 whitespace-nowrap">
                 <span className="font-semibold tabular-nums">{fmtM(i.gasto)}</span>
-                <span className="text-xs text-[var(--text-muted)] tabular-nums w-11 text-right">{i.participacion}%</span>
+                <span className="text-xs text-[var(--text-muted)] tabular-nums w-11 text-right">{dec2(i.participacion)}%</span>
                 <Delta v={i.variacion_pct} className="text-xs w-14 text-right" />
               </span>
             </div>

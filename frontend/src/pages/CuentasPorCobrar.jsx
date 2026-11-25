@@ -20,6 +20,7 @@ import {
   ChevronRightIcon
 } from '@heroicons/react/24/outline'
 import { exportarExcel, traerTodo } from '../services/excel'
+import { dec2 } from '../components/analisis/formato'
 
 const fmtQ = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
 const fmtM = (n) => {
@@ -587,7 +588,7 @@ function TablaClientes({ filas, cargando, actualizando, onClick, moneda }) {
                   <td className="px-4 py-3 text-right">
                     {r.saldo > 0 ? <>
                       <p className="font-bold tabular-nums">{f(r.saldo)}</p>
-                      <p className="text-xs text-[var(--text-muted)] tabular-nums">{r.pct_saldo}% del total</p>
+                      <p className="text-xs text-[var(--text-muted)] tabular-nums">{dec2(r.pct_saldo)}% del total</p>
                       {!moneda && r.saldo_usd > 0 && (
                         <p className="text-xs text-[var(--info)] tabular-nums" title={`≈ ${fmtQ(r.saldo_usd_q)} de este saldo está en documentos en dólares`}>
                           {r.saldo_usd_q >= r.saldo - 0.01 ? 'todo en' : 'incl.'} {fmtMon(r.saldo_usd, 'US$')}
@@ -608,7 +609,7 @@ function TablaClientes({ filas, cargando, actualizando, onClick, moneda }) {
                     {r.dias_pago !== null ? `${r.dias_pago} d` : '—'}
                   </td>
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.pct_a_tiempo === null ? 'text-[var(--text-muted)]' : r.pct_a_tiempo >= 80 ? 'text-[var(--success)]' : r.pct_a_tiempo >= 50 ? 'text-[var(--warning)]' : 'text-[var(--danger)]'}`}>
-                    {r.pct_a_tiempo !== null ? `${r.pct_a_tiempo}%` : '—'}
+                    {r.pct_a_tiempo !== null ? `${dec2(r.pct_a_tiempo)}%` : '—'}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-sm">
                     {r.compras > 0 ? fmtM(r.compras) : <span className="text-[var(--text-muted)]">—</span>}

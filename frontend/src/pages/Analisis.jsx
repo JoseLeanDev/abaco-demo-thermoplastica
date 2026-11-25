@@ -18,6 +18,7 @@ import { fmtM, fmtQ, fmtPct, fmtDias, fmtMes, tooltipStyle } from '../components
 import { useSaludFinanciera, useProyeccionVentas, useFlujoCaja } from '../hooks/useCfoData'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/analisis/leyendasInventario'
+import { dec2 } from '../components/analisis/formato'
 
 /**
  * Análisis: la única vista que cruza cartera, inventario y proveedores.
@@ -299,7 +300,7 @@ function CapitalInmovilizado({ inventario, ciclo }) {
                       </div>
                     </td>
                     <td className="py-1.5 text-right tabular-nums text-[var(--danger)]">{fmtM(c.quieto)}</td>
-                    <td className="py-1.5 text-right tabular-nums text-xs text-[var(--text-muted)]">{c.pct_quieto}%</td>
+                    <td className="py-1.5 text-right tabular-nums text-xs text-[var(--text-muted)]">{dec2(c.pct_quieto)}%</td>
                   </tr>
                 ))}
               </tbody>

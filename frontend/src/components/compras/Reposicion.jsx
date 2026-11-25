@@ -18,6 +18,7 @@ import { Leyenda } from '../common/leyendas'
 import DetalleReorden, { LEADS } from './DetalleReorden'
 import { ordenar } from './comun'
 import { FILTRO_VACIO, NIVELES_PRODUCTO } from '../ventas/FiltroProducto'
+import { dec2 } from '../analisis/formato'
 
 const fmtNum = (n) => Number(n || 0).toLocaleString('es-GT')
 
@@ -445,7 +446,7 @@ function LineaCard({ linea, onFocus, leadSelect }) {
         <div>
           <p className="text-[var(--text-muted)]">Cobertura</p>
           <p className={`font-semibold tabular-nums ${linea.cobertura_dias < 30 ? 'text-rose-500' : linea.cobertura_dias < 60 ? 'text-amber-500' : 'text-emerald-500'}`}>
-            {linea.cobertura_dias !== null ? `${linea.cobertura_dias}d` : '—'}
+            {linea.cobertura_dias !== null ? `${dec2(linea.cobertura_dias)}d` : '—'}
           </p>
         </div>
         <div>
@@ -495,7 +496,7 @@ function SkuUrgenteRow({ item, leadPropio, onClick }) {
           <span className="text-rose-500 font-bold">0d</span>
         ) : (
           <span className={`font-bold ${item.dias_cobertura < item.lead_time_dias ? 'text-rose-500' : item.dias_cobertura < item.lead_time_dias * 1.5 ? 'text-amber-500' : 'text-[var(--text-primary)]'}`}>
-            {item.dias_cobertura}d
+            {dec2(item.dias_cobertura)}d
           </span>
         )}
       </td>

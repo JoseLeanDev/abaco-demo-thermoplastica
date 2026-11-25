@@ -32,6 +32,7 @@ import { Leyenda } from '../components/common/leyendas'
 import TabMatriz from '../components/ventas/TabMatriz'
 import FiltroProducto, { FILTRO_VACIO } from '../components/ventas/FiltroProducto'
 import { exportarExcel, traerTodo } from '../services/excel'
+import { dec2 } from '../components/analisis/formato'
 
 // -------------------------------------------------------------------
 // Helpers
@@ -757,12 +758,12 @@ function TabClientes({ clientes, resumen }) {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="kpi-card">
           <span className="kpi-label flex items-center gap-1">Top 10 clientes <Leyenda k="concentracion_top" /></span>
-          <p className={`kpi-value ${top10Pct >= 50 ? 'text-[var(--warning)]' : 'text-[var(--text-primary)]'}`}>{top10Pct}%</p>
+          <p className={`kpi-value ${top10Pct >= 50 ? 'text-[var(--warning)]' : 'text-[var(--text-primary)]'}`}>{dec2(top10Pct)}%</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">del total facturado</p>
         </div>
         <div className="kpi-card">
           <span className="kpi-label flex items-center gap-1">Top 20 clientes <Leyenda k="concentracion_top" /></span>
-          <p className="kpi-value">{top20Pct}%</p>
+          <p className="kpi-value">{dec2(top20Pct)}%</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">del total facturado</p>
         </div>
         <div className="kpi-card">

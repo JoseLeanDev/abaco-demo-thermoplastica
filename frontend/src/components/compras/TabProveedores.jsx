@@ -4,6 +4,7 @@ import { ArrowDownTrayIcon, BuildingOfficeIcon, MagnifyingGlassIcon, UserMinusIc
 import { endpoints } from '../../services/cfoApi'
 import { Leyenda } from '../common/leyendas'
 import { Cargando, Delta, Mini, Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, fmtQ, ordenar, td, th } from './comun'
+import { dec2 } from '../analisis/formato'
 
 export default function TabProveedores({ filtros, clave, r, setProveedor, setTab }) {
   const [orden, setOrden] = useState({ col: 'gasto', dir: 'desc' })
@@ -44,7 +45,7 @@ export default function TabProveedores({ filtros, clave, r, setProveedor, setTab
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Mini titulo="Concentran el 80%" leyenda="concentracion_proveedores" valor={`${c.proveedores_80 ?? '—'} proveedores`} sub={`de ${fmtInt(r.proveedores)} activos`} />
-        <Mini titulo="Top 5" leyenda="concentracion_proveedores" valor={`${c.top5_pct ?? 0}%`} sub={c.top1 ? `${c.top1.nombre}: ${c.top1_pct}%` : ''} />
+        <Mini titulo="Top 5" leyenda="concentracion_proveedores" valor={`${dec2(c.top5_pct ?? 0)}%`} sub={c.top1 ? `${c.top1.nombre}: ${dec2(c.top1_pct)}%` : ''} />
         <Mini titulo="Proveedores nuevos" leyenda="proveedores_nuevos" valor={fmtInt(c.proveedores_nuevos)} sub={`${fmtM(c.gasto_nuevos)} comprado`} />
         <Mini titulo="Ya no se les compró" leyenda="proveedores_dejados" valor={fmtInt(c.proveedores_dejados)} sub={`${fmtM(d?.gasto_dejados)} el año anterior`} />
       </div>
@@ -104,13 +105,13 @@ export default function TabProveedores({ filtros, clave, r, setProveedor, setTab
                     <p className="text-xs text-[var(--text-muted)]">{i.clave}</p>
                   </td>
                   <td className={`${td} text-right tabular-nums font-semibold`}>{fmtQ(i.gasto)}</td>
-                  <td className={`${td} text-right tabular-nums ${i.participacion >= 25 ? 'text-[var(--warning)] font-semibold' : ''}`}>{i.participacion}%</td>
-                  <td className={`${td} text-right tabular-nums text-[var(--text-muted)]`}>{i.acumulado_pct}%</td>
+                  <td className={`${td} text-right tabular-nums ${i.participacion >= 25 ? 'text-[var(--warning)] font-semibold' : ''}`}>{dec2(i.participacion)}%</td>
+                  <td className={`${td} text-right tabular-nums text-[var(--text-muted)]`}>{dec2(i.acumulado_pct)}%</td>
                   <td className={`${td} text-right`}>{i.nuevo ? <span className="text-xs text-[var(--text-muted)]">nuevo</span> : <Delta v={i.variacion_pct} />}</td>
                   <td className={`${td} text-right tabular-nums`}>{fmtInt(i.facturas)}</td>
                   <td className={`${td} text-right tabular-nums`}>{fmtInt(i.articulos)}</td>
                   <td className={`${td} text-right tabular-nums`}>
-                    {i.dias_pago === null ? '—' : `${i.dias_pago} d`}
+                    {i.dias_pago === null ? '—' : `${dec2(i.dias_pago)} d`}
                     {i.dias_credito ? <span className="block text-[10px] text-[var(--text-muted)]">crédito {i.dias_credito} d</span> : null}
                   </td>
                   <td className={`${td} text-right tabular-nums`}>{i.saldo_por_pagar > 0 ? fmtQ(i.saldo_por_pagar) : '—'}</td>

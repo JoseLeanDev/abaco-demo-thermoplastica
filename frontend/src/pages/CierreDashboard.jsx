@@ -13,6 +13,7 @@ import {
   LockClosedIcon,
   PlayCircleIcon
 } from '@heroicons/react/24/outline'
+import { dec2 } from '../components/analisis/formato'
 
 // Datos de ejemplo - últimos 12 meses
 const mesesCierre = demoMesesCierre
@@ -208,7 +209,7 @@ export default function CierreDashboard() {
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-medium ${esPositivo ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
-                      {esPositivo ? '+' : ''}{variacion}%
+                      {esPositivo ? '+' : ''}{dec2(variacion)}%
                     </p>
                     <p className="text-xs text-[var(--text-muted)]">Ant: Q{item.anterior.toLocaleString()}</p>
                   </div>

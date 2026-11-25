@@ -1,6 +1,6 @@
 // Exportación a Excel (.xlsx), común a toda la app.
-// columnas: [{ label, get: fila => valor }]. Los números (o textos numéricos como
-// "1234.50") se escriben como número con separador de miles y los mismos decimales;
+// columnas: [{ label, get: fila => valor }]. Los números se escriben redondeados a
+// 2 decimales; los textos numéricos (como "1234.50") con los decimales que traen;
 // las fechas "YYYY-MM-DD" como fecha. Códigos con ceros a la izquierda quedan como texto.
 // exceljs se carga solo al exportar para no engordar el bundle inicial.
 
@@ -11,13 +11,16 @@ function celda(v) {
   if (v === null || v === undefined || v === '') return { v: null }
   if (typeof v === 'number') {
     if (!Number.isFinite(v)) return { v: null }
-    const dec = Number.isInteger(v) ? 0 : Math.min(4, (String(v).split('.')[1] || '').length)
-    return { v, fmt: dec ? `#,##0.${'0'.repeat(Math.max(2, dec))}` : '#,##0' }
+    // Números crudos (p. ej. % del total = 18.29325204205916) se guardan con 2 decimales.
+    const r = Math.round(v * 100) / 100
+    return { v: r, fmt: Number.isInteger(r) ? '#,##0' : '#,##0.00' }
   }
   if (v instanceof Date) return { v, fmt: 'dd/mm/yyyy' }
   const s = String(v).trim()
   if (RE_NUM.test(s)) {
     const dec = (s.split('.')[1] || '').length
+    // Hasta 4 decimales se respetan (precios unitarios con toFixed(4)); más que eso es un número crudo.
+    if (dec > 4) return celda(Number(s))
     return { v: Number(s), fmt: dec ? `#,##0.${'0'.repeat(dec)}` : '#,##0' }
   }
   const f = RE_FECHA.exec(s)

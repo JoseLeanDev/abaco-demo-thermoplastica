@@ -3,6 +3,7 @@ import { ExclamationTriangleIcon, LightBulbIcon, Squares2X2Icon, TableCellsIcon 
 import { Seccion, fmtInt, fmtM, td, th } from '../compras/comun'
 import { ABCS, TRAMOS, fmtDias, resumir } from './datos'
 import { colorDias } from './TabResumen'
+import { dec2 } from '../analisis/formato'
 
 // Análisis ABC por salida del período (Pareto) cruzado con la cobertura del stock.
 export default function TabAbc({ filas, tot, dias, objetivo, setAbc, irDetalle }) {
@@ -52,8 +53,8 @@ export default function TabAbc({ filas, tot, dias, objetivo, setAbc, irDetalle }
         <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] p-4 flex items-start gap-3">
           <LightBulbIcon className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <p className="text-sm text-[var(--text-secondary)]">
-            <strong className="text-[var(--text-primary)]">{fmtInt(A.articulos)} artículos A</strong> ({A.pct_skus}% de los SKUs) generan el {A.pct_salida}% de la salida
-            y ocupan {fmtM(A.valor)} ({A.pct_valor}%) del stock.
+            <strong className="text-[var(--text-primary)]">{fmtInt(A.articulos)} artículos A</strong> ({dec2(A.pct_skus)}% de los SKUs) generan el {dec2(A.pct_salida)}% de la salida
+            y ocupan {fmtM(A.valor)} ({dec2(A.pct_valor)}%) del stock.
             {' '}Los artículos C y sin salida son {fmtInt(colaSkus)} SKUs con stock que retienen <strong className="text-[var(--text-primary)]">{fmtM(colaValor)}</strong>
             {' '}({tot.valor > 0 ? Math.round(colaValor / tot.valor * 100) : 0}% del inventario) y mueven apenas el {Math.round((C.pct_salida + N.pct_salida) * 10) / 10}% de la salida:
             ahí está el capital a liberar. En los A, el riesgo es quedarse sin stock.
@@ -85,17 +86,17 @@ export default function TabAbc({ filas, tot, dias, objetivo, setAbc, irDetalle }
                       <span className="text-xs text-[var(--text-muted)]">{c.desc}</span>
                     </span>
                   </td>
-                  <td className={`${td} text-right tabular-nums`}>{fmtInt(c.articulos)} <span className="text-xs text-[var(--text-muted)]">· {c.pct_skus}%</span></td>
+                  <td className={`${td} text-right tabular-nums`}>{fmtInt(c.articulos)} <span className="text-xs text-[var(--text-muted)]">· {dec2(c.pct_skus)}%</span></td>
                   <td className={`${td} text-right tabular-nums`}>
                     <div className="flex items-center justify-end gap-2">
                       <span className="font-medium">{fmtM(c.salida)}</span>
-                      <span className="text-xs text-[var(--text-muted)] w-10">{c.pct_salida}%</span>
+                      <span className="text-xs text-[var(--text-muted)] w-10">{dec2(c.pct_salida)}%</span>
                     </div>
                   </td>
                   <td className={`${td} text-right tabular-nums`}>
                     <div className="flex items-center justify-end gap-2">
                       <span className="font-medium">{fmtM(c.valor)}</span>
-                      <span className="text-xs text-[var(--text-muted)] w-10">{c.pct_valor}%</span>
+                      <span className="text-xs text-[var(--text-muted)] w-10">{dec2(c.pct_valor)}%</span>
                     </div>
                   </td>
                   <td className={`${td} text-right tabular-nums font-medium ${colorDias(c.dias_inventario)}`}>{fmtDias(c.dias_inventario)}</td>
@@ -113,7 +114,7 @@ export default function TabAbc({ filas, tot, dias, objetivo, setAbc, irDetalle }
               <span className="text-xs text-[var(--text-muted)] w-16">{label}</span>
               <div className="flex-1 h-4 rounded overflow-hidden flex bg-[var(--bg-tertiary)]">
                 {clases.map(c => c[k] > 0 && (
-                  <div key={c.id} style={{ width: `${c[k]}%`, background: c.color }} className="h-full text-[9px] text-white flex items-center justify-center overflow-hidden" title={`${c.label}: ${c[k]}%`}>
+                  <div key={c.id} style={{ width: `${c[k]}%`, background: c.color }} className="h-full text-[9px] text-white flex items-center justify-center overflow-hidden" title={`${c.label}: ${dec2(c[k])}%`}>
                     {c[k] >= 8 ? `${c.id === 'N' ? 'S/s' : c.id} ${Math.round(c[k])}%` : ''}
                   </div>
                 ))}

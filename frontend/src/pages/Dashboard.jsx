@@ -35,6 +35,7 @@ import {
 import InsightsCarousel from '../components/agents/InsightsCarousel'
 import { Leyenda } from '../components/common/leyendas'
 import SemaforoCxc from '../components/common/SemaforoCxc'
+import { dec2 } from '../components/analisis/formato'
 
 // ============================================================
 // Helpers de formato
@@ -518,7 +519,7 @@ function VentasTrendCard({ serie, kpis: k, sinMargen }) {
               domain={[0, 60]}
             />}
             <Tooltip
-              formatter={(v, name) => name === 'Margen %' ? `${v}%` : fmtQ(v)}
+              formatter={(v, name) => name === 'Margen %' ? `${dec2(v)}%` : fmtQ(v)}
               labelFormatter={fmtPeriod}
               contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }}
             />
@@ -911,7 +912,7 @@ function MixLineasCard({ lineas, sinMargen }) {
               domain={[0, 70]}
             />}
             <Tooltip
-              formatter={(v, name) => name === 'Margen %' ? `${v}%` : fmtQ(v)}
+              formatter={(v, name) => name === 'Margen %' ? `${dec2(v)}%` : fmtQ(v)}
               contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12 }}
             />
             <Bar yAxisId="left" dataKey="ventas" name="Ventas" fill="#6366f1" radius={[6, 6, 0, 0]} />
@@ -957,7 +958,7 @@ function ConcentracionCard({ titulo, leyenda, icono: Icon, data, nameKey, alerta
                 {fmtM(r.monto || r.gasto || r.ventas)}
                 {r.porcentaje > 0 && (
                   <span className={`text-[10px] ml-1 ${r.porcentaje >= alertaPct ? 'text-amber-500' : 'text-[var(--text-muted)]'}`}>
-                    ({r.porcentaje}%)
+                    ({dec2(r.porcentaje)}%)
                   </span>
                 )}
               </span>

@@ -24,6 +24,7 @@ import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ve
 import { fmtM, fmtQ, tooltipStyle } from '../components/analisis/formato'
 import { Leyenda } from '../components/common/leyendas'
 import { exportarExcel } from '../services/excel'
+import { dec2 } from '../components/analisis/formato'
 
 /**
  * Rotación de inventarios por Categoría › Subcategoría › Sublínea › Artículo
@@ -83,14 +84,14 @@ function Seccion({ icon: Icon, titulo, subtitulo, accion, children }) {
 // % del inventario vs % del costo de ventas (dos barras finas)
 function Peso({ inv, cogs, flujo }) {
   return (
-    <div className="space-y-0.5 w-28" title={`${inv}% del inventario · ${cogs}% del ${flujo}`}>
+    <div className="space-y-0.5 w-28" title={`${dec2(inv)}% del inventario · ${dec2(cogs)}% del ${flujo}`}>
       <div className="flex items-center gap-1.5">
         <div className="h-1.5 rounded-sm bg-[#001639]" style={{ width: `${Math.min(100, inv)}%`, minWidth: inv > 0 ? 2 : 0 }} />
-        <span className="text-[10px] tabular-nums text-[var(--text-muted)]">{inv}%</span>
+        <span className="text-[10px] tabular-nums text-[var(--text-muted)]">{dec2(inv)}%</span>
       </div>
       <div className="flex items-center gap-1.5">
         <div className="h-1.5 rounded-sm bg-[#10b981]" style={{ width: `${Math.min(100, cogs)}%`, minWidth: cogs > 0 ? 2 : 0 }} />
-        <span className="text-[10px] tabular-nums text-[var(--text-muted)]">{cogs}%</span>
+        <span className="text-[10px] tabular-nums text-[var(--text-muted)]">{dec2(cogs)}%</span>
       </div>
     </div>
   )
@@ -254,7 +255,7 @@ export default function RotacionInventario() {
               <p className="kpi-value">{fmtM(t.cogs)}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">
                 {t.cogs_variacion_pct !== null
-                  ? <><span className={`font-semibold ${t.cogs_variacion_pct >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{t.cogs_variacion_pct >= 0 ? '+' : ''}{t.cogs_variacion_pct}%</span> vs año anterior</>
+                  ? <><span className={`font-semibold ${t.cogs_variacion_pct >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{t.cogs_variacion_pct >= 0 ? '+' : ''}{dec2(t.cogs_variacion_pct)}%</span> vs año anterior</>
                   : 'sin ventas el año anterior'}
               </p>
             </div>
@@ -280,7 +281,7 @@ export default function RotacionInventario() {
               <> El producto terminado rota {fmtRot(tipoProd.rotacion)} ({fmtDias(tipoProd.dias)}) y la materia prima {fmtRot(tipoMP.rotacion)} ({fmtDias(tipoMP.dias)}).</>
             )}
             {lento && (
-              <> <strong>{lento.nombre}</strong> tiene el {lento.pct_inventario}% del inventario pero el {lento.pct_cogs}% del {flujo}: rota {fmtRot(lento.rotacion)} ({fmtDias(lento.dias)}).</>
+              <> <strong>{lento.nombre}</strong> tiene el {dec2(lento.pct_inventario)}% del inventario pero el {dec2(lento.pct_cogs)}% del {flujo}: rota {fmtRot(lento.rotacion)} ({fmtDias(lento.dias)}).</>
             )}
             {t.sin_salida_valor > 0 && <> {fmtM(t.sin_salida_valor)} están en {fmtInt(t.sin_salida_articulos)} artículos sin venta comercial medida en el período.</>}
           </p>
@@ -348,7 +349,7 @@ export default function RotacionInventario() {
                   <button onClick={() => drill(it)} disabled={esHoja} className="w-full text-left px-5 py-3 flex items-center gap-3">
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="font-medium text-sm nombre-articulo">{it.nombre}</p>
-                      <p className="text-xs text-[var(--text-muted)]">{fmtM(it.inventario)} inventario · {it.pct_inventario}% del inv. · {it.pct_cogs}% del {flujo}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{fmtM(it.inventario)} inventario · {dec2(it.pct_inventario)}% del inv. · {dec2(it.pct_cogs)}% del {flujo}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className={`text-sm font-semibold tabular-nums ${tonoDias(it.dias)}`}>{fmtRot(it.rotacion)}</p>
@@ -381,7 +382,7 @@ export default function RotacionInventario() {
                         <span className="font-medium nombre-articulo block">{it.nombre}</span>
                         {esHoja
                           ? <span className="text-[10px] text-[var(--text-muted)]">{it.clave} · {CLASES[it.clase]}</span>
-                          : it.pct_materia_prima > 0 && <span className="text-[10px] text-[var(--text-muted)]">{it.pct_materia_prima}% materia prima</span>}
+                          : it.pct_materia_prima > 0 && <span className="text-[10px] text-[var(--text-muted)]">{dec2(it.pct_materia_prima)}% materia prima</span>}
                       </td>
                       <td className="py-2.5 px-2 min-w-[10rem]">
                         <div className="flex items-center gap-2">
@@ -411,7 +412,7 @@ export default function RotacionInventario() {
               </table>
               {d.sin_inventario?.cogs > 0 && (
                 <p className="text-[11px] text-[var(--text-muted)] mt-2">
-                  No se muestran {d.sin_inventario.grupos.length} {nivel.plural.toLowerCase()} sin inventario ({d.sin_inventario.grupos.slice(0, 4).join(', ')}{d.sin_inventario.grupos.length > 4 ? '…' : ''}): servicios o artículos sin stock en el inventario promedio. Su costo de ventas ({fmtM(d.sin_inventario.cogs)}, {d.sin_inventario.pct_cogs}% del total) sí entra en la rotación total.
+                  No se muestran {d.sin_inventario.grupos.length} {nivel.plural.toLowerCase()} sin inventario ({d.sin_inventario.grupos.slice(0, 4).join(', ')}{d.sin_inventario.grupos.length > 4 ? '…' : ''}): servicios o artículos sin stock en el inventario promedio. Su costo de ventas ({fmtM(d.sin_inventario.cogs)}, {dec2(d.sin_inventario.pct_cogs)}% del total) sí entra en la rotación total.
                 </p>
               )}
               {filas.some(f => !f.cogs && f.consumo_mp > 0) && (
@@ -549,7 +550,7 @@ function InventarioVsCosto({ items, flujo }) {
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" horizontal={false} />
         <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
         <YAxis type="category" dataKey="nombre" tick={{ fontSize: 11 }} stroke="var(--text-muted)" width={120} />
-        <Tooltip contentStyle={tooltipStyle} labelFormatter={(l, p) => p?.[0]?.payload?.completo || l} formatter={(v, n) => [`${v}%`, n]} />
+        <Tooltip contentStyle={tooltipStyle} labelFormatter={(l, p) => p?.[0]?.payload?.completo || l} formatter={(v, n) => [`${dec2(v)}%`, n]} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="inv" name="% del inventario" fill="#001639" barSize={10} radius={[0, 3, 3, 0]} />
         <Bar dataKey="cogs" name={`% del ${flujo}`} fill="#10b981" barSize={10} radius={[0, 3, 3, 0]} />

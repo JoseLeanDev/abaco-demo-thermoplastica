@@ -14,6 +14,7 @@ import {
   CalendarIcon,
   StarIcon,
 } from '@heroicons/react/24/outline'
+import { dec2 } from '../components/analisis/formato'
 
 const formatGTQ = (value) => {
   if (!value && value !== 0) return 'Q 0'
@@ -376,7 +377,7 @@ export default function HistorialServicios() {
                         <MinusIcon className="w-4 h-4 text-[var(--text-muted)]" />
                       )}
                       <span className={`text-xs font-mono ${servicio.crecimiento > 0 ? 'text-[var(--success)]' : servicio.crecimiento < 0 ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>
-                        {servicio.crecimiento > 0 ? '+' : ''}{servicio.crecimiento}%
+                        {servicio.crecimiento > 0 ? '+' : ''}{dec2(servicio.crecimiento)}%
                       </span>
                     </div>
                   </div>
@@ -502,11 +503,11 @@ export default function HistorialServicios() {
                     <td className="text-center">
                       {servicio.tendencia === 'up' ? (
                         <span className="badge-success text-[10px] flex items-center justify-center gap-1">
-                          <ArrowTrendingUpIcon className="w-3 h-3" /> +{servicio.crecimiento}%
+                          <ArrowTrendingUpIcon className="w-3 h-3" /> +{dec2(servicio.crecimiento)}%
                         </span>
                       ) : servicio.tendencia === 'down' ? (
                         <span className="badge-danger text-[10px] flex items-center justify-center gap-1">
-                          <ArrowTrendingDownIcon className="w-3 h-3" /> {servicio.crecimiento}%
+                          <ArrowTrendingDownIcon className="w-3 h-3" /> {dec2(servicio.crecimiento)}%
                         </span>
                       ) : (
                         <span className="badge-neutral text-[10px]">→ Estable</span>

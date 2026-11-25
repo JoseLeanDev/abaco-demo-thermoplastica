@@ -18,6 +18,7 @@ import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ve
 import { fmtM, fmtQ, tooltipStyle } from '../components/analisis/formato'
 import { Leyenda } from '../components/analisis/leyendasInventario'
 import { exportarExcel } from '../services/excel'
+import { dec2 } from '../components/analisis/formato'
 
 /**
  * Capital inmovilizado en inventario por Categoría › Subcategoría › Sublínea › Artículo
@@ -224,7 +225,7 @@ export default function InventarioQuieto() {
             <div className="kpi-card">
               <span className="kpi-label flex items-center gap-1">Inmovilizado <Leyenda k="inmovilizado" /></span>
               <p className="kpi-value" style={{ color: ESTADOS.inmovilizado.color }}>{fmtM(t.inmovilizado)}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">{t.pct_inmovilizado}% del inventario</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{dec2(t.pct_inmovilizado)}% del inventario</p>
             </div>
             <div className="kpi-card">
               <span className="kpi-label flex items-center gap-1">Lento (más de 6 meses de stock) <Leyenda k="lento" /></span>
@@ -234,7 +235,7 @@ export default function InventarioQuieto() {
             <div className="kpi-card">
               <span className="kpi-label flex items-center gap-1">Consumo por validar <Leyenda k="por_validar" /></span>
               <p className="kpi-value" style={{ color: ESTADOS.por_validar.color }}>{fmtM(t.por_validar)}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(t.articulos_por_validar)} artículos · {t.pct_por_validar}% del inventario</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{fmtInt(t.articulos_por_validar)} artículos · {dec2(t.pct_por_validar)}% del inventario</p>
             </div>
             <div className="kpi-card">
               <span className="kpi-label flex items-center gap-1">Cobertura <Leyenda k="cobertura" /></span>
@@ -251,8 +252,8 @@ export default function InventarioQuieto() {
           <LightBulbIcon className="w-5 h-5 text-[var(--warning)] shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
             De los <strong>{fmtM(t.total)}</strong> en inventario{path.length ? <> de <strong>{titulo}</strong></> : ''},{' '}
-            <strong>{fmtM(t.quieto)} ({t.pct_quieto}%)</strong> están quietos <Leyenda k="quieto" />: {fmtM(t.inmovilizado)} inmovilizados y {fmtM(t.lento)} de rotación lenta.
-            {' '}Otros <strong>{fmtM(t.por_validar)} ({t.pct_por_validar}%)</strong> tienen el consumo por validar: faltan las salidas de producción. Ese valor sigue incluido en inventario y no se clasifica como activo ni quieto.
+            <strong>{fmtM(t.quieto)} ({dec2(t.pct_quieto)}%)</strong> están quietos <Leyenda k="quieto" />: {fmtM(t.inmovilizado)} inmovilizados y {fmtM(t.lento)} de rotación lenta.
+            {' '}Otros <strong>{fmtM(t.por_validar)} ({dec2(t.pct_por_validar)}%)</strong> tienen el consumo por validar: faltan las salidas de producción. Ese valor sigue incluido en inventario y no se clasifica como activo ni quieto.
             {!esHoja && filas[0] && filas[0].quieto > 0 && (
               <> La {nivel.singular.toLowerCase()} con más capital quieto es <strong>{filas[0].nombre}</strong> ({fmtM(filas[0].quieto)}, {filas[0].participacion_quieto}% del total quieto)
               {filas[0].dias_cobertura ? <>, con stock para {fmtDias(filas[0].dias_cobertura)}</> : ''}.</>
@@ -289,7 +290,7 @@ export default function InventarioQuieto() {
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="font-medium text-sm nombre-articulo">{it.nombre}</p>
                       <BarraEstado r={it} max={maxTotal} />
-                      <p className="text-xs text-[var(--text-muted)]">{it.pct_quieto}% quieto · {fmtM(it.total)} total · {fmtUds(esHoja ? it.stock_actual : it.unidades)} uds</p>
+                      <p className="text-xs text-[var(--text-muted)]">{dec2(it.pct_quieto)}% quieto · {fmtM(it.total)} total · {fmtUds(esHoja ? it.stock_actual : it.unidades)} uds</p>
                     </div>
                     <p className="text-sm font-semibold tabular-nums shrink-0" style={{ color: ESTADOS.inmovilizado.color }}>{fmtM(it.quieto)}</p>
                     {!esHoja && <ChevronRightIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />}
@@ -340,7 +341,7 @@ export default function InventarioQuieto() {
                         <td className="py-2.5 px-2 text-right tabular-nums" style={{ color: it.inmovilizado ? ESTADOS.inmovilizado.color : undefined }}>{it.inmovilizado ? fmtM(it.inmovilizado) : '—'}</td>
                         <td className="py-2.5 px-2 text-right tabular-nums" style={{ color: it.lento ? '#b45309' : undefined }}>{it.lento ? fmtM(it.lento) : '—'}</td>
                         <td className="py-2.5 px-2 text-right tabular-nums text-slate-500">{it.por_validar ? fmtM(it.por_validar) : '—'}</td>
-                        <td className={`py-2.5 px-2 text-right tabular-nums font-semibold ${it.pct_quieto >= 80 ? 'text-[var(--danger)]' : it.pct_quieto >= 50 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>{it.pct_quieto}%</td>
+                        <td className={`py-2.5 px-2 text-right tabular-nums font-semibold ${it.pct_quieto >= 80 ? 'text-[var(--danger)]' : it.pct_quieto >= 50 ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>{dec2(it.pct_quieto)}%</td>
                       </>}
                       <td className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap">{fmtDias(it.dias_cobertura)}</td>
                       {esHoja ? <>

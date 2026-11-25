@@ -20,6 +20,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell, LabelList,
 } from 'recharts'
 import { exportarExcel } from '../../services/excel'
+import { dec2 } from '../analisis/formato'
 
 // -------------------------------------------------------------------
 // Ventas por categoría. Responde, en orden:
@@ -286,7 +287,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm nombre-articulo">{it.nombre}</p>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                    {it.participacion}% del total<span className="col-margen"> · margen <span className={margenTone(it.margen_pct)}>{it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}</span></span>
+                    {dec2(it.participacion)}% del total<span className="col-margen"> · margen <span className={margenTone(it.margen_pct)}>{it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}</span></span>
                   </p>
                 </div>
                 <div className="text-right shrink-0">
@@ -345,7 +346,7 @@ export default function TabCategorias({ filtro, onFiltro }) {
                       <p className="text-[10px] text-[var(--text-muted)] tabular-nums">{fmtSigno(it.variacion)}</p>
                     )}
                   </td>
-                  <td className="py-2.5 px-2 text-right tabular-nums text-[var(--text-secondary)]">{it.participacion}%</td>
+                  <td className="py-2.5 px-2 text-right tabular-nums text-[var(--text-secondary)]">{dec2(it.participacion)}%</td>
                   <td className={`py-2.5 px-2 text-right tabular-nums font-semibold whitespace-nowrap col-margen ${margenTone(it.margen_pct)}`}>
                     {it.margen_pct === null ? '—' : `${it.margen_pct.toFixed(1)}%`}
                     {it.margen_pct !== null && it.margen_pct_prev !== null && Math.abs(it.margen_pct - it.margen_pct_prev) >= 0.1 && (
@@ -568,7 +569,7 @@ function RankingCruzado({ icon: Icon, titulo, subtitulo, data, loading }) {
                   <td className="py-1.5 pr-2 max-w-[18rem] nombre-articulo">{i.nombre}</td>
                   <td className="py-1.5 text-right tabular-nums font-semibold">{fmtM(i.ventas)}</td>
                   <td className="py-1.5 text-right"><Variacion pct={i.variacion_pct} nuevo={i.nuevo} /></td>
-                  <td className="py-1.5 text-right tabular-nums text-xs">{i.participacion}%</td>
+                  <td className="py-1.5 text-right tabular-nums text-xs">{dec2(i.participacion)}%</td>
                   <td className={`py-1.5 text-right tabular-nums col-margen ${margenTone(i.margen_pct)}`}>{i.margen_pct === null ? '—' : `${i.margen_pct.toFixed(1)}%`}</td>
                 </tr>
               ))}

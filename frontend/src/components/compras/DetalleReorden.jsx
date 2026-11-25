@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import { endpoints } from '../../services/cfoApi'
 import { Cargando, fmtMes, fmtPrecio, fmtQ, tooltipStyle } from './comun'
+import { dec2 } from '../analisis/formato'
 
 const SERVICIOS = [90, 95, 97.5, 99]
 export const LEADS = [15, 30, 45, 60, 75, 90, 120, 150, 180]
@@ -241,7 +242,7 @@ export default function DetalleReorden({ item, params, onClose }) {
                     <Variable simbolo="d̄" nombre="demanda diaria" valor={`${n1(c.demanda_diaria, 2)} uds`} sub={`${n0(c.demanda_mensual)} uds/mes`} />
                     <Variable simbolo="σd" nombre="desviación diaria" valor={`${n1(c.sigma_diaria, 2)} uds`} sub={`σ mensual ${n0(c.sigma_mensual)}`} />
                     <Variable simbolo="L" nombre="lead time" valor={`${L} días`} sub="selector Lead time (arriba)" />
-                    <Variable simbolo="Z" nombre="nivel de servicio" valor={P.z} sub={`${P.nivel_servicio}% de ciclos sin quiebre`} />
+                    <Variable simbolo="Z" nombre="nivel de servicio" valor={P.z} sub={`${dec2(P.nivel_servicio)}% de ciclos sin quiebre`} />
                     <Variable simbolo="N" nombre="meses de historia" valor={P.meses_consumo} sub={`demanda = ${fuente}`} />
                     <Variable simbolo="Pos." nombre="stock + tránsito" valor={`${n0(c.posicion)} uds`} sub={`${n0(c.stock_actual)} + ${n0(c.stock_transito)} tránsito`} />
                   </div>

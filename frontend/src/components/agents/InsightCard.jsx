@@ -7,6 +7,7 @@ import {
   EyeIcon,
   EyeSlashIcon
 } from '@heroicons/react/24/outline'
+import { dec2 } from '../analisis/formato'
 
 /**
  * InsightCard - Componente compacto para mostrar insights en dashboard
@@ -99,7 +100,7 @@ export default function InsightCard({
               </h4>
               {change !== undefined && (
                 <span className={`text-xs font-medium ${getChangeColor()}`}>
-                  {getChangePrefix()}{change}%
+                  {getChangePrefix()}{dec2(change)}%
                 </span>
               )}
             </div>
@@ -173,7 +174,7 @@ export default function InsightCard({
             <div className="mt-2 flex items-center gap-2">
               <span className="text-sm text-slate-500">Variación:</span>
               <span className={`text-sm font-semibold ${getChangeColor()}`}>
-                {getChangePrefix()}{change}%
+                {getChangePrefix()}{dec2(change)}%
               </span>
             </div>
           )}

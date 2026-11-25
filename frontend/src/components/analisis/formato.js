@@ -8,6 +8,13 @@ export const fmtM = (n) => {
   return fmtQ(v)
 }
 
+// Redondea a 2 decimales como máximo para mostrar (18.29325… → 18.29; 18.3 queda 18.3).
+// Lo que no es número (null, '—', texto) pasa igual.
+export const dec2 = (n) => {
+  if (typeof n === 'string' && n.trim() !== '' && Number.isFinite(Number(n))) n = Number(n)
+  return typeof n === 'number' && Number.isFinite(n) ? Math.round(n * 100) / 100 : n
+}
+
 export const fmtPct = (n, d = 1) => (n === null || n === undefined ? '—' : `${Number(n).toFixed(d)}%`)
 
 export const fmtDias = (n) => (n === null || n === undefined ? '—' : `${Math.round(Number(n))} días`)

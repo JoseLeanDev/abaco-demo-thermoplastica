@@ -9,6 +9,7 @@ import { endpoints } from '../services/cfoApi'
 import { usePeriodo } from '../context/PeriodoContext'
 import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
+import { dec2 } from '../components/analisis/formato'
 
 // Conciliación bancaria: movimientos de bancos de Profit (vst_ConciliacionBancaria) con su
 // marca de conciliación. Saldos al corte (= fin del período del filtro global), en la
@@ -121,7 +122,7 @@ export default function ConciliacionBancaria() {
         </div>
         <div className="kpi-card card-hover">
           <span className="kpi-label flex items-center gap-1">Conciliado en el período <Leyenda k="conc_pct" /></span>
-          <p className="kpi-value">{r.periodo?.pct_conciliado != null ? `${r.periodo.pct_conciliado}%` : '—'}</p>
+          <p className="kpi-value">{r.periodo?.pct_conciliado != null ? `${dec2(r.periodo.pct_conciliado)}%` : '—'}</p>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             {(r.periodo?.conciliados || 0).toLocaleString('es-GT')} de {(r.periodo?.movimientos || 0).toLocaleString('es-GT')} movimientos · {(r.periodo?.anulados || 0).toLocaleString('es-GT')} anulados
           </p>
@@ -242,7 +243,7 @@ export default function ConciliacionBancaria() {
                       <p className="text-[var(--text-secondary)]">−{fmtMon(c.salidas_periodo, c.moneda)}</p>
                     </td>
                     <td className="py-2 text-right tabular-nums">
-                      {c.pct_conciliado != null ? `${c.pct_conciliado}%` : '—'}
+                      {c.pct_conciliado != null ? `${dec2(c.pct_conciliado)}%` : '—'}
                       <p className="text-xs text-[var(--text-muted)]">{c.mov_periodo.toLocaleString('es-GT')} mov.</p>
                     </td>
                   </tr>

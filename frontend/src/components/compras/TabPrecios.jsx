@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, MagnifyingGlassIcon, TagIcon } from '@heroicons/react/24/outline'
 import { Cargando, Delta, Mini, Seccion, Th, exportarExcel, fmtInt, fmtM, fmtPrecio, ordenar, td } from './comun'
+import { dec2 } from '../analisis/formato'
 
 const VISTAS = [['todos', 'Todos'], ['subieron', 'Subieron'], ['bajaron', 'Bajaron']]
 
@@ -40,7 +41,7 @@ export default function TabPrecios({ precios: d }) {
         <Mini titulo="Variación de precios" leyenda="inflacion_compras" valor={<Delta v={d.inflacion_pct} invertir />} sub="promedio ponderado por lo comprado" />
         <Mini titulo="Sobrecosto" leyenda="sobrecosto_precio" valor={<span className="text-[var(--danger)]">{fmtM(d.sobrecosto)}</span>} sub={`${fmtInt(d.n_subieron)} artículos subieron de precio`} />
         <Mini titulo="Ahorro" leyenda="sobrecosto_precio" valor={<span className="text-[var(--success)]">{fmtM(-d.ahorro)}</span>} sub={`${fmtInt(d.n_bajaron)} artículos bajaron de precio`} />
-        <Mini titulo="Cobertura" leyenda="cobertura_precios" valor={`${cobertura}%`} sub={`${fmtInt(d.n_comparables)} artículos comprados en ambos períodos`} />
+        <Mini titulo="Cobertura" leyenda="cobertura_precios" valor={`${dec2(cobertura)}%`} sub={`${fmtInt(d.n_comparables)} artículos comprados en ambos períodos`} />
       </div>
 
       <Seccion

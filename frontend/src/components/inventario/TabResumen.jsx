@@ -3,6 +3,7 @@ import { ArrowDownTrayIcon, ClockIcon, HeartIcon, Squares2X2Icon } from '@heroic
 import { cambiarNivel } from '../ventas/FiltroProducto'
 import { Seccion, Th, exportarExcel, fmtInt, fmtM, ordenar, td } from '../compras/comun'
 import { ESTADOS, TRAMOS, agrupar, fmtDias, nivelSiguiente } from './datos'
+import { dec2 } from '../analisis/formato'
 
 // Barra horizontal con el % del grupo
 export function BarraPct({ pct, color = '#001639' }) {
@@ -105,7 +106,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
                     </td>
                     <td className={`${td} text-right tabular-nums`}>
                       <p className="font-semibold">{fmtM(g.valor)}</p>
-                      <p className="text-xs text-[var(--text-muted)]">{g.pct}%</p>
+                      <p className="text-xs text-[var(--text-muted)]">{dec2(g.pct)}%</p>
                     </td>
                     <td className={`${td} text-right tabular-nums`}>{fmtInt(g.skus)}</td>
                     <td className={`${td} text-right tabular-nums font-medium ${colorDias(g.dias_inventario)}`}>
@@ -113,7 +114,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
                       {g.base === 'consumo' && !esArticulo && <p className="text-[10px] font-normal text-[var(--text-muted)]">por consumo</p>}
                     </td>
                     <td className={`${td} text-right tabular-nums ${g.pct_quieto >= 50 ? 'text-[var(--warning)] font-semibold' : ''}`}>
-                      {g.valor > 0 ? `${g.pct_quieto}%` : '—'}
+                      {g.valor > 0 ? `${dec2(g.pct_quieto)}%` : '—'}
                     </td>
                     <td className={`${td} text-right tabular-nums`}>{g.exceso > 0 ? fmtM(g.exceso) : '—'}</td>
                     <td className={`${td} text-right tabular-nums ${g.quiebres > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
@@ -129,7 +130,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
                     <td className={`${td} text-right tabular-nums`}>{fmtM(tot.valor)}</td>
                     <td className={`${td} text-right tabular-nums`}>{fmtInt(tot.skus)}</td>
                     <td className={`${td} text-right tabular-nums`}>{fmtDias(tot.dias_inventario)}</td>
-                    <td className={`${td} text-right tabular-nums`}>{tot.pct_quieto}%</td>
+                    <td className={`${td} text-right tabular-nums`}>{dec2(tot.pct_quieto)}%</td>
                     <td className={`${td} text-right tabular-nums`}>{fmtM(tot.exceso)}</td>
                     <td className={`${td} text-right tabular-nums`}>{fmtInt(tot.quiebres)}</td>
                   </tr>

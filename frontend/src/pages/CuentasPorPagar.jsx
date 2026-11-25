@@ -21,6 +21,7 @@ import {
   ChevronRightIcon,
 } from '@heroicons/react/24/outline'
 import { exportarExcel, traerTodo } from '../services/excel'
+import { dec2 } from '../components/analisis/formato'
 
 const fmtQ = (n) => `Q${(Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })}`
 const fmtM = (n) => {
@@ -743,7 +744,7 @@ function TablaProveedores({ filas, cargando, actualizando, onClick, moneda }) {
                       <p className="font-bold tabular-nums">{fmt(r.saldo)}</p>
                       {!moneda && r.saldo_usd > 0 && <p className="text-xs text-[var(--info)] tabular-nums">incluye {fmtMonM(r.saldo_usd, 'US$')}</p>}
                       {!moneda && r.saldo_eu > 0 && <p className="text-xs text-[var(--info)] tabular-nums">incluye {fmtMonM(r.saldo_eu, 'EU')}</p>}
-                      <p className="text-xs text-[var(--text-muted)] tabular-nums">{r.pct_saldo}% del total</p>
+                      <p className="text-xs text-[var(--text-muted)] tabular-nums">{dec2(r.pct_saldo)}% del total</p>
                     </> : <span className="text-sm text-[var(--text-muted)]">—</span>}
                   </td>
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.vencido > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
@@ -758,7 +759,7 @@ function TablaProveedores({ filas, cargando, actualizando, onClick, moneda }) {
                     {r.dias_pago !== null ? `${r.dias_pago} d` : '—'}
                   </td>
                   <td className={`px-4 py-3 text-right tabular-nums text-sm ${r.pct_a_tiempo === null ? 'text-[var(--text-muted)]' : r.pct_a_tiempo >= 80 ? 'text-[var(--success)]' : r.pct_a_tiempo >= 50 ? 'text-[var(--warning)]' : 'text-[var(--danger)]'}`}>
-                    {r.pct_a_tiempo !== null ? `${r.pct_a_tiempo}%` : '—'}
+                    {r.pct_a_tiempo !== null ? `${dec2(r.pct_a_tiempo)}%` : '—'}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-sm">
                     {r.compras > 0 ? fmtC(r.compras) : <span className="text-[var(--text-muted)]">—</span>}

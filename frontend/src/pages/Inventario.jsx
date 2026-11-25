@@ -26,6 +26,7 @@ import TabAbc from '../components/inventario/TabAbc'
 import TabAccion from '../components/inventario/TabAccion'
 import TabProveedores from '../components/inventario/TabProveedores'
 import TabDetalle, { COLUMNAS_DETALLE } from '../components/inventario/TabDetalle'
+import { dec2 } from '../components/analisis/formato'
 
 const PESTANAS = [
   { id: 'resumen',     label: 'Resumen',           icon: ChartBarIcon },
@@ -191,13 +192,13 @@ export default function Inventario() {
             titulo="Capital quieto" leyenda="inv_quieto"
             valor={fmtM(tot.quieto)}
             onClick={() => irDetalle({ rapido: 'quieto' })}
-            sub={<><span className={tot.pct_quieto >= 40 ? 'text-[var(--warning)] font-medium' : ''}>{tot.pct_quieto}%</span> del stock · {fmtM(tot.inmovilizado)} inmovilizado</>}
+            sub={<><span className={tot.pct_quieto >= 40 ? 'text-[var(--warning)] font-medium' : ''}>{dec2(tot.pct_quieto)}%</span> del stock · {fmtM(tot.inmovilizado)} inmovilizado</>}
           />
           <Kpi
             titulo={`Exceso sobre ${objetivo} días`} leyenda="inv_exceso"
             valor={tot.skus_evaluables > 0 ? fmtM(tot.exceso) : 'N/D'}
             onClick={() => setTab('accion')}
-            sub={tot.skus_evaluables > 0 ? `${tot.pct_exceso}% del stock · ${fmtInt(tot.skus_exceso)} SKUs` : 'Consumo de producción pendiente'}
+            sub={tot.skus_evaluables > 0 ? `${dec2(tot.pct_exceso)}% del stock · ${fmtInt(tot.skus_exceso)} SKUs` : 'Consumo de producción pendiente'}
           />
           <Kpi
             titulo="Quiebres de stock" leyenda="inv_quiebre"

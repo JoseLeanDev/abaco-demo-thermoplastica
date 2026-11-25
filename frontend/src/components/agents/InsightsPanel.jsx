@@ -12,6 +12,7 @@ import {
   ChevronRightIcon,
   BellIcon
 } from '@heroicons/react/24/outline'
+import { dec2 } from '../analisis/formato'
 
 /**
  * InsightsPanel - Panel completo para mostrar insights de IA
@@ -271,7 +272,7 @@ export default function InsightsPanel({
                     <div className="mt-3 flex items-center gap-4 text-xs text-slate-400">
                       {insight.change !== undefined && (
                         <span className={`font-medium ${insight.change > 0 ? 'text-emerald-600' : insight.change < 0 ? 'text-rose-600' : ''}`}>
-                          {insight.change > 0 ? '+' : ''}{insight.change}% vs período anterior
+                          {insight.change > 0 ? '+' : ''}{dec2(insight.change)}% vs período anterior
                         </span>
                       )}
                       {insight.category && (
