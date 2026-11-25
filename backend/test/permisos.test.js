@@ -13,8 +13,8 @@ function pasa(rol, url, method = 'GET') {
   return ok && status === 200;
 }
 
-test('el catálogo tiene los 11 roles de la hoja y solo usa módulos conocidos', () => {
-  assert.equal(ROLES.length, 11);
+test('el catálogo tiene los 12 roles (11 de la hoja + Gerencia Operaciones) y solo usa módulos conocidos', () => {
+  assert.equal(ROLES.length, 12);
   const keys = new Set(MODULOS.map(m => m.key));
   for (const r of ROLES) for (const m of Object.keys(r.permisos)) assert.ok(keys.has(m), `${r.key}.${m}`);
 });
@@ -121,4 +121,14 @@ test('conciliación bancaria: solo dirección, finanzas y admin', () => {
   // No se confunde con el módulo viejo /conciliador (solo admin)
   assert.deepEqual(modulosDeEndpoint('/conciliacion-bancaria').modulos, ['bancos']);
   assert.ok(!pasa('finanzas', '/api/conciliador/conciliaciones/1/2026/1'));
+});
+
+test('sin uso en la plataforma y con datos de demostración: /alertas y el chat viejo, solo admin', () => {
+  for (const r of ROLES) {
+    const esperado = r.key === 'admin';
+    assert.equal(pasa(r.key, '/api/alertas'), esperado, r.key);
+    assert.equal(pasa(r.key, '/api/agents/chat', 'POST'), esperado, r.key);
+  }
+  assert.ok(pasa('gerencia_operaciones', '/api/agents/chat-agente', 'POST'));
+  assert.ok(!pasa('gerencia_operaciones', '/api/conciliacion-bancaria/resumen'));
 });

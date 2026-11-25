@@ -122,3 +122,18 @@ test('márgenes: un producto con menos de Q1,000 aparece en la lista, sin semáf
   assert.ok(r.data.productos.find((p) => p.sku === 'GRANDE'));
   assert.equal(r.data.resumen.total_productos, 2);
 });
+
+test('el CPP respeta el alcance: ejecutivo solo sus ventas, gerente de línea solo sus artículos', async () => {
+  const { als } = require('../src/services/alcance');
+  const req = { query: { desde: '2026-01-01', hasta: '2026-09-30', corte_cpp: '2026-09-30' } };
+  const ventas = [venta({ codigo_vendedor: '048', fact_num: 1 }), venta({ codigo_vendedor: '017 ', fact_num: 2, codigo_articulo: 'SKU2' })];
+  const cargar = async () => ({ ventas, compras: [compra()], articulos: [{ codigo_articulo: 'SKU1', articulo_id: 1 }] });
+  const now = new Date('2026-10-21T12:00:00Z');
+  const total = (r) => adaptarVentas(r, '/', {}).ventas_sin_iva;
+  close(total(await obtenerReporte(req, null, { now, cargar })), 600);
+  const ej = await als.run({ vendedores: ['048'], lineas: null }, () => obtenerReporte(req, null, { now, cargar }));
+  close(total(ej), 300);
+  const pool = { query: async (_sql, [marcas]) => ({ rows: marcas.includes('Liners') ? [{ codigo_articulo: 'LIN1' }] : [{ codigo_articulo: 'SKU2 ' }] }) };
+  close(total(await als.run({ lineas: ['Liners'], vendedores: null }, () => obtenerReporte(req, pool, { now, cargar }))), 0);
+  close(total(await als.run({ lineas: ['Laminados'], vendedores: null }, () => obtenerReporte(req, pool, { now, cargar }))), 300);
+});

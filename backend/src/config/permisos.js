@@ -152,7 +152,6 @@ function permisosDeUsuario(u) {
 // `todos` exige todos los módulos listados, no uno (la posición de Tesorería cruza CxC y CxP).
 const ENDPOINTS = [
   ['/dashboard',                    ['panel']],
-  ['/alertas',                      ['panel']],
   ['/ventas/desglose',              ['ventas', 'margenes']],   // filtro de producto de Márgenes
   ['/ventas',                       ['ventas']],
   ['/margenes',                     ['margenes']],
@@ -171,10 +170,13 @@ const ENDPOINTS = [
   ['/analisis/inventario-quieto',   ['capital', 'analisis']],
   ['/analisis/rotacion-inventario', ['capital']],
   ['/analisis/ventas-vs-compras',   ['ventas_compras', 'analisis']],
-  ['/agents/chat',                  ['asistente']],             // también /chat-agente
+  ['/agents/chat-agente',           ['asistente']],
+  // Chat viejo (sin uso en la plataforma, datos de demostración): solo admin
+  ['/agents/chat',                  ['usuarios']],
   ['/agents',                       ['agentes'], { escritura: true }],
   ['/scheduler',                    ['agentes'], { escritura: true }],
-  // Módulos apagados en el menú (contabilidad, cierre, SAT): solo admin
+  // Módulos apagados en el menú (contabilidad, cierre, SAT) y /alertas (sin uso, tablas de demostración):
+  // sin mapear o con 'usuarios' = solo admin
   ['/contabilidad',                 ['usuarios']],
   ['/cierre',                       ['usuarios']],
   ['/conciliador',                  ['usuarios']],

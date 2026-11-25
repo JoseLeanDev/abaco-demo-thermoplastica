@@ -8,7 +8,7 @@ const nombreCliente = (r) => {
 };
 const suma = (rows, campo) => rows.reduce((n, r) => n + Number(r[campo] || 0), 0);
 const contar = (rows, campo) => new Set(rows.map((r) => r[campo]).filter((v) => v !== null && v !== undefined && v !== '')).size;
-const { claveAlcance } = require('./alcance');
+const { als, claveAlcance } = require('./alcance');
 const cache = new Map();
 // Venta mínima del período para que un producto lleve semáforo de margen.
 const MIN_SEMAFORO = 1000;
@@ -137,7 +137,28 @@ async function obtenerReporte(req, pool, { now = new Date(), cargar = leerLamina
       promise.catch(() => cache.delete(key));
     }
   }
-  return construirReporte(await cached.promise, P, { corte, query: req.query });
+  const datos = await recortarAlcance(await cached.promise, pool);
+  return construirReporte(datos, P, { corte, query: req.query });
+}
+
+// El CPP lee las ventas con su propio cliente de Postgres (cppDatos.js), que no pasa por la
+// reescritura de connection.js: sin esto un gerente de línea vería las líneas CPP de otros
+// gerentes y un ejecutivo las ventas de todos los vendedores. Se recorta aquí, igual que
+// services/alcance.js: líneas por la marca del artículo, vendedores por su código.
+async function recortarAlcance(datos, pool) {
+  const A = als.getStore();
+  if (!A || (!A.lineas && !A.vendedores)) return datos;
+  let ventas = datos.ventas;
+  if (A.lineas) {
+    const r = await pool.query('SELECT codigo_articulo FROM thermoplastica.dim_articulo WHERE marca = ANY($1::text[])', [A.lineas]);
+    const propios = new Set(r.rows.map((x) => trim(x.codigo_articulo)));
+    ventas = ventas.filter((v) => propios.has(trim(v.codigo_articulo)));
+  }
+  if (A.vendedores) {
+    const suyos = new Set(A.vendedores.map(trim));
+    ventas = ventas.filter((v) => suyos.has(trim(v.codigo_vendedor)));
+  }
+  return { ...datos, ventas };
 }
 
 module.exports = { construirReporte, obtenerReporte, metricas, ultimoMesCerrado, DIMENSIONES };
