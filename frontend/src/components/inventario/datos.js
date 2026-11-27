@@ -110,3 +110,5 @@ export function opcionesProducto(filas) {
 
 export const fmtDias = (d) => (d === null || d === undefined ? '—' : `${Math.round(d).toLocaleString('es-GT')} d`)
 export const fmtNum = (n) => Number(n || 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })
+// Unidades: enteras desde 1,000 (los decimales solo estorban en cantidades grandes)
+export const fmtUnid = (n) => Number(n || 0).toLocaleString('es-GT', { maximumFractionDigits: Math.abs(n) >= 1000 ? 0 : 2 })

@@ -714,6 +714,10 @@ export const LEYENDAS = {
     titulo: 'Matriz ABC × cobertura',
     texto: <>Valor en stock cruzando la clase ABC con los días de cobertura de cada artículo. Bordes rojos: artículos A con menos de 30 días (riesgo de quiebre) y C o sin salida con más de 180 días (capital estancado).</>,
   },
+  inv_unidades: {
+    titulo: 'Existencia en unidades',
+    texto: <>Unidades físicas en bodega según la foto más reciente del ERP (stock actual), en la unidad de cada artículo; debajo, las que vienen en tránsito. En grupos (categoría, proveedor, clase ABC) es la suma simple de unidades: el ERP no trae unidad de medida, así que puede mezclar metros, kilos o rollos.</>,
+  },
   inv_composicion: {
     titulo: 'Inventario por grupo',
     texto: <>Valor en stock, días de inventario, % en estado lento o inmovilizado, exceso sobre la cobertura objetivo y quiebres de cada grupo de la jerarquía Categoría › Subcategoría › Sublínea.</>,

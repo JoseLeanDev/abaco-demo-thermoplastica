@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, ClockIcon, HeartIcon, Squares2X2Icon } from '@heroicons/react/24/outline'
 import { cambiarNivel } from '../ventas/FiltroProducto'
 import { Seccion, Th, exportarExcel, fmtInt, fmtM, ordenar, td } from '../compras/comun'
-import { ESTADOS, TRAMOS, agrupar, fmtDias, nivelSiguiente } from './datos'
+import { ESTADOS, TRAMOS, agrupar, fmtDias, fmtUnid, nivelSiguiente } from './datos'
 import { dec2 } from '../analisis/formato'
 
 // Barra horizontal con el % del grupo
@@ -11,6 +11,16 @@ export function BarraPct({ pct, color = '#001639' }) {
     <div className="h-1.5 w-full bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
       <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(pct, 0.5))}%`, background: color }} />
     </div>
+  )
+}
+
+// Unidades en existencia (en la unidad de cada artículo) y, debajo, las que vienen en tránsito
+export function Unidades({ u, t }) {
+  return (
+    <>
+      <p className={u > 0 ? 'font-medium' : 'text-[var(--text-muted)]'}>{fmtUnid(u)}</p>
+      {t > 0 && <p className="text-xs text-[var(--text-muted)]">+{fmtUnid(t)} tráns.</p>}
+    </>
   )
 }
 
@@ -48,6 +58,8 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
     ...(esArticulo ? [{ label: 'Código', get: g => g.clave }] : []),
     { label: 'Valor en stock', get: g => g.valor.toFixed(2) },
     { label: '% del stock', get: g => g.pct },
+    { label: 'Unidades en existencia', get: g => g.unidades },
+    { label: 'Unidades en tránsito', get: g => g.unidades_transito },
     { label: 'SKUs con stock', get: g => g.skus },
     { label: 'Días de inventario', get: g => g.dias_inventario ?? '' },
     { label: 'Rotación anual', get: g => g.rotacion ?? '' },
@@ -81,6 +93,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
                 <tr>
                   <Th col="nombre" orden={orden} setOrden={setOrden} align="left">{nivel.singular}</Th>
                   <Th col="valor" orden={orden} setOrden={setOrden}>Valor</Th>
+                  <Th col="unidades" orden={orden} setOrden={setOrden} leyenda="inv_unidades">Existencia</Th>
                   <Th col="skus" orden={orden} setOrden={setOrden}>SKUs</Th>
                   <Th col="dias_inventario" orden={orden} setOrden={setOrden} leyenda="inv_dias">Días inv.</Th>
                   <Th col="pct_quieto" orden={orden} setOrden={setOrden} leyenda="inv_quieto">% quieto</Th>
@@ -90,7 +103,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
               </thead>
               <tbody className="divide-y divide-[var(--border-default)]">
                 {visibles.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin inventario en el filtro.</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin inventario en el filtro.</td></tr>
                 )}
                 {visibles.map(g => (
                   <tr
@@ -108,6 +121,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
                       <p className="font-semibold">{fmtM(g.valor)}</p>
                       <p className="text-xs text-[var(--text-muted)]">{dec2(g.pct)}%</p>
                     </td>
+                    <td className={`${td} text-right tabular-nums`}><Unidades u={g.unidades} t={g.unidades_transito} /></td>
                     <td className={`${td} text-right tabular-nums`}>{fmtInt(g.skus)}</td>
                     <td className={`${td} text-right tabular-nums font-medium ${colorDias(g.dias_inventario)}`}>
                       {fmtDias(g.dias_inventario)}
@@ -128,6 +142,7 @@ export default function TabResumen({ filas, tot, dias, objetivo, producto, setPr
                   <tr className="font-semibold">
                     <td className={td}>Total</td>
                     <td className={`${td} text-right tabular-nums`}>{fmtM(tot.valor)}</td>
+                    <td className={`${td} text-right tabular-nums`}><Unidades u={tot.unidades} t={tot.unidades_transito} /></td>
                     <td className={`${td} text-right tabular-nums`}>{fmtInt(tot.skus)}</td>
                     <td className={`${td} text-right tabular-nums`}>{fmtDias(tot.dias_inventario)}</td>
                     <td className={`${td} text-right tabular-nums`}>{dec2(tot.pct_quieto)}%</td>

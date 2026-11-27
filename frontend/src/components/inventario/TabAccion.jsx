@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowDownTrayIcon, ArrowTrendingDownIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { Seccion, Th, exportarExcel, fmtFecha, fmtInt, fmtM, ordenar, td } from '../compras/comun'
 import { ESTADO, agrupar, excesoDe, fmtDias, fmtNum } from './datos'
-import { BarraPct, colorDias } from './TabResumen'
+import { BarraPct, Unidades, colorDias } from './TabResumen'
 import { dec2 } from '../analisis/formato'
 
 // Exceso (capital a liberar) y quiebres (ventas en riesgo).
@@ -33,6 +33,8 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
     { label: 'Proveedor', get: f => f.proveedor || '' },
     { label: 'Estado', get: f => ESTADO[f.estado]?.label },
     { label: 'Valor en stock', get: f => f.valor.toFixed(2) },
+    { label: 'Unidades en existencia', get: f => f.stock },
+    { label: 'Unidades en tránsito', get: f => f.transito },
     { label: 'Días de cobertura', get: f => f.dias_cobertura ?? 'sin salida' },
     { label: `Exceso sobre ${objetivo} días`, get: f => f.exceso.toFixed(2) },
     { label: 'Última venta', get: f => f.ultima_venta || '' },
@@ -44,6 +46,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
     { label: 'Categoría', get: f => f.categoria },
     { label: 'Subcategoría', get: f => f.subcategoria },
     { label: 'Proveedor', get: f => f.proveedor || '' },
+    { label: 'Unidades en existencia', get: f => f.stock },
     { label: 'Salida mensual (Q)', get: f => f.salida_mes.toFixed(2) },
     { label: 'Meses con demanda (últ. 6)', get: f => f.meses_demanda_6m },
     { label: 'Última venta', get: f => f.ultima_venta || '' },
@@ -91,13 +94,14 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
                 <Th col="descripcion" orden={ordenEx} setOrden={setOrdenEx} align="left">Artículo</Th>
                 <Th col="estado" orden={ordenEx} setOrden={setOrdenEx} align="left">Estado</Th>
                 <Th col="valor" orden={ordenEx} setOrden={setOrdenEx}>Valor</Th>
+                <Th col="stock" orden={ordenEx} setOrden={setOrdenEx} leyenda="inv_unidades">Existencia</Th>
                 <Th col="dias_cobertura" orden={ordenEx} setOrden={setOrdenEx}>Cobertura</Th>
                 <Th col="exceso" orden={ordenEx} setOrden={setOrdenEx}>Exceso</Th>
                 <Th col="dias_sin_mov" orden={ordenEx} setOrden={setOrdenEx} leyenda="inv_dias_sin_mov">Sin mov.</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
-              {exceso.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Nada por encima del objetivo.</td></tr>}
+              {exceso.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Nada por encima del objetivo.</td></tr>}
               {exceso.slice(0, 200).map(f => (
                 <tr key={f.codigo} className="hover:bg-[var(--bg-secondary)]">
                   <td className={`${td} max-w-[320px]`}>
@@ -106,6 +110,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
                   </td>
                   <td className={td}><EstadoBadge estado={f.estado} /></td>
                   <td className={`${td} text-right tabular-nums`}>{fmtM(f.valor)}</td>
+                  <td className={`${td} text-right tabular-nums`}><Unidades u={f.stock} t={f.transito} /></td>
                   <td className={`${td} text-right tabular-nums font-medium ${colorDias(f.dias_cobertura)}`}>{f.dias_cobertura === null ? 'sin salida' : fmtDias(f.dias_cobertura)}</td>
                   <td className={`${td} text-right tabular-nums font-bold text-amber-600`}>{fmtM(f.exceso)}</td>
                   <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{fmtDias(f.dias_sin_mov)}</td>
@@ -131,6 +136,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
               <tr>
                 <Th col="descripcion" orden={ordenQ} setOrden={setOrdenQ} align="left">Artículo</Th>
                 <Th col="abc" orden={ordenQ} setOrden={setOrdenQ} align="left">ABC</Th>
+                <Th col="stock" orden={ordenQ} setOrden={setOrdenQ} leyenda="inv_unidades">Existencia</Th>
                 <Th col="salida_mes" orden={ordenQ} setOrden={setOrdenQ}>Salida/mes</Th>
                 <Th col="meses_demanda_6m" orden={ordenQ} setOrden={setOrdenQ}>Meses con demanda</Th>
                 <Th col="ultima_venta" orden={ordenQ} setOrden={setOrdenQ}>Última venta</Th>
@@ -138,7 +144,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
-              {quiebres.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin quiebres en el filtro.</td></tr>}
+              {quiebres.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin quiebres en el filtro.</td></tr>}
               {quiebres.map(f => (
                 <tr key={f.codigo} className="hover:bg-[var(--bg-secondary)]">
                   <td className={`${td} max-w-[320px]`}>
@@ -146,6 +152,7 @@ export default function TabAccion({ filas, tot, dias, objetivo }) {
                     <p className="text-xs text-[var(--text-muted)] truncate">{f.codigo} · {f.subcategoria}{f.proveedor ? ` · ${f.proveedor}` : ''}</p>
                   </td>
                   <td className={`${td} font-semibold`}>{f.abc === 'N' ? '—' : f.abc}</td>
+                  <td className={`${td} text-right tabular-nums`}><Unidades u={f.stock} t={f.transito} /></td>
                   <td className={`${td} text-right tabular-nums font-semibold`}>{fmtM(f.salida_mes)}</td>
                   <td className={`${td} text-right tabular-nums`}>{fmtNum(Math.min(f.meses_demanda_6m, 6))} de 6</td>
                   <td className={`${td} text-right text-[var(--text-secondary)]`}>{fmtFecha(f.ultima_venta)}</td>

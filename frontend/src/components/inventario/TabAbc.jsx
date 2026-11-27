@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { ExclamationTriangleIcon, LightBulbIcon, Squares2X2Icon, TableCellsIcon } from '@heroicons/react/24/outline'
 import { Seccion, fmtInt, fmtM, td, th } from '../compras/comun'
-import { ABCS, TRAMOS, fmtDias, resumir } from './datos'
-import { colorDias } from './TabResumen'
+import { ABCS, TRAMOS, fmtDias, fmtUnid, resumir } from './datos'
+import { Unidades, colorDias } from './TabResumen'
 import { dec2 } from '../analisis/formato'
 
 // Análisis ABC por salida del período (Pareto) cruzado con la cobertura del stock.
@@ -27,8 +27,9 @@ export default function TabAbc({ filas, tot, dias, objetivo, setAbc, irDetalle }
     for (const f of filas) {
       if (!f.tramo) continue
       const k = `${f.abc}|${f.tramo}`
-      m[k] = m[k] || { valor: 0, skus: 0 }
+      m[k] = m[k] || { valor: 0, skus: 0, unidades: 0 }
       m[k].valor += f.valor
+      m[k].unidades += f.stock > 0 ? f.stock : 0
       m[k].skus++
     }
     return m
@@ -71,6 +72,7 @@ export default function TabAbc({ filas, tot, dias, objetivo, setAbc, irDetalle }
                 <th className={`${th} text-right`}>Artículos</th>
                 <th className={`${th} text-right`}>Salida del período</th>
                 <th className={`${th} text-right`}>Valor en stock</th>
+                <th className={`${th} text-right`}>Existencia</th>
                 <th className={`${th} text-right`}>Días inv.</th>
                 <th className={`${th} text-right`}>Exceso</th>
                 <th className={`${th} text-right`}>Quiebres</th>
@@ -99,6 +101,7 @@ export default function TabAbc({ filas, tot, dias, objetivo, setAbc, irDetalle }
                       <span className="text-xs text-[var(--text-muted)] w-10">{dec2(c.pct_valor)}%</span>
                     </div>
                   </td>
+                  <td className={`${td} text-right tabular-nums`}><Unidades u={c.unidades} t={c.unidades_transito} /></td>
                   <td className={`${td} text-right tabular-nums font-medium ${colorDias(c.dias_inventario)}`}>{fmtDias(c.dias_inventario)}</td>
                   <td className={`${td} text-right tabular-nums`}>{c.exceso > 0 ? fmtM(c.exceso) : '—'}</td>
                   <td className={`${td} text-right tabular-nums ${c.quiebres > 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>{c.quiebres || '—'}</td>
@@ -155,7 +158,7 @@ export default function TabAbc({ filas, tot, dias, objetivo, setAbc, irDetalle }
                           {c ? (
                             <>
                               <span className="block text-xs font-semibold">{fmtM(c.valor)}</span>
-                              <span className={`block text-[10px] ${alpha > 0.45 ? 'text-white/70' : 'text-[var(--text-muted)]'}`}>{fmtInt(c.skus)} SKUs</span>
+                              <span className={`block text-[10px] ${alpha > 0.45 ? 'text-white/70' : 'text-[var(--text-muted)]'}`}>{fmtInt(c.skus)} SKUs · {fmtUnid(c.unidades)} u.</span>
                             </>
                           ) : <span className="text-[10px] text-[var(--text-muted)]">—</span>}
                         </button>
@@ -207,6 +210,7 @@ function ListaCorta({ icon, titulo, subtitulo, filas, vacio, col, colTitulo, dia
           <thead className="bg-[var(--bg-secondary)] border-y border-[var(--border-default)]">
             <tr>
               <th className={`${th} text-left`}>Artículo</th>
+              <th className={`${th} text-right`}>Existencia</th>
               <th className={`${th} text-right`}>Salida/mes</th>
               <th className={`${th} text-right`}>{colTitulo}</th>
             </tr>
@@ -218,6 +222,7 @@ function ListaCorta({ icon, titulo, subtitulo, filas, vacio, col, colTitulo, dia
                   <p className="font-medium nombre-articulo">{f.descripcion}</p>
                   <p className="text-xs text-[var(--text-muted)] truncate">{f.codigo} · {f.subcategoria}</p>
                 </td>
+                <td className={`${td} text-right tabular-nums`}><Unidades u={f.stock} t={f.transito} /></td>
                 <td className={`${td} text-right tabular-nums text-[var(--text-secondary)]`}>{f.salida > 0 ? fmtM(f.salida / dias * 30) : '—'}</td>
                 <td className={`${td} text-right tabular-nums`}>{col(f)}</td>
               </tr>

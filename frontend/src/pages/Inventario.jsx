@@ -20,7 +20,7 @@ import { PeriodoActivo } from '../components/common/FiltroPeriodo'
 import { Leyenda } from '../components/common/leyendas'
 import FiltroProducto, { FILTRO_VACIO, NIVELES_PRODUCTO } from '../components/ventas/FiltroProducto'
 import { Kpi, exportarExcel, fmtFecha, fmtInt, fmtM } from '../components/compras/comun'
-import { ABCS, CLASES, OBJETIVOS, filtrar, hidratar, opcionesProducto, resumir } from '../components/inventario/datos'
+import { ABCS, CLASES, OBJETIVOS, filtrar, hidratar, fmtUnid, opcionesProducto, resumir } from '../components/inventario/datos'
 import TabResumen from '../components/inventario/TabResumen'
 import TabAbc from '../components/inventario/TabAbc'
 import TabAccion from '../components/inventario/TabAccion'
@@ -181,7 +181,10 @@ export default function Inventario() {
           <Kpi
             titulo="Valor en stock" leyenda="valor_stock"
             valor={fmtM(tot.valor)}
-            sub={<>{fmtInt(tot.skus)} SKUs{tot.transito > 0 && <> · +{fmtM(tot.transito)} en tránsito</>}</>}
+            sub={<>
+              <span className="font-semibold text-[var(--text-primary)]">{fmtUnid(tot.unidades)} unidades</span> en existencia · {fmtInt(tot.skus)} SKUs
+              {tot.transito > 0 && <> · +{fmtUnid(tot.unidades_transito)} u. ({fmtM(tot.transito)}) en tránsito</>}
+            </>}
           />
           <Kpi
             titulo="Días de inventario" leyenda="inv_dias"

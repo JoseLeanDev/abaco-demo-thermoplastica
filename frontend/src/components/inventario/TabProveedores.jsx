@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ArrowDownTrayIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline'
 import { Seccion, Th, exportarExcel, fmtInt, fmtM, ordenar, td } from '../compras/comun'
 import { agrupar, fmtDias } from './datos'
-import { BarraPct, colorDias } from './TabResumen'
+import { BarraPct, Unidades, colorDias } from './TabResumen'
 import { dec2 } from '../analisis/formato'
 
 // Inventario por proveedor principal: con quién está el capital y qué tan rápido rota.
@@ -27,6 +27,8 @@ export default function TabProveedores({ filas, tot, dias, objetivo, setProveedo
     { label: 'Código', get: g => g.clave },
     { label: 'Valor en stock', get: g => g.valor.toFixed(2) },
     { label: '% del stock', get: g => g.pct },
+    { label: 'Unidades en existencia', get: g => g.unidades },
+    { label: 'Unidades en tránsito', get: g => g.unidades_transito },
     { label: 'SKUs con stock', get: g => g.skus },
     { label: 'Días de inventario', get: g => g.dias_inventario ?? '' },
     { label: '% quieto', get: g => g.pct_quieto },
@@ -49,6 +51,7 @@ export default function TabProveedores({ filas, tot, dias, objetivo, setProveedo
             <tr>
               <Th col="nombre" orden={orden} setOrden={setOrden} align="left">Proveedor</Th>
               <Th col="valor" orden={orden} setOrden={setOrden}>Valor</Th>
+              <Th col="unidades" orden={orden} setOrden={setOrden} leyenda="inv_unidades">Existencia</Th>
               <Th col="skus" orden={orden} setOrden={setOrden}>SKUs</Th>
               <Th col="dias_inventario" orden={orden} setOrden={setOrden} leyenda="inv_dias">Días inv.</Th>
               <Th col="pct_quieto" orden={orden} setOrden={setOrden} leyenda="inv_quieto">% quieto</Th>
@@ -57,7 +60,7 @@ export default function TabProveedores({ filas, tot, dias, objetivo, setProveedo
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-default)]">
-            {items.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin inventario en el filtro.</td></tr>}
+            {items.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">Sin inventario en el filtro.</td></tr>}
             {items.map(g => (
               <tr
                 key={g.clave || 'sin'}
@@ -72,6 +75,7 @@ export default function TabProveedores({ filas, tot, dias, objetivo, setProveedo
                   <p className="font-semibold">{fmtM(g.valor)}</p>
                   <p className="text-xs text-[var(--text-muted)]">{dec2(g.pct)}%</p>
                 </td>
+                <td className={`${td} text-right tabular-nums`}><Unidades u={g.unidades} t={g.unidades_transito} /></td>
                 <td className={`${td} text-right tabular-nums`}>{fmtInt(g.skus)}</td>
                 <td className={`${td} text-right tabular-nums font-medium ${colorDias(g.dias_inventario)}`}>{fmtDias(g.dias_inventario)}</td>
                 <td className={`${td} text-right tabular-nums ${g.pct_quieto >= 50 ? 'text-[var(--warning)] font-semibold' : ''}`}>{g.valor > 0 ? `${dec2(g.pct_quieto)}%` : '—'}</td>
