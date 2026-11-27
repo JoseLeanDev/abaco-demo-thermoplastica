@@ -144,10 +144,10 @@ async function obtenerReporte(req, pool, { now = new Date(), cargar = leerLamina
 // El CPP lee las ventas con su propio cliente de Postgres (cppDatos.js), que no pasa por la
 // reescritura de connection.js: sin esto un gerente de línea vería las líneas CPP de otros
 // gerentes y un ejecutivo las ventas de todos los vendedores. Se recorta aquí, igual que
-// services/alcance.js: líneas por la marca del artículo, vendedores por su código.
+// services/alcance.js: líneas por la marca del artículo, vendedores y clientes por su código.
 async function recortarAlcance(datos, pool) {
   const A = als.getStore();
-  if (!A || (!A.lineas && !A.vendedores)) return datos;
+  if (!A || (!A.lineas && !A.vendedores && !A.clientes)) return datos;
   let ventas = datos.ventas;
   if (A.lineas) {
     const r = await pool.query('SELECT codigo_articulo FROM thermoplastica.dim_articulo WHERE marca = ANY($1::text[])', [A.lineas]);
@@ -157,6 +157,10 @@ async function recortarAlcance(datos, pool) {
   if (A.vendedores) {
     const suyos = new Set(A.vendedores.map(trim));
     ventas = ventas.filter((v) => suyos.has(trim(v.codigo_vendedor)));
+  }
+  if (A.clientes) {
+    const cartera = new Set(A.clientes.map(trim));
+    ventas = ventas.filter((v) => cartera.has(trim(v.codigo_cliente)));
   }
   return { ...datos, ventas };
 }

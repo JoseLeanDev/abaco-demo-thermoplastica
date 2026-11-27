@@ -32,17 +32,23 @@ const OCULTAR = {
 // Alcance efectivo: null = sin recorte.
 //   lineas     → marcas que puede ver (gerente de línea)
 //   vendedores → códigos de vendedor (ejecutivo: los suyos; gerente/asistente: su equipo si se asignó)
+//   clientes   → códigos de cliente (ejecutivo que atiende una cartera fija, p. ej. Costa Rica,
+//                aunque la factura otro vendedor). Con clientes y sin vendedores el ejecutivo ve
+//                todas las ventas de esos clientes; con ambos, solo las que cumplen los dos.
 //   ocultar    → [{ en, que }] montos que se quitan de la respuesta
 //   verticales → áreas de insights que puede ver (null = todas)
 function alcanceDeUsuario(u) {
   const roles = rolesDeUsuario(u);
   if (roles.some(r => SIN_RECORTE.includes(r))) return null;
   const a = u?.alcance || {};
-  const out = { lineas: null, vendedores: null, ocultar: [], verticales: null };
+  const out = { lineas: null, vendedores: null, clientes: null, ocultar: [], verticales: null };
 
   if (roles.includes('gerente_linea')) out.lineas = a.lineas || [];
-  if (roles.includes('ejecutivo_ventas')) out.vendedores = a.vendedores || [];
-  else if (roles.some(r => r === 'gerente_ventas' || r === 'asistente_ventas') && a.vendedores?.length) {
+  if (roles.includes('ejecutivo_ventas')) {
+    if (a.clientes?.length) out.clientes = a.clientes;
+    // Sin vendedores ni clientes no ve nada (ARRAY[''])
+    if (a.vendedores?.length || !out.clientes) out.vendedores = a.vendedores || [];
+  } else if (roles.some(r => r === 'gerente_ventas' || r === 'asistente_ventas') && a.vendedores?.length) {
     out.vendedores = a.vendedores;
   }
   for (const r of roles) out.ocultar.push(...(OCULTAR[r] || []));
@@ -65,9 +71,12 @@ const cliIn = (A) => `cliente_id IN (SELECT cliente_id FROM thermoplastica.fact_
                        UNION SELECT cliente_id FROM thermoplastica.fact_cxc_snapshot_diario WHERE ${vendIn(A)})`;
 // Vistas analíticas sin articulo_id: se cruzan por la descripción del artículo
 const descIn = (A) => `articulo IN (SELECT descripcion FROM thermoplastica.dim_articulo WHERE marca = ANY(${arr(A.lineas)}))`;
+// Cartera fija: los clientes por su código
+const cliLista = (A) => `cliente_id IN (SELECT cliente_id FROM thermoplastica.dim_cliente WHERE codigo_cliente = ANY(${arr(A.clientes)}))`;
+const porCliente = (A) => [A.vendedores && cliIn(A), A.clientes && cliLista(A)].filter(Boolean).join(' AND ') || null;
 
 const porLinea = (A) => (A.lineas ? artIn(A) : null);
-const porLineaYVendedor = (A) => [A.lineas && artIn(A), A.vendedores && vendIn(A)].filter(Boolean).join(' AND ') || null;
+const porLineaYVendedor = (A) => [A.lineas && artIn(A), A.vendedores && vendIn(A), A.clientes && cliLista(A)].filter(Boolean).join(' AND ') || null;
 
 // tabla → condición según el alcance (null = no se recorta)
 const TABLAS = {
@@ -87,9 +96,9 @@ const TABLAS = {
   'analitica.v_inventario_salud':            porLinea,
   'analitica.v_compras':                     (A) => (A.lineas ? descIn(A) : null),
   'analitica.v_ventas_mensuales':            (A) => (A.lineas ? descIn(A) : null),
-  'thermoplastica.fact_cxc_snapshot_diario': (A) => (A.vendedores ? vendIn(A) : null),
-  'thermoplastica.fact_cxc_factura':         (A) => (A.vendedores ? cliIn(A) : null),
-  'analitica.v_cxc':                         (A) => (A.vendedores ? cliIn(A) : null),
+  'thermoplastica.fact_cxc_snapshot_diario': (A) => [A.vendedores && vendIn(A), A.clientes && cliLista(A)].filter(Boolean).join(' AND ') || null,
+  'thermoplastica.fact_cxc_factura':         porCliente,
+  'analitica.v_cxc':                         porCliente,
 };
 
 // Palabras que pueden seguir a una tabla sin ser su alias
@@ -97,7 +106,7 @@ const NO_ALIAS = new Set(('where join left right inner full cross natural on usi
   'union except intersect having window fetch for returning set values lateral').split(' '));
 
 function reescribirSql(sql, A) {
-  if (!A || (!A.lineas && !A.vendedores) || typeof sql !== 'string') return sql;
+  if (!A || (!A.lineas && !A.vendedores && !A.clientes) || typeof sql !== 'string') return sql;
   return sql.replace(/\b(thermoplastica|analitica)\.([a-z_][a-z0-9_]*)\b(?!\s*\()/gi, (m, esq, tabla, offset, full) => {
     const f = TABLAS[`${esq}.${tabla}`.toLowerCase()];
     const cond = f && f(A);
@@ -116,7 +125,7 @@ const reescribir = (sql) => reescribirSql(sql, als.getStore());
 // Para las cachés en memoria: los datos recortados no se mezclan con los completos
 function claveAlcance() {
   const A = als.getStore();
-  return A && (A.lineas || A.vendedores) ? `|${JSON.stringify([A.lineas, A.vendedores])}` : '';
+  return A && (A.lineas || A.vendedores || A.clientes) ? `|${JSON.stringify([A.lineas, A.vendedores, A.clientes])}` : '';
 }
 
 // ---------------------------------------------------------------- insights

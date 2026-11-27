@@ -38,6 +38,7 @@ const todo = Object.fromEntries(MODULOS.map(m => [m.key, T]));
 // `alcance` del usuario (columna usuarios.alcance):
 //   lineas     → líneas de producto asignadas (gerente de línea) = categoría (marca del ERP)
 //   vendedores → códigos de vendedor (ejecutivo: el suyo; gerente/asistente: su equipo, vacío = todos)
+//   clientes   → códigos de cliente (solo ejecutivo: cartera fija; sin vendedores ve todas sus ventas)
 const ROLES = [
   {
     key: 'direccion', nombre: 'Dirección',
@@ -77,7 +78,7 @@ const ROLES = [
     },
   },
   {
-    key: 'ejecutivo_ventas', nombre: 'Ejecutivo de Ventas', alcance: ['vendedores'],
+    key: 'ejecutivo_ventas', nombre: 'Ejecutivo de Ventas', alcance: ['vendedores', 'clientes'],
     permisos: {
       // Sin Márgenes (la hoja le daba 👁): ningún vendedor salvo el gerente ve márgenes
       panel: P('solo sus ventas, sin márgenes'), ventas: P('solo sus ventas, sin costo y sin márgenes'),

@@ -268,7 +268,7 @@ router.post('/logout', authenticate, async (req, res) => {
 
 // ==================== CATÁLOGO DE ROLES (solo admin) ====================
 // Roles con su matriz de permisos y las opciones para asignar alcance:
-// líneas = categoría de producto (campo marca del ERP), vendedores = dim_vendedor.
+// líneas = categoría de producto (campo marca del ERP), vendedores = dim_vendedor, clientes = dim_cliente.
 router.get('/roles', authenticate, async (req, res) => {
   try {
     if (req.user.rol !== 'admin') {
@@ -278,12 +278,15 @@ router.get('/roles', authenticate, async (req, res) => {
       });
     }
 
-    const [lineas, vendedores] = await Promise.all([
+    const [lineas, vendedores, clientes] = await Promise.all([
       db.allAsync(`SELECT DISTINCT TRIM(marca) AS valor FROM thermoplastica.dim_articulo
                    WHERE NULLIF(TRIM(marca), '') IS NOT NULL ORDER BY 1`),
       db.allAsync(`SELECT codigo_vendedor AS valor, MAX(TRIM(nombre)) AS nombre, BOOL_OR(activo) AS activo
                    FROM thermoplastica.dim_vendedor WHERE NULLIF(TRIM(codigo_vendedor), '') IS NOT NULL
                    GROUP BY codigo_vendedor ORDER BY 2`),
+      db.allAsync(`SELECT TRIM(codigo_cliente) AS valor, MAX(TRIM(nombre)) AS nombre
+                   FROM thermoplastica.dim_cliente WHERE NULLIF(TRIM(codigo_cliente), '') IS NOT NULL
+                   GROUP BY 1 ORDER BY 2`),
     ]);
 
     res.json({
@@ -294,6 +297,7 @@ router.get('/roles', authenticate, async (req, res) => {
         opciones: {
           lineas: lineas.map(l => ({ valor: l.valor, nombre: l.valor })),
           vendedores: vendedores.map(v => ({ valor: v.valor, nombre: v.nombre, activo: v.activo })),
+          clientes: clientes.map(c => ({ valor: c.valor, nombre: c.nombre.replace(`${c.valor}-`, '') })),
         }
       }
     });

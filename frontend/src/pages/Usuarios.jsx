@@ -209,6 +209,7 @@ export default function Usuarios() {
       const nombre = catalogo?.opciones.vendedores.find(v => v.valor === a.vendedores[0])?.nombre
       partes.push(a.vendedores.length === 1 ? (nombre || a.vendedores[0]) : `${a.vendedores.length} vendedores`)
     }
+    if (a.clientes?.length) partes.push(a.clientes.length === 1 ? a.clientes[0] : `${a.clientes.length} clientes`)
     return partes.join(' · ')
   }
 

@@ -3,6 +3,7 @@ import { useState } from 'react'
 const ETIQUETA_ALCANCE = {
   lineas: { titulo: 'Líneas asignadas', ayuda: 'Categorías de producto que ve este gerente.' },
   vendedores: { titulo: 'Vendedores', ayuda: 'El ejecutivo: su propio código. Gerente o asistente: los vendedores de su equipo.' },
+  clientes: { titulo: 'Clientes', ayuda: 'Opcional: cartera fija del ejecutivo. Sin vendedores ve todas las ventas de estos clientes; con vendedores, solo las de ellos a estos clientes.' },
 }
 
 // Selector de rol (+ roles adicionales) y alcance (líneas o vendedores), con el resumen
